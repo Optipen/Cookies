@@ -11,3 +11,7 @@ html, body, #root { height: 100%; }
   60% { transform: translateX(-6px) }
   80% { transform: translateX(4px) }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
