@@ -433,11 +433,20 @@ export default function CookieCraze() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        // tentative JSON direct
         const data = migrate(JSON.parse(String(reader.result)));
         setState(data);
         toast("Sauvegarde importée.", "success");
       } catch {
-        toast("Import invalide.", "warn");
+        try {
+          // fallback ancien format base64 .txt
+          const txt = decodeURIComponent(escape(atob(String(reader.result))));
+          const data = migrate(JSON.parse(txt));
+          setState(data);
+          toast("Ancienne sauvegarde importée.", "success");
+        } catch {
+          toast("Import invalide.", "warn");
+        }
       }
     };
     reader.readAsText(file);
@@ -533,10 +542,16 @@ export default function CookieCraze() {
                   <button onClick={doPrestige} className="text-xs px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 transition border border-purple-400/50 shadow">Prestige +{potentialChips - state.prestige.chips}</button>
                 )}
                 <div className="flex items-center gap-2 justify-end">
-                  <button onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))} className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">{state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}</button>
+                  <button
+                    aria-pressed={state.ui.sounds}
+                    onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
+                    className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700"
+                  >
+                    {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
+                  </button>
                   <button onClick={exportSave} className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
                   <label className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
-                    <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
+                    <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
                   </label>
                   <button onClick={(e) => hardReset(e)} title="Astuce: Alt+clic = reset total" className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">♻️ Reset</button>
                 </div>
@@ -545,7 +560,9 @@ export default function CookieCraze() {
 
             {/* Big Cookie */}
             <div className="mt-4 flex items-center justify-center">
-              <motion.button whileTap={{ scale: 0.92, rotate: -2 }} onClick={onCookieClick}
+              <motion.button
+                aria-label="Cliquer pour produire des cookies"
+                whileTap={{ scale: 0.92, rotate: -2 }} onClick={onCookieClick}
                 className="relative h-56 w-56 md:h-72 md:w-72 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 shadow-[0_20px_60px_rgba(0,0,0,0.5)] border-4 border-amber-300/60 ring-2 ring-amber-200/20 hover:shadow-[0_25px_90px_rgba(255,200,0,0.25)] transition">
                 <div className="absolute inset-0 rounded-full" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), transparent 40%), radial-gradient(circle at 70% 70%, rgba(0,0,0,0.2), transparent 50%)" }} />
                 <div className="absolute inset-0">{[...Array(14)].map((_, i) => (<div key={i} className="absolute h-3 w-3 bg-zinc-900/70 rounded-full" style={{ left: `${10 + (i*6)%80}%`, top: `${10 + (i*9)%80}%` }} />))}</div>
@@ -706,6 +723,9 @@ export default function CookieCraze() {
       <AnimatePresence>
         {!state.ui.introSeen && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="intro-title"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -739,14 +759,15 @@ export default function CookieCraze() {
               ))}
             </div>
             <div className="relative h-full w-full flex flex-col items-center justify-center text-center px-6">
-              <motion.div
+              <motion.h1
+                id="intro-title"
                 initial={{ scale: 0.8, rotateX: 25, opacity: 0 }}
                 animate={{ scale: 1, rotateX: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 120, damping: 14 }}
                 className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow"
               >
                 COOKIE CRAZE
-              </motion.div>
+              </motion.h1>
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -767,6 +788,7 @@ export default function CookieCraze() {
                 Appuie sur <b>Entrée</b> ou <b>Espace</b> pour commencer
               </div>
               <button
+                aria-pressed={state.ui.sounds}
                 onClick={() => setState(s => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
                 className="mt-2 text-xs px-3 py-1 rounded-xl bg-zinc-800/70 border border-zinc-700"
               >
