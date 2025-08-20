@@ -207,12 +207,14 @@ export default function CookieCraze() {
     }
     scheduleGolden();
     scheduleRain();
-    // Key to skip intro
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const onKey = (e) => { if (!state.ui.introSeen && (e.key === 'Enter' || e.key === ' ')) skipIntro(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [state.ui.introSeen]);
 
   // Track timestamp for offline Save
   useEffect(() => {
@@ -420,8 +422,26 @@ export default function CookieCraze() {
   };
 
   // Export / Import / Reset
-  const exportSave = () => { const blob = new Blob([btoa(unescape(encodeURIComponent(JSON.stringify(state))))], { type: "text/plain" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "cookiecraze_save.txt"; a.click(); URL.revokeObjectURL(url); };
-  const importSave = (file) => { const reader = new FileReader(); reader.onload = () => { try { const text = decodeURIComponent(escape(atob(String(reader.result)))); const data = migrate(JSON.parse(text)); setState(data); toast("Sauvegarde importée.", "success"); } catch (e) { toast("Import invalide.", "warn"); } }; reader.readAsText(file); };
+  const exportSave = () => {
+      const blob = new Blob([JSON.stringify(state)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "cookiecraze_save.json"; a.click();
+      URL.revokeObjectURL(url);
+  };
+  const importSave = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = migrate(JSON.parse(String(reader.result)));
+        setState(data);
+        toast("Sauvegarde importée.", "success");
+      } catch {
+        toast("Import invalide.", "warn");
+      }
+    };
+    reader.readAsText(file);
+  };
   const hardReset = (e) => {
     const full = e && (e.altKey || e.metaKey);
     const preserve = !full;
@@ -495,8 +515,7 @@ export default function CookieCraze() {
         </div>
 
         {/* Top Stats */}
-        <div className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${shaking ? "animate-[wiggle_0.7s_ease]" : ""}`}
-          style={{"@keyframes wiggle": "from{transform:translateX(0)} 20%{transform:translateX(-10px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(4px)} to{transform:translateX(0)}"}}>
+        <div className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${shaking ? "animate-[wiggle_0.7s_ease]" : ""}`}>
           <div className="md:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
@@ -517,7 +536,7 @@ export default function CookieCraze() {
                   <button onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))} className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">{state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}</button>
                   <button onClick={exportSave} className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
                   <label className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
-                    <input type="file" accept=".txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
+                    <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
                   </label>
                   <button onClick={(e) => hardReset(e)} title="Astuce: Alt+clic = reset total" className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">♻️ Reset</button>
                 </div>
@@ -747,6 +766,12 @@ export default function CookieCraze() {
               <div className="mt-3 text-xs text-zinc-500">
                 Appuie sur <b>Entrée</b> ou <b>Espace</b> pour commencer
               </div>
+              <button
+                onClick={() => setState(s => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
+                className="mt-2 text-xs px-3 py-1 rounded-xl bg-zinc-800/70 border border-zinc-700"
+              >
+                {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
+              </button>
             </div>
           </motion.div>
         )}
