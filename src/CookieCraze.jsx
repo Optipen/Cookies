@@ -96,6 +96,19 @@ export default function CookieCraze() {
   const { ping } = useAudio(state.ui.sounds);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
 
+  const cookieField = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => ({
+        id: i,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        size: Math.random() * 32 + 24,
+        delay: Math.random() * 5,
+        duration: Math.random() * 10 + 10,
+      })),
+    []
+  );
+
   // --- Helpers for CPS recompute (NO stale closure) ---
   const computePerItemMult = (items, upgrades) => {
     const mult = {}; ITEMS.forEach((it) => (mult[it.id] = 1));
@@ -673,15 +686,67 @@ export default function CookieCraze() {
       {/* Intro Overlay */}
       <AnimatePresence>
         {!state.ui.introSeen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-gradient-to-br from-amber-900 via-zinc-950 to-black">
-            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 20% 30%, rgba(255,200,100,0.12), transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08), transparent 45%)" }} />
-            <div className="h-full w-full flex flex-col items-center justify-center text-center px-6">
-              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 120, damping: 14 }} className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow">COOKIE CRAZE</motion.div>
-              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="mt-3 text-zinc-300 max-w-xl">
-                Forge des cookies, **mine** des <span className="text-emerald-300">CrumbCoins</span>, et monte vers l'infini.
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 overflow-hidden bg-gradient-to-br from-amber-900 via-zinc-950 to-black"
+          >
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 20% 30%,rgba(255,200,100,0.12), transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08), transparent 45%)",
+              }}
+            />
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {cookieField.map((c) => (
+                <motion.div
+                  key={c.id}
+                  className="absolute select-none"
+                  style={{ top: `${c.top}%`, left: `${c.left}%`, fontSize: c.size }}
+                  initial={{ y: 0, opacity: 0 }}
+                  animate={{ y: ["0%", "-20%", "0%"], opacity: [0.1, 0.6, 0.1] }}
+                  transition={{
+                    duration: c.duration,
+                    delay: c.delay,
+                    repeat: Infinity,
+                    repeatType: "mirror",
+                    ease: "easeInOut",
+                  }}
+                >
+                  🍪
+                </motion.div>
+              ))}
+            </div>
+            <div className="relative h-full w-full flex flex-col items-center justify-center text-center px-6">
+              <motion.div
+                initial={{ scale: 0.8, rotateX: 25, opacity: 0 }}
+                animate={{ scale: 1, rotateX: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 120, damping: 14 }}
+                className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow"
+              >
+                COOKIE CRAZE
               </motion.div>
-              <motion.button whileTap={{ scale: 0.97 }} onClick={skipIntro} className="mt-8 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Entrer</motion.button>
-              <div className="mt-3 text-xs text-zinc-500">Appuie sur <b>Entrée</b> ou <b>Espace</b> pour commencer</div>
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="mt-3 text-zinc-300 max-w-xl"
+              >
+                Forge des cookies, <b>mine</b> des <span className="text-emerald-300">CrumbCoins</span>, et monte vers l'infini.
+              </motion.div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={skipIntro}
+                className="mt-8 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl"
+              >
+                Entrer
+              </motion.button>
+              <div className="mt-3 text-xs text-zinc-500">
+                Appuie sur <b>Entrée</b> ou <b>Espace</b> pour commencer
+              </div>
             </div>
           </motion.div>
         )}
