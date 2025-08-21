@@ -110,7 +110,7 @@ export default function CookieCraze() {
     mult.farm *= 1 + 0.002 * fac; // +0,2%/usine
     return mult;
   };
-  const cpsFrom = (items, upgrades, chips, stakeMulti = 1) => {
+  export const cpsFrom = (items, upgrades, chips, stakeMulti = 1) => {
     const mult = computePerItemMult(items, upgrades);
     let cps = 0; for (const it of ITEMS) cps += (items[it.id] || 0) * it.cps * (mult[it.id] || 1);
     return cps * (1 + (chips || 0) * 0.02) * stakeMulti;
