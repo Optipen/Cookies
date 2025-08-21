@@ -3,6 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import Shop from "./Shop.jsx";
 import Upgrades from "./Upgrades.jsx";
 import Skins from "./Skins.jsx";
+import { ITEMS } from "../data/items.js";
+import { UPGRADES } from "../data/upgrades.js";
+import { ACHIEVEMENTS } from "../data/achievements.js";
+import { fmt, clamp } from "../utils/format.js";
 
 // === Skins ===
 const SKINS = {
@@ -11,50 +15,7 @@ const SKINS = {
   fire:    { id: "fire",    name: "Lava",  price: 1_000_000, src: "/cookie-fire.png" },
 };
 
-// === Utils ===
-const fmt = (n) => {
-  if (!isFinite(n)) return "∞";
-  const suf = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
-  let i = 0;
-  while (n >= 1000 && i < suf.length - 1) { n /= 1000; i++; }
-  return (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 }) + suf[i];
-};
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
 // === Game Data ===
-const ITEMS = [
-  { id: "cursor", name: "Curseur", emoji: "🖱️", base: 18, growth: 1.15, cps: 0.22, desc: "Clique automatiquement à petits pas." },
-  { id: "grandma", name: "Mamie", emoji: "👵", base: 140, growth: 1.15, cps: 1.8, desc: "Cuit des cookies maison." },
-  { id: "farm", name: "Ferme", emoji: "🌾", base: 1400, growth: 1.16, cps: 14, desc: "Culture intensive de cookies." },
-  { id: "factory", name: "Usine", emoji: "🏭", base: 16000, growth: 1.17, cps: 72, desc: "Production industrielle." },
-  { id: "bank", name: "Banque", emoji: "🏦", base: 180000, growth: 1.18, cps: 360, desc: "Intérêts en cookies." },
-  { id: "ai", name: "IA Boulangerie", emoji: "🤖", base: 2200000, growth: 1.19, cps: 1800, desc: "Réseaux de neurones pâtissiers." },
-  { id: "tm", name: "Machine à Temps", emoji: "⌛", base: 32000000, growth: 1.21, cps: 9800, desc: "Cuisson avant même d'avoir faim." },
-];
-
-// Upgrades (inclut 2 mégas très chères)
-const UPGRADES = [
-  { id: "cursorx2", name: "Curseurs renforcés", target: "cursor", type: "mult", value: 2, cost: 320, unlock: (s) => (s.items.cursor || 0) >= 10 },
-  { id: "cursorx4", name: "Macro-clics", target: "cursor", type: "mult", value: 2, cost: 5200, unlock: (s) => (s.items.cursor || 0) >= 25 },
-  { id: "grandmax2", name: "Thé vert turbo", target: "grandma", type: "mult", value: 2, cost: 4800, unlock: (s) => (s.items.grandma || 0) >= 10 },
-  { id: "farmx2", name: "Engrais au chocolat", target: "farm", type: "mult", value: 2, cost: 38000, unlock: (s) => (s.items.farm || 0) >= 10 },
-  { id: "global1", name: "Levure quantique", target: "all", type: "mult", value: 1.25, cost: 260000, unlock: (s) => s.lifetime >= 50000 },
-  { id: "cpc1", name: "Souris nitro", target: "cpc", type: "mult", value: 1.6, cost: 6200, unlock: (s) => s.stats.clicks >= 100 },
-  // Mega upgrades (wow-moment)
-  { id: "omega1", name: "Catalyseur cosmique", target: "all", type: "mult", value: 2, cost: 2_500_000, unlock: (s) => (s.items.factory||0) >= 25 },
-  { id: "omega2", name: "Four stellaire", target: "all", type: "mult", value: 2.5, cost: 25_000_000, unlock: (s) => (s.items.tm||0) >= 10 },
-];
-
-const ACHIEVEMENTS = [
-  { id: "firstClick", name: "Premier croc", desc: "Ton premier clic !", cond: (s) => s.stats.clicks >= 1 },
-  { id: "tenClicks", name: "Ça clique sec", desc: "10 clics.", cond: (s) => s.stats.clicks >= 10 },
-  { id: "hundredClicks", name: "Cliqueur fou", desc: "100 clics.", cond: (s) => s.stats.clicks >= 100 },
-  { id: "1kBank", name: "Petit pécule", desc: "1 000 en banque.", cond: (s) => s.cookies >= 1_000 },
-  { id: "1mBank", name: "Ça pèse", desc: "1 000 000 en banque.", cond: (s) => s.cookies >= 1_000_000 },
-  { id: "10grandmas", name: "Thé de 17h", desc: "10 mamies.", cond: (s) => (s.items.grandma || 0) >= 10 },
-  { id: "50cursor", name: "Octopus", desc: "50 curseurs.", cond: (s) => (s.items.cursor || 0) >= 50 },
-  { id: "offline", name: "Rentier", desc: "Gagner hors-ligne.", cond: (s) => s.flags.offlineCollected },
-];
 
 const DEFAULT_STATE = {
   version: 4,
