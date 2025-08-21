@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// === Skins ===
+const SKINS = {
+  default: { id: "default", name: "Choco", price: 0, src: "/cookie.png" },
+  ice:     { id: "ice",     name: "Ice",   price: 200_000, src: "/cookie-ice.png" },
+  fire:    { id: "fire",    name: "Lava",  price: 1_000_000, src: "/cookie-fire.png" },
+};
+
 // === Utils ===
 const fmt = (n) => {
   if (!isFinite(n)) return "∞";
@@ -25,7 +32,7 @@ const ITEMS = [
 // Upgrades (inclut 2 mégas très chères)
 const UPGRADES = [
   { id: "cursorx2", name: "Curseurs renforcés", target: "cursor", type: "mult", value: 2, cost: 320, unlock: (s) => (s.items.cursor || 0) >= 10 },
-  { id: "cursorx4", name: "Macro‑clics", target: "cursor", type: "mult", value: 2, cost: 5200, unlock: (s) => (s.items.cursor || 0) >= 25 },
+  { id: "cursorx4", name: "Macro-clics", target: "cursor", type: "mult", value: 2, cost: 5200, unlock: (s) => (s.items.cursor || 0) >= 25 },
   { id: "grandmax2", name: "Thé vert turbo", target: "grandma", type: "mult", value: 2, cost: 4800, unlock: (s) => (s.items.grandma || 0) >= 10 },
   { id: "farmx2", name: "Engrais au chocolat", target: "farm", type: "mult", value: 2, cost: 38000, unlock: (s) => (s.items.farm || 0) >= 10 },
   { id: "global1", name: "Levure quantique", target: "all", type: "mult", value: 1.25, cost: 260000, unlock: (s) => s.lifetime >= 50000 },
@@ -43,7 +50,7 @@ const ACHIEVEMENTS = [
   { id: "1mBank", name: "Ça pèse", desc: "1 000 000 en banque.", cond: (s) => s.cookies >= 1_000_000 },
   { id: "10grandmas", name: "Thé de 17h", desc: "10 mamies.", cond: (s) => (s.items.grandma || 0) >= 10 },
   { id: "50cursor", name: "Octopus", desc: "50 curseurs.", cond: (s) => (s.items.cursor || 0) >= 50 },
-  { id: "offline", name: "Rentier", desc: "Gagner hors‑ligne.", cond: (s) => s.flags.offlineCollected },
+  { id: "offline", name: "Rentier", desc: "Gagner hors-ligne.", cond: (s) => s.flags.offlineCollected },
 ];
 
 const DEFAULT_STATE = {
@@ -53,6 +60,10 @@ const DEFAULT_STATE = {
   cpcBase: 1,
   items: {},
   upgrades: {},
+  // Skins state
+  skin: "default",
+  skinsOwned: { default: true, ice: false, fire: false },
+
   lastTs: Date.now(),
   stats: { clicks: 0, lastPurchaseTs: Date.now() },
   flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0 },
@@ -63,7 +74,15 @@ const DEFAULT_STATE = {
   toasts: [],
   unlocked: {},
   fx: { banner: null, shakeUntil: 0 },
-  crypto: { name: "CrumbCoin", symbol: "CRMB", balance: 0, staked: 0, mintedUnits: 0, perCookies: 20000, perAmount: 0.001 },
+  crypto: { 
+    name: "CrumbCoin", 
+    symbol: "CRMB", 
+    balance: 0, 
+    staked: 0, 
+    mintedUnits: 0, 
+    perCookies: 20000, 
+    perAmount: 0.001 
+  },
 };
 
 const SAVE_KEY = "cookieCrazeSaveV4";
@@ -202,7 +221,7 @@ export default function CookieCraze() {
     if (dt > 3) {
       const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
       const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * dt * 0.5;
-      if (offlineGain > 0) toast(`+${fmt(offlineGain)} cookies gagnés hors‑ligne`, "info");
+      if (offlineGain > 0) toast(`+${fmt(offlineGain)} cookies gagnés hors-ligne`, "info");
       setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
     }
     scheduleGolden();
@@ -387,6 +406,26 @@ export default function CookieCraze() {
     toast(`Upgrade: ${u.name}`, "success");
   };
 
+  // --- Skins Shop (logic) ---
+  const buySkin = (skinId) => {
+    const skin = SKINS[skinId];
+    if (!skin) return;
+    if (state.skinsOwned[skinId]) return toast("Skin déjà acheté", "warn");
+    if (state.cookies < skin.price) return toast("Pas assez de cookies…", "warn");
+
+    setState((s) => ({
+      ...s,
+      cookies: s.cookies - skin.price,
+      skinsOwned: { ...s.skinsOwned, [skinId]: true },
+    }));
+    toast(`Nouveau skin débloqué: ${skin.name}`, "success");
+  };
+
+  const selectSkin = (skinId) => {
+    if (!state.skinsOwned[skinId]) return toast("Skin non débloqué", "warn");
+    setState((s) => ({ ...s, skin: skinId }));
+  };
+
   // Particles (clics)
   const [particles, setParticles] = useState([]);
   const mousePos = useRef({ x: 0, y: 0 });
@@ -418,7 +457,7 @@ export default function CookieCraze() {
     if (!canPrestige) return;
     if (!confirm(`Prestige ? Tu gagneras ${potentialChips - state.prestige.chips} chips célestes (+2% prod/chip) et ta progression sera réinitialisée.`)) return;
     setState((s) => ({ ...DEFAULT_STATE, prestige: { chips: potentialChips }, ui: s.ui, toasts: [] }));
-    toast("Re‑naissance céleste ✨", "success");
+    toast("Re-naissance céleste ✨", "success");
   };
 
   // Export / Import / Reset
@@ -559,20 +598,20 @@ export default function CookieCraze() {
             </div>
 
             {/* Big Cookie */}
-<div className="mt-8 flex items-center justify-center relative">
-  <motion.img
-    src="/cookie.png"
-    alt="Cookie"
-    className="h-72 w-72 md:h-96 md:w-96 cursor-pointer select-none drop-shadow-xl"
-    whileTap={{ scale: 0.92, rotate: -2 }}
-    onClick={onCookieClick}
-    draggable="false"
-  />
-  <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-lg text-zinc-400">
-    Combo x{state.combo.value.toFixed(2)}
-  </div>
-</div>
-            
+            <div className="mt-8 flex items-center justify-center relative">
+              <motion.img
+                src={SKINS[state.skin].src}
+                alt="Cookie"
+                className="h-72 w-72 md:h-96 md:w-96 cursor-pointer select-none drop-shadow-xl"
+                whileTap={{ scale: 0.92, rotate: -2 }}
+                onClick={onCookieClick}
+                draggable="false"
+              />
+              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-lg text-zinc-400">
+                Combo x{state.combo.value.toFixed(2)}
+              </div>
+            </div>
+
             {/* Particles */}
             <div className="pointer-events-none fixed left-0 top-0 w-full h-full">
               <AnimatePresence>
@@ -611,7 +650,7 @@ export default function CookieCraze() {
             </AnimatePresence>
           </div>
 
-          {/* Shop */}
+          {/* Shop (bâtiments) */}
           <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl flex flex-col gap-3 max-h-[520px] md:max-h-[620px] overflow-auto">
             <div className="text-sm font-semibold text-zinc-300 flex items-center justify-between">
               <span>Boutique</span>
@@ -646,8 +685,9 @@ export default function CookieCraze() {
           </div>
         </div>
 
-        {/* Upgrades & Crypto */}
+        {/* Upgrades, Crypto & Skins */}
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Upgrades */}
           <div className="lg:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
             <div className="text-sm font-semibold text-zinc-300 mb-2">Améliorations</div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-3">
@@ -667,6 +707,7 @@ export default function CookieCraze() {
             </div>
           </div>
 
+          {/* Crypto */}
           <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-zinc-300">{state.crypto.name} <span className="text-zinc-500">({state.crypto.symbol})</span></div>
@@ -680,6 +721,40 @@ export default function CookieCraze() {
               <button onClick={() => stake(0.001)} disabled={(state.crypto.balance || 0) < 0.001} className="text-xs px-3 py-1 rounded-lg bg-emerald-700/30 border border-emerald-500/40 disabled:opacity-50">Stake +0.001</button>
               <button onClick={() => unstake(0.001)} disabled={(state.crypto.staked || 0) < 0.001} className="text-xs px-3 py-1 rounded-lg bg-zinc-800 border border-zinc-700 disabled:opacity-50">Unstake -0.001</button>
             </div>
+          </div>
+        </div>
+
+        {/* Skins Shop */}
+        <div className="mt-4 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
+          <div className="text-sm font-semibold text-zinc-300 mb-3">Skins de cookie</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {Object.values(SKINS).map((skin) => (
+              <div key={skin.id} className="p-3 rounded-xl border bg-zinc-800/40">
+                <img src={skin.src} alt={skin.name} className="h-16 w-16 mx-auto mb-2 select-none" draggable="false" />
+                <div className="text-center font-semibold">{skin.name}</div>
+                {state.skinsOwned[skin.id] ? (
+                  <button
+                    onClick={() => selectSkin(skin.id)}
+                    disabled={state.skin === skin.id}
+                    className={`mt-2 w-full px-2 py-1 rounded-lg border ${
+                      state.skin === skin.id
+                        ? "bg-emerald-600/30 border-emerald-400/40 text-emerald-200"
+                        : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
+                    }`}
+                  >
+                    {state.skin === skin.id ? "Équipé" : "Équiper"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => buySkin(skin.id)}
+                    disabled={state.cookies < skin.price}
+                    className="mt-2 w-full px-2 py-1 rounded-lg bg-amber-600/30 border border-amber-400/40 hover:bg-amber-500/40 disabled:opacity-50"
+                  >
+                    Acheter {fmt(skin.price)}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -703,8 +778,8 @@ export default function CookieCraze() {
               <li>Le <b>Rush combo</b> déclenche un boost si tu maintiens un bon rythme.</li>
               <li>Les <b>soldes flash</b> arrivent si tu stagne trop longtemps.</li>
               <li>Les <b>améliorations</b> et les <b>synergies</b> gardent utiles les vieux bâtiments.</li>
-              <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
-              <li>Hors‑ligne : tu gagnes 50% de tes CPS.</li>
+              <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
+              <li>Hors-ligne : tu gagnes 50% de tes CPS.</li>
             </ul>
           </div>
         </div>
@@ -816,6 +891,11 @@ function migrate(s) {
   merged.upgrades = merged.upgrades || {}; merged.unlocked = merged.unlocked || {};
   merged.fx = merged.fx || { banner: null, shakeUntil: 0 };
   merged.crypto = merged.crypto || { name: "CrumbCoin", symbol: "CRMB", balance: 0, staked: 0, mintedUnits: 0, perCookies: 20000, perAmount: 0.001 };
+
+  // Skins migration (compat anciennes saves)
+  merged.skin = merged.skin || "default";
+  merged.skinsOwned = { default: true, ice: false, fire: false, ...(merged.skinsOwned || {}) };
+
   merged.version = 4;
   return merged;
 }
