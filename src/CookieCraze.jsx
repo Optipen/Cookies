@@ -448,7 +448,7 @@ export default function CookieCraze() {
       combo.lastClickTs = now; const gain = cpc;
       return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 }, combo };
     });
-    burstParticles(1);
+    burstParticles(2);
   };
 
   // Prestige
