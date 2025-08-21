@@ -788,7 +788,7 @@ export default function CookieCraze() {
               <li>Les <b>soldes flash</b> arrivent si tu stagne trop longtemps.</li>
               <li>Les <b>améliorations</b> et les <b>synergies</b> gardent utiles les vieux bâtiments.</li>
               <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
-              <li>Hors-ligne : tu gagnes 50% de tes CPS.</li>
+              <li>Hors-ligne : tu gagnes 5% de tes CPS.</li>
             </ul>
           </div>
         </div>
