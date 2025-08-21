@@ -64,7 +64,13 @@ const useAudio = (enabled) => {
       setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + time); o.stop(ctx.currentTime + time); }, time * 800);
     } catch {}
   };
-  return { ping };
+  const dispose = () => {
+    try {
+      if (ctxRef.current) ctxRef.current.close();
+    } catch {}
+    ctxRef.current = null;
+  };
+  return { ping, dispose };
 };
 
 // === Component ===
@@ -76,7 +82,7 @@ export default function CookieCraze() {
     } catch {}
     return { ...DEFAULT_STATE };
   });
-  const { ping } = useAudio(state.ui.sounds);
+  const { ping, dispose } = useAudio(state.ui.sounds);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
 
@@ -92,6 +98,8 @@ export default function CookieCraze() {
       })),
     []
   );
+
+  useEffect(() => () => dispose(), [dispose]);
 
   // --- Helpers for CPS recompute (NO stale closure) ---
   const computePerItemMult = (items, upgrades) => {
