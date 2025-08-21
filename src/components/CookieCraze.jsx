@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Shop from "./Shop.jsx";
+import Upgrades from "./Upgrades.jsx";
+import Skins from "./Skins.jsx";
 
 // === Skins ===
 const SKINS = {
@@ -531,13 +534,6 @@ export default function CookieCraze() {
     try { setTimeout(() => window.location.reload(), 50); } catch {}
   };
 
-  // UI helpers
-  const ProgressBar = ({ value, label }) => (
-    <div className="w-full bg-zinc-800 rounded-xl overflow-hidden shadow-inner">
-      <div className="h-2 bg-amber-400" style={{ width: `${clamp(value, 0, 1) * 100}%` }}></div>
-      {label && <div className="text-[10px] text-zinc-400 mt-1">{label}</div>}
-    </div>
-  );
   const buffTimeLeft = Math.max(0, state.buffs.until - Date.now());
 
   // Intro overlay controls
@@ -660,109 +656,39 @@ export default function CookieCraze() {
             </div>
 
             {tab === 'shop' && (
-              <>
-                <div className="text-sm font-semibold text-zinc-300 flex items-center justify-between">
-                  <span>Boutique</span>
-                  <span className="text-[11px] text-zinc-500">Astuce: <b>Shift</b>=×10 · <b>Ctrl</b>=×100</span>
-                </div>
-                {ITEMS.map((it) => {
-                  const ownedCount = state.items[it.id] || 0;
-                  const singleBase = Math.ceil(it.base * Math.pow(it.growth, ownedCount));
-                  const onFlash = state.flags.flash && state.flags.flash.itemId === it.id && Date.now() < state.flags.flash.until;
-                  const price1 = costOf(it.id, 1);
-                  const affordable = state.cookies >= price1;
-                  return (
-                    <button key={it.id} onClick={(e) => buy(it.id, e.shiftKey ? 10 : e.ctrlKey ? 100 : 1)}
-                      className={`relative w-full text-left p-3 rounded-xl border transition flex items-center gap-3 ${affordable ? "bg-zinc-800/70 hover:bg-zinc-800 border-zinc-700" : "bg-zinc-900/40 border-zinc-800 opacity-70"}`}>
-                      {onFlash && <span className="absolute -top-2 -left-2 text-[10px] px-2 py-0.5 rounded-full bg-pink-600 border border-pink-300">-25% 20s</span>}
-                      <div className="text-2xl">{it.emoji}</div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="font-semibold">{it.name} <span className="text-xs text-zinc-500">×{ownedCount}</span></div>
-                          <div className="text-amber-300 font-bold flex items-center gap-2">
-                            {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(singleBase)}</span>}
-                            <span>{fmt(price1)}</span>
-                          </div>
-                        </div>
-                        <div className="text-xs text-zinc-400">{it.desc}</div>
-                        <div className="mt-1"><ProgressBar value={clamp((state.cookies / price1), 0, 1)} /></div>
-                      </div>
-                      <div className="text-right text-xs text-zinc-400 w-24 leading-tight">+{fmt((perItemMult[it.id] || 1) * it.cps)} CPS</div>
-                    </button>
-                  );
-                })}
-              </>
+              <Shop
+                state={state}
+                ITEMS={ITEMS}
+                buy={buy}
+                costOf={costOf}
+                perItemMult={perItemMult}
+                fmt={fmt}
+                clamp={clamp}
+              />
             )}
 
             {tab === 'upgrades' && (
-              <>
-                <div className="text-sm font-semibold text-zinc-300 mb-2">Améliorations</div>
-                <div className="grid grid-cols-1 gap-3">
-                  {UPGRADES.map((u) => {
-                    const available = canBuyUpgrade(u);
-                    const purchased = !!state.upgrades[u.id];
-                    return (
-                      <button key={u.id} disabled={purchased || !available || state.cookies < u.cost}
-                        onClick={() => buyUpgrade(u)}
-                        className={`p-3 rounded-xl border text-left transition ${purchased ? "bg-emerald-600/20 border-emerald-400/40 text-emerald-200" : available ? (state.cookies >= u.cost ? "bg-zinc-800/70 hover:bg-zinc-800 border-zinc-700" : "bg-zinc-900/40 border-zinc-800") : "bg-zinc-900/30 border-zinc-900 opacity-60"}`}>
-                        <div className="font-semibold">{u.name}</div>
-                        <div className="text-xs text-zinc-400">{u.target === 'all' ? "Tous les bâtiments" : u.target === 'cpc' ? "Puissance de clic" : `Boost ${ITEMS.find(i=>i.id===u.target)?.name}`}</div>
-                        <div className="text-sm mt-1 text-amber-300">{purchased ? "Acheté" : `Coût: ${fmt(u.cost)}`}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-zinc-300">{state.crypto.name} <span className="text-zinc-500">({state.crypto.symbol})</span></div>
-                    <div className={`text-sm px-2 py-1 rounded-lg border ${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"}`}>
-                      Solde: <b>{(state.crypto.balance || 0).toFixed(3)} {state.crypto.symbol}</b>
-                    </div>
-                  </div>
-                  <div className="text-xs text-zinc-400 mt-1">Faucet: <b>{state.crypto.perAmount} {state.crypto.symbol}</b> / <b>{fmt(state.crypto.perCookies)}</b> cookies cuits</div>
-                  <div className="mt-2 text-xs text-zinc-400">Stake: <b>{(state.crypto.staked || 0).toFixed(3)} {state.crypto.symbol}</b> → Boost global <b>+{((state.crypto.staked || 0)*50).toFixed(1)}%</b></div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button onClick={() => stake(0.001)} disabled={(state.crypto.balance || 0) < 0.001} className="text-xs px-3 py-1 rounded-lg bg-emerald-700/30 border border-emerald-500/40 disabled:opacity-50">Stake +0.001</button>
-                    <button onClick={() => unstake(0.001)} disabled={(state.crypto.staked || 0) < 0.001} className="text-xs px-3 py-1 rounded-lg bg-zinc-800 border border-zinc-700 disabled:opacity-50">Unstake -0.001</button>
-                  </div>
-                </div>
-              </>
+              <Upgrades
+                state={state}
+                UPGRADES={UPGRADES}
+                buyUpgrade={buyUpgrade}
+                canBuyUpgrade={canBuyUpgrade}
+                ITEMS={ITEMS}
+                fmt={fmt}
+                stake={stake}
+                unstake={unstake}
+                cryptoFlash={cryptoFlash}
+              />
             )}
 
             {tab === 'skins' && (
-              <>
-                <div className="text-sm font-semibold text-zinc-300 mb-3">Marché des Skins</div>
-                <div className="grid grid-cols-1 gap-3">
-                  {Object.values(SKINS).map((skin) => (
-                    <div key={skin.id} className="p-3 rounded-xl border bg-zinc-800/40">
-                      <img src={skin.src} alt={skin.name} className="h-16 w-16 mx-auto mb-2 select-none" draggable="false" />
-                      <div className="text-center font-semibold">{skin.name}</div>
-                      {state.skinsOwned[skin.id] ? (
-                        <button
-                          onClick={() => selectSkin(skin.id)}
-                          disabled={state.skin === skin.id}
-                          className={`mt-2 w-full px-2 py-1 rounded-lg border ${
-                            state.skin === skin.id
-                              ? "bg-emerald-600/30 border-emerald-400/40 text-emerald-200"
-                              : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700"
-                          }`}
-                        >
-                          {state.skin === skin.id ? "Équipé" : "Équiper"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => buySkin(skin.id)}
-                          disabled={state.cookies < skin.price}
-                          className="mt-2 w-full px-2 py-1 rounded-lg bg-amber-600/30 border border-amber-400/40 hover:bg-amber-500/40 disabled:opacity-50"
-                        >
-                          Acheter {fmt(skin.price)}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
+              <Skins
+                state={state}
+                SKINS={SKINS}
+                selectSkin={selectSkin}
+                buySkin={buySkin}
+                fmt={fmt}
+              />
             )}
           </div>
         </div>
