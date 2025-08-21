@@ -559,16 +559,19 @@ export default function CookieCraze() {
             </div>
 
             {/* Big Cookie */}
-            <div className="mt-4 flex items-center justify-center">
-              <motion.button
-                aria-label="Cliquer pour produire des cookies"
-                whileTap={{ scale: 0.92, rotate: -2 }} onClick={onCookieClick}
-                className="relative h-56 w-56 md:h-72 md:w-72 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 shadow-[0_20px_60px_rgba(0,0,0,0.5)] border-4 border-amber-300/60 ring-2 ring-amber-200/20 hover:shadow-[0_25px_90px_rgba(255,200,0,0.25)] transition">
-                <div className="absolute inset-0 rounded-full" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), transparent 40%), radial-gradient(circle at 70% 70%, rgba(0,0,0,0.2), transparent 50%)" }} />
-                <div className="absolute inset-0">{[...Array(14)].map((_, i) => (<div key={i} className="absolute h-3 w-3 bg-zinc-900/70 rounded-full" style={{ left: `${10 + (i*6)%80}%`, top: `${10 + (i*9)%80}%` }} />))}</div>
-                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-sm text-zinc-400">Combo x{state.combo.value.toFixed(2)}</div>
-              </motion.button>
-            </div>
+<div className="mt-4 flex items-center justify-center">
+  <motion.img
+    src="/cookie.png"   // mets ton image ici (dans /public/cookie.png)
+    alt="Cookie"
+    className="h-56 w-56 md:h-72 md:w-72 cursor-pointer select-none drop-shadow-lg"
+    whileTap={{ scale: 0.92, rotate: -2 }}
+    onClick={onCookieClick}
+  />
+  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-sm text-zinc-400">
+    Combo x{state.combo.value.toFixed(2)}
+  </div>
+</div>
+
 
             {/* Particles */}
             <div className="pointer-events-none fixed left-0 top-0 w-full h-full">
