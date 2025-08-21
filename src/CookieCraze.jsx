@@ -221,7 +221,7 @@ export default function CookieCraze() {
     const dt = Math.max(0, (now - state.lastTs) / 1000);
     if (dt > 3) {
       const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-      const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * dt * 0.5;
+      const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * dt * 0.05;
       if (offlineGain > 0) toast(`+${fmt(offlineGain)} cookies gagnés hors-ligne`, "info");
       setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
     }
