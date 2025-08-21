@@ -559,20 +559,20 @@ export default function CookieCraze() {
             </div>
 
             {/* Big Cookie */}
-<div className="mt-4 flex items-center justify-center">
+<div className="mt-8 flex items-center justify-center relative">
   <motion.img
-    src="/cookie.png"   // mets ton image ici (dans /public/cookie.png)
+    src="/cookie.png"
     alt="Cookie"
-    className="h-56 w-56 md:h-72 md:w-72 cursor-pointer select-none drop-shadow-lg"
+    className="h-72 w-72 md:h-96 md:w-96 cursor-pointer select-none drop-shadow-xl"
     whileTap={{ scale: 0.92, rotate: -2 }}
     onClick={onCookieClick}
+    draggable="false"
   />
-  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-sm text-zinc-400">
+  <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-lg text-zinc-400">
     Combo x{state.combo.value.toFixed(2)}
   </div>
 </div>
-
-
+            
             {/* Particles */}
             <div className="pointer-events-none fixed left-0 top-0 w-full h-full">
               <AnimatePresence>
