@@ -174,6 +174,7 @@ export default function CookieCraze() {
   const { ping, crunch, dispose } = useAudio(state.ui.sounds);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const cookieField = useMemo(
     () =>
@@ -190,6 +191,16 @@ export default function CookieCraze() {
 
   // Dispose uniquement au démontage pour éviter de couper l'audio entre les rendus
   useEffect(() => () => dispose(), []);
+
+  // Advanced gate: visible si DEV ou ?advanced=1
+  useEffect(() => {
+    try {
+      const isDev = !!(import.meta?.env?.DEV);
+      const url = new URL(window.location.href);
+      const q = url.searchParams.get('advanced');
+      if (isDev || q === '1') setShowAdvanced(true);
+    } catch {}
+  }, []);
 
   // --- Multipliers (memo for live view) ---
   const prestigeMulti = useMemo(() => 1 + state.prestige.chips * 0.02, [state.prestige.chips]);
@@ -658,12 +669,23 @@ export default function CookieCraze() {
                   >
                     {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
                   </button>
-                  <button onClick={exportSave} className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
-                  <label className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
-                    <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
-                  </label>
+                  <button
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700"
+                    aria-expanded={showAdvanced}
+                  >
+                    Avancé {showAdvanced ? "▲" : "▼"}
+                  </button>
                   <button onClick={(e) => hardReset(e)} title="Astuce: Alt+clic = reset total" className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">♻️ Reset</button>
                 </div>
+                {showAdvanced && (
+                  <div className="mt-2 flex items-center gap-2 justify-end text-xs">
+                    <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
+                    <label className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
+                      <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
