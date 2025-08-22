@@ -64,23 +64,102 @@ const PENDING_RESET_KEY = "cookieCrazePendingReset";
 
 const useAudio = (enabled) => {
   const ctxRef = useRef(null);
+  const buffersRef = useRef({});
   const ping = (freq = 520, time = 0.05) => {
     if (!enabled) return;
     try {
       if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = ctxRef.current; const o = ctx.createOscillator(); const g = ctx.createGain();
+      const ctx = ctxRef.current; if (ctx.state === "suspended") { try { ctx.resume(); } catch {} }
+      const o = ctx.createOscillator(); const g = ctx.createGain();
       o.type = "triangle"; o.frequency.value = freq; g.gain.value = 0.07;
       o.connect(g); g.connect(ctx.destination); o.start();
       setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + time); o.stop(ctx.currentTime + time); }, time * 800);
     } catch {}
+  };
+  const loadBuffer = async (url) => {
+    if (!enabled) return null;
+    try {
+      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = ctxRef.current;
+      if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+      if (buffersRef.current[url]) return buffersRef.current[url];
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const arr = await res.arrayBuffer();
+      const buf = await new Promise((resolve, reject) => {
+        try { ctx.decodeAudioData(arr, (b) => resolve(b), (e) => reject(e)); } catch (e) { reject(e); }
+      });
+      buffersRef.current[url] = buf;
+      return buf;
+    } catch {
+      return null;
+    }
+  };
+  const crunch = async () => {
+    if (!enabled) return;
+    try {
+      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = ctxRef.current;
+      if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+      const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) ? (import.meta.env.BASE_URL || '/') : '/';
+      const ensureSlash = (s) => s.endsWith('/') ? s : (s + '/');
+      const b = ensureSlash(base);
+      const candidates = [
+        `${b}crunch.mp3`, `${b}crunch-1.mp3`, `${b}crunch-2.mp3`,
+        "/crunch.mp3", "/crunch-1.mp3", "/crunch-2.mp3",
+        "crunch.mp3", "crunch-1.mp3", "crunch-2.mp3"
+      ];
+      const start = Math.floor(Math.random() * candidates.length);
+      let played = false;
+      for (let i = 0; i < candidates.length; i++) {
+        const url = candidates[(start + i) % candidates.length];
+        const buf = await loadBuffer(url);
+        if (buf) {
+          const src = ctx.createBufferSource();
+          const g = ctx.createGain();
+          g.gain.value = 0.4;
+          src.buffer = buf;
+          src.connect(g); g.connect(ctx.destination);
+          src.start(0);
+          played = true;
+          break;
+        }
+      }
+      if (!played) {
+        // Fallback HTMLAudioElement (débloque certains navigateurs / iframes)
+        try {
+          const htmlCandidates = [
+            `${b}crunch.mp3`, `${b}crunch-1.mp3`, `${b}crunch-2.mp3`,
+            "/crunch.mp3", "/crunch-1.mp3", "/crunch-2.mp3",
+            "crunch.mp3", "crunch-1.mp3", "crunch-2.mp3"
+          ];
+          let ok = false;
+          for (const u of htmlCandidates) {
+            try {
+              const a = new Audio(u);
+              a.volume = 0.4;
+              await a.play();
+              ok = true;
+              break;
+            } catch {}
+          }
+          if (!ok) ping(520, 0.05);
+        } catch {
+          ping(520, 0.05);
+        }
+      }
+    } catch {
+      ping(520, 0.05);
+    }
   };
   const dispose = () => {
     try {
       if (ctxRef.current) ctxRef.current.close();
     } catch {}
     ctxRef.current = null;
+    buffersRef.current = {};
   };
-  return { ping, dispose };
+  return { ping, crunch, dispose };
 };
 
 // === Component ===
@@ -92,7 +171,7 @@ export default function CookieCraze() {
     } catch {}
     return { ...DEFAULT_STATE };
   });
-  const { ping, dispose } = useAudio(state.ui.sounds);
+  const { ping, crunch, dispose } = useAudio(state.ui.sounds);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
 
@@ -109,7 +188,8 @@ export default function CookieCraze() {
     []
   );
 
-  useEffect(() => () => dispose(), [dispose]);
+  // Dispose uniquement au démontage pour éviter de couper l'audio entre les rendus
+  useEffect(() => () => dispose(), []);
 
   // --- Multipliers (memo for live view) ---
   const prestigeMulti = useMemo(() => 1 + state.prestige.chips * 0.02, [state.prestige.chips]);
@@ -401,7 +481,7 @@ export default function CookieCraze() {
 
   // Big cookie click
   const onCookieClick = () => {
-    ping(520, 0.05);
+    crunch();
     const now = Date.now();
     setState((s) => {
       let combo = { ...s.combo };
