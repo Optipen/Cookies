@@ -175,6 +175,12 @@ export default function CookieCraze() {
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  useEffect(() => {
+    const onEsc = (e) => e.key === 'Escape' && setShowMenu(false);
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, []);
 
   const cookieField = useMemo(
     () =>
@@ -635,11 +641,48 @@ export default function CookieCraze() {
             <div className="text-3xl">🍪</div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cookie Craze</h1>
           </div>
-          <div className="flex items-center gap-3 text-sm flex-wrap">
+          <div className="relative flex items-center gap-3 text-sm flex-wrap">
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">CPS: <b>{fmt(cpsWithBuff)}</b></span>
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">CPC: <b>{fmt(cpc)}</b></span>
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Prestige: <b>{state.prestige.chips}</b></span>
             <span className={`px-2 py-1 rounded-full border ${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"}`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
+            <button
+              onClick={() => setShowMenu(v => !v)}
+              aria-haspopup="menu"
+              aria-expanded={showMenu}
+              className="absolute right-0 -top-1 md:top-0 rounded-lg px-2 py-1 bg-zinc-800 border border-zinc-700 text-sm"
+            >⚙️</button>
+            {showMenu && (
+              <div
+                role="menu"
+                className="absolute right-0 mt-2 w-44 rounded-xl bg-zinc-900/95 border border-zinc-700 shadow-xl z-50"
+                onMouseLeave={() => setShowMenu(false)}
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => setState(s => ({ ...s, ui:{...s.ui, sounds: !s.ui.sounds} }))}
+                  className="w-full text-left px-3 py-2 hover:bg-zinc-800/60"
+                >
+                  {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
+                </button>
+
+                <button
+                  role="menuitem"
+                  onClick={() => { setShowAdvanced(v => !v); setShowMenu(false); }}
+                  className="w-full text-left px-3 py-2 hover:bg-zinc-800/60"
+                >
+                  🛠️ Avancé
+                </button>
+
+                <button
+                  role="menuitem"
+                  onClick={hardReset}
+                  className="w-full text-left px-3 py-2 text-red-300 hover:bg-red-900/30"
+                >
+                  ♻️ Reset
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -661,23 +704,7 @@ export default function CookieCraze() {
                 {canPrestige && (
                   <button onClick={doPrestige} className="text-xs px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 transition border border-purple-400/50 shadow">Prestige +{potentialChips - state.prestige.chips}</button>
                 )}
-                <div className="flex items-center gap-2 justify-end">
-                  <button
-                    aria-pressed={state.ui.sounds}
-                    onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
-                    className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700"
-                  >
-                    {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
-                  </button>
-                  <button
-                    onClick={() => setShowAdvanced((v) => !v)}
-                    className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700"
-                    aria-expanded={showAdvanced}
-                  >
-                    Avancé {showAdvanced ? "▲" : "▼"}
-                  </button>
-                  <button onClick={(e) => hardReset(e)} title="Astuce: Alt+clic = reset total" className="text-xs px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">♻️ Reset</button>
-                </div>
+                
                 {showAdvanced && (
                   <div className="mt-2 flex items-center gap-2 justify-end text-xs">
                     <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
