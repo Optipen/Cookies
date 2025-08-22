@@ -633,7 +633,7 @@ export default function CookieCraze() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="text-3xl">🍪</div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cookie Craze — <span className="text-amber-300">Ultra Addictif</span></h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cookie Craze</h1>
           </div>
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">CPS: <b>{fmt(cpsWithBuff)}</b></span>
