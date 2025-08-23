@@ -869,7 +869,15 @@ export default function CookieCraze() {
             </div>
 
             {/* Big Cookie */}
-            <div ref={cookieWrapRef} className="-mt-9 flex items-center justify-center relative">
+            <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
+              {/* welcome.png centré au-dessus du cookie quand fx.tag est actif */}
+              {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
+                <img
+                  src={state.fx.tag.image}
+                  alt="Bienvenue"
+                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] max-w-[500px] drop-shadow-2xl z-10"
+                />
+              )}
               {state.cookieEatEnabled ? (
                 <CookieBiteMask
                   skinSrc={SKINS[state.skin].src}
@@ -933,28 +941,6 @@ export default function CookieCraze() {
                   className="fixed left-1/2 top-24 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-amber-500/20 border border-amber-300/50 backdrop-blur text-amber-200 shadow-xl">
                   <div className="text-xs tracking-widest">{state.fx.banner.title}</div>
                   <div className="text-lg font-extrabold">{state.fx.banner.sub}</div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Central Tag (graffiti-like or image) */}
-            <AnimatePresence>
-              {state.fx.tag && Date.now() < state.fx.tag.until && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.92, rotateZ: -2 }}
-                  animate={{ opacity: 1, scale: 1, rotateZ: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, rotateZ: 2, transition: { duration: (state.fx.tag.anim?.outMs || 800) / 1000 } }}
-                  transition={{ duration: (state.fx.tag.anim?.inMs || 3000) / 1000, ease: 'easeInOut' }}
-                  className="fixed z-40"
-                  style={{ left: state.fx.tag.x || '50vw', top: state.fx.tag.y || '50vh', transform: 'translate(-50%, -50%)' }}
-                >
-                  {state.fx.tag.image ? (
-                    <img src={state.fx.tag.image} alt="Bienvenue" className="drop-shadow-2xl object-contain" style={{ maxWidth: 'min(80vw, 900px)', width: '100%', height: 'auto' }} />
-                  ) : (
-                    <div className="px-6 py-3 rounded-[28px] bg-amber-500/25 border border-amber-300/60 text-amber-200 font-extrabold text-4xl drop-shadow-xl shadow-amber-500/20 tracking-tight" style={{ textShadow: '0 2px 12px rgba(251,191,36,0.5)' }}>
-                      {state.fx.tag.text}
-                    </div>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
