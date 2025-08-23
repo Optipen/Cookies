@@ -222,10 +222,10 @@ export default function CookieCraze() {
 
   const cpsWithBuff = useMemo(() => baseCpsNoBuff * (Date.now() < state.buffs.until ? state.buffs.cpsMulti : 1), [baseCpsNoBuff, state.buffs]);
   const clickMult = useMemo(() => clickMultiplierFrom(state.items, state.upgrades), [state.items, state.upgrades]);
-  // Base CPC: dépend de max(1, CPS) puis × multiplicateurs de clic
+  // Base CPC: dépend UNIQUEMENT du cpcBase initial × multiplicateurs de clic (indépendant du CPS auto)
   const cpcBase = useMemo(() => (
-    Math.max(state.cpcBase || 1, baseCpsNoBuff) * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades
-  ), [state.cpcBase, baseCpsNoBuff, clickMult, state.buffs, cpcMultFromUpgrades]);
+    (state.cpcBase || 1) * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades
+  ), [state.cpcBase, clickMult, state.buffs, cpcMultFromUpgrades]);
   // CPC courant utilisé pour les gains (sans combo)
   const cpc = useMemo(() => cpcBase, [cpcBase]);
 
@@ -548,7 +548,7 @@ export default function CookieCraze() {
     if (isManualClickItem) {
       const beforeClickMult = clickMultiplierFrom(state.items, state.upgrades);
       const afterClickMult = clickMultiplierFrom(newItems, state.upgrades);
-      // Recalcule CPC avant/après avec la même formule que l'UI
+      // Recalcule CPC avant/après avec la même formule que l'UI (sans dépendre du CPS auto)
       let cpcUpgradesMult = 1;
       for (const upId in state.upgrades) {
         if (!state.upgrades[upId]) continue;
@@ -556,10 +556,8 @@ export default function CookieCraze() {
         if (up && up.target === 'cpc' && up.type === 'mult') cpcUpgradesMult *= up.value;
       }
       const cpcBuffNow = (Date.now() < state.buffs.until) ? state.buffs.cpcMulti : 1;
-      const baseNoBuffBefore = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM);
-      const baseNoBuffAfter = cpsFrom(newItems, state.upgrades, state.prestige.chips, stakeM);
-      const cpcBefore = Math.max(state.cpcBase || 1, baseNoBuffBefore) * beforeClickMult * cpcUpgradesMult * cpcBuffNow;
-      const cpcAfter = Math.max(state.cpcBase || 1, baseNoBuffAfter) * afterClickMult * cpcUpgradesMult * cpcBuffNow;
+      const cpcBefore = (state.cpcBase || 1) * beforeClickMult * cpcUpgradesMult * cpcBuffNow;
+      const cpcAfter = (state.cpcBase || 1) * afterClickMult * cpcUpgradesMult * cpcBuffNow;
       const deltaCpc = cpcAfter - cpcBefore;
       bannerSub = `+${fmt(deltaCpc)} CPC`;
     }
@@ -870,34 +868,38 @@ export default function CookieCraze() {
 
             {/* Big Cookie */}
             <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
-              {/* welcome.png centré au-dessus du cookie quand fx.tag est actif */}
-              {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
-                <img
-                  src={state.fx.tag.image}
-                  alt="Bienvenue"
-                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] max-w-[500px] drop-shadow-2xl z-10"
-                />
-              )}
-              {state.cookieEatEnabled ? (
-                <CookieBiteMask
-                  skinSrc={SKINS[state.skin].src}
-                  clicks={state.stats.clicks}
-                  bitesTotal={80}
-                  enabled={state.cookieEatEnabled}
-                  onFinished={onCookieEaten}
-                  className="h-96 w-96 md:h-[30rem] md:w-[30rem] cursor-pointer select-none drop-shadow-xl"
-                  onClick={onCookieClick}
-                />
-              ) : (
-                <motion.img
-                  src={SKINS[state.skin].src}
-                  alt="Cookie"
-                  className="h-96 w-96 md:h-[30rem] md:w-[30rem] cursor-pointer select-none drop-shadow-xl"
-                  whileTap={{ scale: 0.92, rotate: -2 }}
-                  onClick={onCookieClick}
-                  draggable="false"
-                />
-              )}
+              {/* Wrapper carré aux dimensions du cookie pour un centrage parfait */}
+              <div className="relative h-96 w-96 md:h-[30rem] md:w-[30rem]">
+                {/* welcome.png centré au-dessus du cookie quand fx.tag est actif */}
+                {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
+                  <img
+                    src={state.fx.tag.image}
+                    alt="Bienvenue"
+                    className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] md:w-[200%] max-w-[960px] drop-shadow-2xl z-10"
+                  />
+                )}
+
+                {state.cookieEatEnabled ? (
+                  <CookieBiteMask
+                    skinSrc={SKINS[state.skin].src}
+                    clicks={state.stats.clicks}
+                    bitesTotal={80}
+                    enabled={state.cookieEatEnabled}
+                    onFinished={onCookieEaten}
+                    className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                    onClick={onCookieClick}
+                  />
+                ) : (
+                  <motion.img
+                    src={SKINS[state.skin].src}
+                    alt="Cookie"
+                    className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                    whileTap={{ scale: 0.92, rotate: -2 }}
+                    onClick={onCookieClick}
+                    draggable="false"
+                  />
+                )}
+              </div>
               {/* Particles (confinées à la zone du cookie) */}
               <div className="pointer-events-none absolute inset-0">
                 <AnimatePresence>
