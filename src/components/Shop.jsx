@@ -14,12 +14,12 @@ const ProgressBar = ({ value, label }) => (
 export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep, modeFilter, purchaseFlash }) {
   return (
     <>
-      <div className="text-sm font-semibold text-zinc-200 flex items-center justify-between">
+      <div className="text-base font-semibold text-amber-900 flex items-center justify-between mb-3">
         <span>{modeFilter === 'auto' ? 'Production auto' : 'Boutique'}</span>
-        <span className="text-[11px] text-zinc-400">Astuce: <b>Shift</b>=×10 · <b>Ctrl</b>=×100</span>
+        <span className="text-xs text-amber-700">Astuce: <b>Shift</b>=×10 · <b>Ctrl</b>=×100</span>
       </div>
       {modeFilter !== 'auto' && (<>
-      <div className="mt-2 text-xs font-semibold text-zinc-300">Clics (manuels)</div>
+      <div className="mt-2 text-sm font-semibold text-amber-800">Clics (manuels)</div>
       {ITEMS.filter((it) => it.mode === 'mult').map((it) => {
         const ownedCount = state.items[it.id] || 0;
         const singleBase = Math.ceil(it.base * Math.pow(it.growth, ownedCount));
@@ -44,10 +44,10 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
           <button
             key={it.id}
             onClick={(e) => buy(it.id, e.shiftKey ? 10 : e.ctrlKey ? 100 : 1)}
-            className={`relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 btn-pressable transition ${
+            className={`relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 btn-pressable transition item-card ${
               affordable
-                ? "glass-neon hover:border-sky-400/60"
-                : "bg-zinc-900/40 border-zinc-800 opacity-70"
+                ? "glass-warm hover:border-amber-400/60"
+                : "bg-stone-900/40 border-stone-800 opacity-70"
             } ${isFirstFreeCursor ? "animate-pulse ring-2 ring-cyan-300/60" : ""} ${
               purchaseFlash && purchaseFlash[it.id] ? "ring-2 ring-emerald-400/80 bg-emerald-500/20" : ""
             } card-shadow`}
@@ -62,20 +62,20 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <div className="font-semibold">
-                  {it.name} <span className="text-xs text-zinc-500">×{ownedCount}</span>
+                  {it.name} <span className="text-xs text-amber-600">×{ownedCount}</span>
                 </div>
-                <div className="text-cyan-200 font-extrabold flex items-center gap-2 drop-shadow">
+                <div className="text-amber-900 font-extrabold flex items-center gap-2">
                   {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(preDiscountPrice || singleBase)}</span>}
-                  <span className="px-2 py-0.5 rounded-md badge-neon-cyan">{isFirstFreeCursor ? "0" : fmt(price1)}</span>
+                  <span className="px-2 py-0.5 rounded-md badge-warm-price">{isFirstFreeCursor ? "0" : fmt(price1)}</span>
                 </div>
               </div>
-              <div className="text-xs text-zinc-400">{it.desc}</div>
+              <div className="text-xs text-amber-700">{it.desc}</div>
               <div className="mt-1">
                 <ProgressBar value={clamp(state.cookies / price1, 0, 1)} />
               </div>
             </div>
-            <div className="text-right text-xs text-zinc-300 w-24 leading-tight">
-              <span className="px-2 py-1 rounded-md badge-neon-amber inline-block">+{fmt((perItemMult[it.id] || 1) * (it.mult || 0))} CPC</span>
+            <div className="text-right text-xs text-amber-800 w-24 leading-tight">
+              <span className="px-2 py-1 rounded-md badge-warm-boost inline-block">+{fmt((perItemMult[it.id] || 1) * (it.mult || 0))} CPC</span>
             </div>
           </button>
           </ShopTooltip>
@@ -84,7 +84,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
       </>)}
       {modeFilter === 'auto' && (
       <>
-      <div className="mt-3 text-xs font-semibold text-zinc-300">Auto (production passive)</div>
+      <div className="mt-3 text-sm font-semibold text-amber-800">Auto (production passive)</div>
       {ITEMS.filter((it) => it.mode === 'cps').map((it) => {
         const ownedCount = state.items[it.id] || 0;
         const singleBase = Math.ceil(it.base * Math.pow(it.growth, ownedCount));
@@ -108,8 +108,8 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
           <button
             key={it.id}
             onClick={(e) => buy(it.id, e.shiftKey ? 10 : e.ctrlKey ? 100 : 1)}
-            className={`relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 btn-pressable transition ${
-              affordable ? "glass-neon hover:border-sky-400/60" : "bg-zinc-900/40 border-zinc-800 opacity-70"
+            className={`relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 btn-pressable transition item-card ${
+              affordable ? "glass-warm hover:border-amber-400/60" : "bg-stone-900/40 border-stone-800 opacity-70"
             } ${
               purchaseFlash && purchaseFlash[it.id] ? "ring-2 ring-emerald-400/80 bg-emerald-500/20" : ""
             } card-shadow`}
@@ -121,20 +121,20 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <div className="font-semibold">
-                  {it.name} <span className="text-xs text-zinc-500">×{ownedCount}</span>
+                  {it.name} <span className="text-xs text-amber-600">×{ownedCount}</span>
                 </div>
-                <div className="text-cyan-200 font-extrabold flex items-center gap-2 drop-shadow">
+                <div className="text-amber-900 font-extrabold flex items-center gap-2">
                   {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(preDiscountPrice || singleBase)}</span>}
-                  <span className="px-2 py-0.5 rounded-md badge-neon-cyan">{fmt(price1)}</span>
+                  <span className="px-2 py-0.5 rounded-md badge-warm-price">{fmt(price1)}</span>
                 </div>
               </div>
-              <div className="text-xs text-zinc-400">{it.desc}</div>
+              <div className="text-xs text-amber-700">{it.desc}</div>
               <div className="mt-1">
                 <ProgressBar value={clamp(state.cookies / price1, 0, 1)} />
               </div>
             </div>
-            <div className="text-right text-xs text-zinc-300 w-24 leading-tight">
-              <span className="px-2 py-1 rounded-md badge-neon-amber inline-block">x{fmt((perItemMult[it.id] || 1) * it.cps)}</span>
+            <div className="text-right text-xs text-amber-800 w-24 leading-tight">
+              <span className="px-2 py-1 rounded-md badge-warm-boost inline-block">x{fmt((perItemMult[it.id] || 1) * it.cps)}</span>
             </div>
           </button>
           </ShopTooltip>

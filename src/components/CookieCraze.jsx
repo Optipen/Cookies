@@ -1110,7 +1110,7 @@ export default function CookieCraze() {
   const shaking = Date.now() < state.fx.shakeUntil;
   const cryptoFlash = Date.now() < state.flags.cryptoFlashUntil;
   return (
-    <div key={viewKey} id="game-area" className="min-h-screen w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100 select-none overflow-hidden">
+    <div key={viewKey} id="game-area" className="min-h-screen w-full bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 text-amber-950 select-none overflow-hidden">
       {/* Composant d'accessibilité pour les annonces de timer */}
       <TimerAnnouncer />
       <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
@@ -1118,31 +1118,31 @@ export default function CookieCraze() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="text-3xl">🍪</div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cookie Craze</h1>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cookie Craze</h1>
           </div>
-          <div className="relative flex items-center gap-3 text-sm flex-wrap pr-12 md:pr-16">
-            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
-            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
-            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Prestige: <b>{state.prestige.chips}</b></span>
-            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"} px-2 py-1 rounded-full border relative group`} aria-label="Solde CRMB" tabIndex={0}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b>
+          <div className="relative flex items-center gap-4 text-sm flex-wrap pr-12 md:pr-16">
+            <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
+            <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
+            <span className="px-2 py-1 rounded-full badge-warm">Prestige: <b>{state.prestige.chips}</b></span>
+            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60 badge-glow" : "badge-warm"} px-2 py-1 rounded-full border relative group`} aria-label="Solde CRMB" tabIndex={0}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b>
               <span className="pointer-events-none absolute left-0 mt-1 translate-y-full opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-64">Le faucet crédite automatiquement des CRMB selon les cookies cuits. Tu peux les stake pour booster toute ta production.</span>
             </span>
             <button
               onClick={() => setShowMenu(v => !v)}
               aria-haspopup="menu"
               aria-expanded={showMenu}
-              className="absolute right-0 -top-1 md:top-0 rounded-lg px-2 py-1 bg-zinc-800 border border-zinc-700 text-sm"
+              className="absolute right-0 -top-1 md:top-0 rounded-lg px-3 py-2 bg-white/90 backdrop-blur border border-amber-300/50 text-sm shadow-lg hover:shadow-xl hover:bg-white transition-all"
             >⚙️</button>
             {showMenu && (
               <div
                 role="menu"
-                className="absolute right-0 mt-2 w-44 rounded-xl bg-zinc-900/95 border border-zinc-700 shadow-xl z-50"
+                className="absolute right-0 mt-2 w-44 rounded-xl bg-white/95 backdrop-blur-md border border-amber-200/50 shadow-2xl z-50"
                 onMouseLeave={() => setShowMenu(false)}
               >
                 <button
                   role="menuitem"
                   onClick={() => setState(s => ({ ...s, ui:{...s.ui, sounds: !s.ui.sounds} }))}
-                  className="w-full text-left px-3 py-2 hover:bg-zinc-800/60"
+                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors first:rounded-t-xl"
                 >
                   {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
                 </button>
@@ -1150,7 +1150,7 @@ export default function CookieCraze() {
                 <button
                   role="menuitem"
                   onClick={() => { setShowAdvanced(v => !v); setShowMenu(false); }}
-                  className="w-full text-left px-3 py-2 hover:bg-zinc-800/60"
+                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors"
                 >
                   🛠️ Avancé
                 </button>
@@ -1158,7 +1158,7 @@ export default function CookieCraze() {
                 <button
                   role="menuitem"
                   onClick={hardReset}
-                  className="w-full text-left px-3 py-2 text-red-300 hover:bg-red-900/30"
+                  className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-100 transition-colors last:rounded-b-xl"
                 >
                   ♻️ Reset
                 </button>
@@ -1169,11 +1169,11 @@ export default function CookieCraze() {
 
         {/* Top Stats */}
         <div className={"mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 " + (shaking ? "animate-[wiggle_0.7s_ease]" : "")}>
-          <div className="md:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
+          <div className="md:col-span-2 rounded-2xl p-5 md:p-6 glass-warm shadow-xl">
             <div className="flex flex-col items-center text-center">
-              <div className="text-base md:text-xl text-zinc-300">Cookies en banque</div>
-              <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{fmtInt(state.cookies)}</div>
-              <div className="text-sm text-zinc-500 flex items-center gap-1">Cuits au total: {fmtInt(state.lifetime)}{baseCpsNoBuff > 0 ? (' · ' + fmt(baseCpsNoBuff) + ' CPS') : ''}
+              <div className="text-base md:text-xl text-amber-900 font-medium">Cookies en banque</div>
+              <div className="text-5xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-500 value-highlight">{fmtInt(state.cookies)}</div>
+              <div className="text-sm text-amber-800/80 flex items-center gap-1">Cuits au total: <span className="font-semibold text-amber-900">{fmtInt(state.lifetime)}</span>{baseCpsNoBuff > 0 ? (<span className="text-amber-700"> · {fmt(baseCpsNoBuff)} CPS</span>) : ''}
                 <span
                   className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-800/70 border border-zinc-700 text-[10px] cursor-help group relative"
                   aria-label="Cookies mangés — aide"
@@ -1261,7 +1261,9 @@ export default function CookieCraze() {
             {/* Big Cookie */}
             <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
               {/* Wrapper carré aux dimensions du cookie pour un centrage parfait */}
-              <div className="relative h-96 w-96 md:h-[30rem] md:w-[30rem]">
+              <div className="relative h-96 w-96 md:h-[32rem] md:w-[32rem] float-animation">
+                {/* Glow ambiant autour du cookie */}
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 via-orange-500/10 to-transparent rounded-full blur-3xl cookie-glow pulse-animation"></div>
                 {/* welcome.png centré au-dessus du cookie quand fx.tag est actif */}
                 {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
                   <img
@@ -1300,7 +1302,7 @@ export default function CookieCraze() {
                     <motion.img
                       src={skinSrc}
                       alt="Cookie"
-                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl " + skinClass}
+                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl cookie-hover " + skinClass}
                       whileTap={{ scale: 0.92, rotate: -2 }}
                       onClick={onCookieClick}
                       draggable="false"
@@ -1406,26 +1408,26 @@ export default function CookieCraze() {
           </div>
 
           {/* Right panel with tabs */}
-          <div className="rounded-2xl p-0 bg-zinc-900/60 border border-zinc-800 shadow-xl flex flex-col max-h-[520px] md:max-h-[620px] overflow-hidden">
+          <div className="rounded-2xl p-0 glass-warm shadow-xl flex flex-col max-h-[520px] md:max-h-[620px] overflow-hidden">
             
             {/* Missions en haut du panneau de droite */}
-            <div className="px-3 py-2 border-b border-zinc-800 space-y-2">
+            <div className="px-4 py-3 border-b border-amber-200/30 space-y-2 bg-gradient-to-b from-amber-50/50 to-transparent">
               {/* Mission en cours */}
               {isFeatureEnabled('ENABLE_MISSIONS') && (
-                <div className="rounded-lg border border-zinc-700/70 bg-zinc-900/40 p-2">
-                  <div className="text-xs text-zinc-300 font-semibold">Mission</div>
-                  <div className="text-xs font-bold text-zinc-100">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
-                  <div className="text-[10px] text-zinc-400 leading-tight">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
-                  <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
+                <div className="rounded-lg border border-amber-300/50 bg-white/80 backdrop-blur p-3 shadow-sm">
+                  <div className="text-xs text-amber-700 font-semibold">Mission</div>
+                  <div className="text-sm font-bold text-amber-950">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
+                  <div className="text-xs text-amber-800/80 leading-tight">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
+                  <div className="mt-2 h-2 rounded-full bg-amber-200/50 overflow-hidden shadow-inner">
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
                   </div>
                 </div>
               )}
 
               {/* Micro‑mission (prioritaire à l'affichage si présente) */}
               {isFeatureEnabled('ENABLE_MICRO_MISSIONS') && state.activeMicroMission && (
-                <div className="rounded-lg border border-zinc-700/70 bg-zinc-900/40 p-2">
-                  <div className="text-xs text-zinc-300 font-semibold">Micro‑mission</div>
+                <div className="rounded-lg border border-emerald-300/50 bg-emerald-50/80 backdrop-blur p-3 shadow-sm">
+                  <div className="text-xs text-emerald-700 font-semibold">Micro‑mission</div>
                   {(() => {
                     const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
                     const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
@@ -1436,12 +1438,12 @@ export default function CookieCraze() {
                     
                     return (
                       <>
-                        <div className="text-xs font-bold text-zinc-100">{cur?.title || "—"}</div>
-                        {cur?.desc && <div className="text-[10px] text-zinc-400 leading-tight">{cur.desc}</div>}
+                        <div className="text-sm font-bold text-emerald-950">{cur?.title || "—"}</div>
+                        {cur?.desc && <div className="text-xs text-emerald-800/80 leading-tight">{cur.desc}</div>}
                         
                         {/* Barre de progression normale */}
-                        <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
-                          <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
+                        <div className="mt-2 h-2 rounded-full bg-emerald-200/50 overflow-hidden shadow-inner" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
+                          <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-500" style={{ width: pct + '%' }} />
                         </div>
                         
                         {/* Timer pour missions chronométrées */}
@@ -1454,16 +1456,16 @@ export default function CookieCraze() {
             </div>
 
             {/* Fixed tabs bar - Mobile responsive with horizontal scroll */}
-            <div className="sticky top-0 z-10 bg-zinc-900/80 backdrop-blur border-b border-zinc-800" role="tablist" aria-label="Navigation boutique">
+            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-amber-200/30 shadow-sm" role="tablist" aria-label="Navigation boutique">
               <div className="flex gap-1 px-3 py-2 text-xs overflow-x-auto scrollbar-hide snap-x snap-mandatory">
                 <button 
                   role="tab" 
                   aria-selected={tab==='shop'} 
                   onClick={() => setTab('shop')} 
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
                     tab==='shop' 
-                      ? 'bg-zinc-800 text-white border border-zinc-700' 
-                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
+                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
                   }`}
                 >
                   🛍️ Boutique
@@ -1472,10 +1474,10 @@ export default function CookieCraze() {
                   role="tab" 
                   aria-selected={tab==='auto'} 
                   onClick={() => setTab('auto')} 
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
                     tab==='auto' 
-                      ? 'bg-zinc-800 text-white border border-zinc-700' 
-                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
+                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
                   }`}
                 >
                   ⚙️ Auto
@@ -1484,10 +1486,10 @@ export default function CookieCraze() {
                   role="tab" 
                   aria-selected={tab==='upgrades'} 
                   onClick={() => setTab('upgrades')} 
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
                     tab==='upgrades' 
-                      ? 'bg-zinc-800 text-white border border-zinc-700' 
-                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
+                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
                   }`}
                 >
                   ⬆️ Améliorations
@@ -1497,10 +1499,10 @@ export default function CookieCraze() {
                     role="tab" 
                     aria-selected={tab==='skins'} 
                     onClick={() => setTab('skins')} 
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                    className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
                       tab==='skins' 
-                        ? 'bg-zinc-800 text-white border border-zinc-700' 
-                        : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
+                        : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
                     }`}
                   >
                     👔 Skins
@@ -1553,28 +1555,28 @@ export default function CookieCraze() {
         </div>
 
         {/* Bottom: achievements & tips */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800">
+        <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
+          <div className="lg:col-span-2 rounded-2xl p-5 md:p-6 glass-warm">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-zinc-300">Succès</div>
-              <div className="text-xs text-zinc-500">{Object.keys(state.unlocked).length}/{ACHIEVEMENTS.length}</div>
+              <div className="text-lg font-bold text-amber-900">Succès</div>
+              <div className="text-sm text-amber-700 font-medium">{Object.keys(state.unlocked).length}/{ACHIEVEMENTS.length}</div>
             </div>
             <div className="mt-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {ACHIEVEMENTS.map((a) => (
                 <div
                   key={a.id}
                   className={(state.unlocked[a.id]
-                    ? "p-2 rounded-lg border text-center text-xs bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
-                    : "p-2 rounded-lg border text-center text-xs bg-zinc-900/40 border-zinc-800 text-zinc-500")}
+                    ? "p-3 rounded-lg border-2 text-center text-xs bg-gradient-to-br from-emerald-100 to-emerald-50 border-emerald-400 text-emerald-900 font-medium shadow-md"
+                    : "p-3 rounded-lg border text-center text-xs bg-amber-50/50 border-amber-200/50 text-amber-400")}
                 >
                   {a.name}
                 </div>
               ))}
             </div>
           </div>
-          <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800">
-            <div className="text-sm font-semibold text-zinc-300">Infos & astuces</div>
-            <ul className="mt-2 text-xs text-zinc-400 space-y-1 list-disc list-inside">
+          <div className="rounded-2xl p-5 md:p-6 glass-warm">
+            <div className="text-lg font-bold text-amber-900">Infos & astuces</div>
+            <ul className="mt-3 text-sm text-amber-800 space-y-2 list-disc list-inside">
               <li>Les <b>cookies dorés</b> apparaissent au hasard. Clique vite !</li>
               {/* Rush combo supprimé */}
               <li>Les <b>soldes flash</b> arrivent si tu stagne trop longtemps.</li>
