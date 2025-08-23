@@ -9,7 +9,9 @@ import { UPGRADES } from "../data/upgrades.js";
 import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "../utils/calc.js";
 import tuning from "../data/tuning.json";
 import { ACHIEVEMENTS } from "../data/achievements.js";
-import { MISSIONS, getInitialMission, nextMissionId } from "../data/missions.js";
+import { MISSIONS, getInitialMission, nextMissionId, MICRO_MISSIONS } from "../data/missions.js";
+import { useSound } from "../hooks/useSound.js";
+import { useMicroMissions } from "../hooks/useMicroMissions.js";
 import { fmt, fmtInt, clamp } from "../utils/format.js";
 
 // --- Helpers for CPS recompute (module-level) ---
@@ -63,6 +65,7 @@ const DEFAULT_STATE = {
   cookieEatenCount: 0,
   cookieBites: [],
   mission: getInitialMission(),
+  activeMicroMission: null,
 };
 
 const SAVE_KEY = "cookieCrazeSaveV4";
@@ -178,6 +181,7 @@ export default function CookieCraze() {
     return { ...DEFAULT_STATE };
   });
   const { ping, crunch, dispose } = useAudio(state.ui.sounds);
+  const { play } = useSound(state.ui.sounds);
   const [previewSkin, setPreviewSkin] = useState(null);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
@@ -238,6 +242,11 @@ export default function CookieCraze() {
   }, [state.cpcBase, clickMult, state.buffs, cpcMultFromUpgrades, state.createdAt]);
   // CPC courant utilisé pour les gains (sans combo)
   const cpc = useMemo(() => cpcBase, [cpcBase]);
+
+  // Skin preview helpers
+  const skinKey = previewSkin || state.skin;
+  const skinClass = (SKINS[skinKey] && SKINS[skinKey].className) ? SKINS[skinKey].className : "";
+  const skinSrc = (SKINS[skinKey] && SKINS[skinKey].src) ? SKINS[skinKey].src : SKINS.default.src;
 
   // Save
   useEffect(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }, [state]);
@@ -429,13 +438,16 @@ export default function CookieCraze() {
     });
   }, [state.cookies, state.items, state.stats.goldenClicks]);
 
-  // Toast helper
-  const toast = (msg, tone = "info", options = {}) => {
+  // Micro missions engine
+  useMicroMissions(state, setState, toast);
+
+  // Toast helper (function declaration to allow hoisting before first use)
+  function toast(msg, tone = "info", options = {}) {
     const id = Math.random().toString(36).slice(2);
     setState((s) => ({ ...s, toasts: [...s.toasts, { id, msg, tone }] }));
     const duration = options.ms || 2800;
     setTimeout(() => setState((s) => ({ ...s, toasts: s.toasts.filter((t) => t.id !== id) })), duration);
-  };
+  }
 
   // Golden cookie
   const goldenTimerRef = useRef(null);
@@ -469,7 +481,7 @@ export default function CookieCraze() {
     const nowClick = Date.now();
     if (nowClick < goldenClickLockRef.current) return; // anti double-click
     goldenClickLockRef.current = nowClick + 800;
-    setShowGolden(false); scheduleGolden(); ping(880, 0.1);
+    setShowGolden(false); scheduleGolden(); ping(880, 0.1); try { play('/sounds/golden_appear.mp3', 0.45); } catch {}
     const now = Date.now();
     const mode = (tuning && tuning.mode) || 'standard';
     const gcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || {};
@@ -506,6 +518,8 @@ export default function CookieCraze() {
   // Cookie Rain (événement toutes ~2–4 min)
   const [rainCrumbs, setRainCrumbs] = useState([]);
   const [rainUntil, setRainUntil] = useState(0);
+  const [flyingCookie, setFlyingCookie] = useState(null);
+  const [speedChallenge, setSpeedChallenge] = useState({ idleSince: Date.now(), visible: false, active: false, clicks: 0, until: 0 });
   const scheduleRain = () => {
     const mode = (tuning && tuning.mode) || 'standard';
     const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
@@ -514,6 +528,71 @@ export default function CookieCraze() {
     const d = (min + Math.random() * (max - min)) * 1000;
     setTimeout(() => startRain(), d);
   };
+  // Flying cookie scheduler (rare)
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (flyingCookie || Date.now() < (speedChallenge.until || 0)) return;
+      if (Math.random() < 0.035) {
+        const area = document.getElementById('game-area'); const r = area?.getBoundingClientRect();
+        const left = (r ? (Math.random() * (r.width - 120) + 60) : (Math.random() * 400 + 60));
+        const top = (r ? (Math.random() * (r.height - 260) + 120) : (Math.random() * 240 + 120));
+        setFlyingCookie({ id: Math.random().toString(36).slice(2), left, top, until: Date.now() + 3000 });
+        try { play('/sounds/golden_appear.mp3', 0.35); } catch {}
+      }
+    }, 4000);
+    return () => clearInterval(iv);
+  }, [flyingCookie, speedChallenge.until]);
+  useEffect(() => {
+    if (!flyingCookie) return; const t = setTimeout(() => setFlyingCookie(null), Math.max(0, flyingCookie.until - Date.now()));
+    return () => clearTimeout(t);
+  }, [flyingCookie]);
+  const onFlyingCookieClick = () => {
+    if (!flyingCookie) return;
+    setFlyingCookie(null);
+    applyBuff({ cpsMulti: 1, cpcMulti: 1.2, seconds: 15, label: 'VITESSE +20% CPC' });
+    toast('Vitesse: +20% CPC (15s)', 'success');
+  };
+
+  // Idle detection + speed challenge
+  useEffect(() => {
+    const onAny = () => setSpeedChallenge((s) => ({ ...s, idleSince: Date.now(), visible: false }));
+    window.addEventListener('mousemove', onAny); window.addEventListener('keydown', onAny); window.addEventListener('click', onAny);
+    const iv = setInterval(() => {
+      setSpeedChallenge((s) => {
+        if (s.active) return s;
+        const idle = Date.now() - (s.idleSince || 0);
+        if (idle > 10000) return { ...s, visible: true };
+        return s;
+      });
+    }, 1000);
+    return () => { window.removeEventListener('mousemove', onAny); window.removeEventListener('keydown', onAny); window.removeEventListener('click', onAny); clearInterval(iv); };
+  }, []);
+  const startSpeedChallenge = () => {
+    setSpeedChallenge({ idleSince: Date.now(), visible: false, active: true, clicks: 0, until: Date.now() + 20000 });
+    toast('Défi de vitesse: 25 clics en 20s !', 'info');
+  };
+  useEffect(() => {
+    if (!speedChallenge.active) return;
+    const t = setInterval(() => {
+      setSpeedChallenge((s) => {
+        if (!s.active) return s;
+        if (Date.now() >= s.until) {
+          const ok = s.clicks >= 25;
+          if (ok) { applyBuff({ cpcMulti: 1.2, seconds: 20, label: 'DÉFI +20% CPC' }); toast('Défi réussi ! CPC +20% (20s)', 'success'); }
+          else { toast(`Défi raté (${s.clicks}/25)`, 'warn'); }
+          return { idleSince: Date.now(), visible: false, active: false, clicks: 0, until: 0 };
+        }
+        return s;
+      });
+    }, 250);
+    return () => clearInterval(t);
+  }, [speedChallenge.active]);
+  useEffect(() => {
+    if (!speedChallenge.active) return;
+    const inc = () => setSpeedChallenge((s) => ({ ...s, clicks: s.clicks + 1 }));
+    window.addEventListener('click', inc);
+    return () => window.removeEventListener('click', inc);
+  }, [speedChallenge.active]);
   const startRain = () => {
     const mode = (tuning && tuning.mode) || 'standard';
     const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
@@ -570,6 +649,10 @@ export default function CookieCraze() {
       const totalCpsOwned = ITEMS.filter(x => x.mode === 'cps').reduce((acc, x) => acc + (state.items[x.id] || 0), 0);
       if (ecfg.free_first_auto && totalCpsOwned === 0 && state.ui.introSeen) price = 0;
       else price *= (1 - (ecfg.cps_discount || 0));
+    }
+    // Discount global temporaire (micro‑missions)
+    if (state.flags.discountAll && Date.now() < state.flags.discountAll.until) {
+      price *= (1 - (state.flags.discountAll.value || 0));
     }
     // Tutoriel: premier achat de Curseur gratuit à la toute première partie (une seule fois)
     if (!state.ui.introSeen && id === 'cursor' && owned === 0) price = 0;
@@ -873,7 +956,9 @@ export default function CookieCraze() {
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Prestige: <b>{state.prestige.chips}</b></span>
-            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"} px-2 py-1 rounded-full border`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
+            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"} px-2 py-1 rounded-full border relative group`} aria-label="Solde CRMB" tabIndex={0}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b>
+              <span className="pointer-events-none absolute left-0 mt-1 translate-y-full opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-64">Le faucet crédite automatiquement des CRMB selon les cookies cuits. Tu peux les stake pour booster toute ta production.</span>
+            </span>
             <button
               onClick={() => setShowMenu(v => !v)}
               aria-haspopup="menu"
@@ -915,12 +1000,23 @@ export default function CookieCraze() {
         </div>
 
         {/* Top Stats */}
-        <div className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${shaking ? "animate-[wiggle_0.7s_ease]" : ""}`}>
+        <div className={"mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 " + (shaking ? "animate-[wiggle_0.7s_ease]" : "")}>
           <div className="md:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
             <div className="flex flex-col items-center text-center">
               <div className="text-base md:text-xl text-zinc-300">Cookies en banque</div>
               <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{fmtInt(state.cookies)}</div>
-              <div className="text-sm text-zinc-500">Cuits au total: {fmtInt(state.lifetime)}{baseCpsNoBuff > 0 ? ` · ${fmt(baseCpsNoBuff)} CPS` : ''}</div>
+              <div className="text-sm text-zinc-500 flex items-center gap-1">Cuits au total: {fmtInt(state.lifetime)}{baseCpsNoBuff > 0 ? (' · ' + fmt(baseCpsNoBuff) + ' CPS') : ''}
+                <span
+                  className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-800/70 border border-zinc-700 text-[10px] cursor-help group relative"
+                  aria-label="Cookies mangés — aide"
+                  tabIndex={0}
+                >
+                  ?
+                  <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 mt-2 translate-y-full opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-64">
+                    Les "cookies mangés" proviennent des cookies dorés. Ils servent à débloquer des petites surprises et ne sont pas dépensés.
+                  </span>
+                </span>
+              </div>
 
               {Date.now() < state.buffs.until && (
                 <div className="mt-3 text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
@@ -955,8 +1051,28 @@ export default function CookieCraze() {
                 <div className="text-sm font-bold text-zinc-100">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
                 <div className="text-xs text-zinc-400">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
                 <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: `${Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))}%` }} />
+                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
                 </div>
+              </div>
+            </div>
+
+            {/* Micro‑mission en cours */}
+            <div className="mt-3 w-full max-w-md mx-auto">
+              <div className="text-xs text-zinc-300 font-semibold">Micro‑mission</div>
+              <div className="mt-1 rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
+                {(() => {
+                  const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
+                  const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
+                  return (
+                    <>
+                      <div className="text-sm font-bold text-zinc-100">{cur?.title || "—"}</div>
+                      {cur?.desc && <div className="text-xs text-zinc-400">{cur.desc}</div>}
+                      <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
+                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -979,19 +1095,19 @@ export default function CookieCraze() {
                 >
                   {state.cookieEatEnabled ? (
                     <CookieBiteMask
-                      skinSrc={SKINS[previewSkin || state.skin].src}
+                      skinSrc={skinSrc}
                       clicks={state.stats.clicks}
                       bitesTotal={80}
                       enabled={state.cookieEatEnabled}
                       onFinished={onCookieEaten}
-                      className={`h-full w-full cursor-pointer select-none drop-shadow-xl ${SKINS[previewSkin || state.skin].className || ""}`}
+                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl " + skinClass}
                       onClick={onCookieClick}
                     />
                   ) : (
                     <motion.img
-                      src={SKINS[previewSkin || state.skin].src}
+                      src={skinSrc}
                       alt="Cookie"
-                      className={`h-full w-full cursor-pointer select-none drop-shadow-xl ${SKINS[previewSkin || state.skin].className || ""}`}
+                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl " + skinClass}
                       whileTap={{ scale: 0.92, rotate: -2 }}
                       onClick={onCookieClick}
                       draggable="false"
@@ -1042,6 +1158,20 @@ export default function CookieCraze() {
               )}
             </AnimatePresence>
 
+            {/* Flying Cookie (mini-jeu) */}
+            <AnimatePresence>
+              {!!flyingCookie && (
+                <motion.button
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={onFlyingCookieClick}
+                  className="fixed z-20 h-14 w-14 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 border-2 border-amber-100 shadow-xl"
+                  style={{ left: flyingCookie.left, top: flyingCookie.top }}
+                >🍪</motion.button>
+              )}
+            </AnimatePresence>
+
             {/* Cookie Rain */}
             <AnimatePresence>
               {Date.now() < rainUntil && rainCrumbs.map((c) => (
@@ -1063,17 +1193,37 @@ export default function CookieCraze() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Speed Challenge CTA and progress */}
+            {!speedChallenge.active && speedChallenge.visible && (
+              <div className="fixed bottom-24 right-4 z-30">
+                <button onClick={startSpeedChallenge} className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm border border-cyan-300/50 shadow">
+                  Démarrer défi de vitesse
+                </button>
+              </div>
+            )}
+            {speedChallenge.active && (
+              <div className="fixed bottom-24 right-4 z-30 px-3 py-2 rounded-xl bg-zinc-900/90 border border-zinc-700 text-xs text-zinc-200 shadow">
+                <div className="font-bold">Défi: {speedChallenge.clicks}/25</div>
+                <div className="mt-1 h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: Math.max(0, Math.min(100, Math.floor(((speedChallenge.until - Date.now())/20000)*100))) + '%' }} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right panel with tabs */}
-          <div className="rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl flex flex-col gap-3 max-h-[520px] md:max-h-[620px] overflow-auto">
-            <div className="flex gap-2 text-xs mb-2">
-              <button onClick={() => setTab('shop')} className={`px-3 py-1 rounded-lg border ${tab === 'shop' ? 'bg-zinc-800 border-zinc-600' : 'bg-zinc-900/50 border-zinc-700 hover:bg-zinc-800'}`}>Boutique</button>
-              <button onClick={() => setTab('upgrades')} className={`px-3 py-1 rounded-lg border ${tab === 'upgrades' ? 'bg-zinc-800 border-zinc-600' : 'bg-zinc-900/50 border-zinc-700 hover:bg-zinc-800'}`}>Améliorations</button>
-              <button onClick={() => setTab('skins')} className={`px-3 py-1 rounded-lg border ${tab === 'skins' ? 'bg-zinc-800 border-zinc-600' : 'bg-zinc-900/50 border-zinc-700 hover:bg-zinc-800'}`}>Skins</button>
+          <div className="rounded-2xl p-0 bg-zinc-900/60 border border-zinc-800 shadow-xl flex flex-col max-h-[520px] md:max-h-[620px] overflow-hidden">
+            {/* Fixed tabs bar */}
+            <div className="sticky top-0 z-10 bg-zinc-900/80 backdrop-blur px-3 py-2 border-b border-zinc-800 flex gap-1 text-xs" role="tablist" aria-label="Navigation boutique">
+              <button role="tab" aria-selected={tab==='shop'} onClick={() => setTab('shop')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='shop' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Boutique</button>
+              <button role="tab" aria-selected={tab==='auto'} onClick={() => setTab('auto')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='auto' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Auto</button>
+              <button role="tab" aria-selected={tab==='upgrades'} onClick={() => setTab('upgrades')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='upgrades' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Améliorations</button>
+              <button role="tab" aria-selected={tab==='skins'} onClick={() => setTab('skins')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='skins' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Skins</button>
             </div>
+            <div className="p-4 flex-1 overflow-auto">
 
-            {tab === 'shop' && (
+            {(tab === 'shop' || tab === 'auto') && (
               <Shop
                 state={state}
                 ITEMS={ITEMS}
@@ -1083,6 +1233,7 @@ export default function CookieCraze() {
                 fmt={fmt}
                 clamp={clamp}
                 tutorialStep={tutorialStep}
+                modeFilter={tab}
               />
             )}
 
@@ -1109,6 +1260,7 @@ export default function CookieCraze() {
                 fmt={fmt}
               />
             )}
+            </div>
           </div>
         </div>
 
@@ -1121,7 +1273,14 @@ export default function CookieCraze() {
             </div>
             <div className="mt-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {ACHIEVEMENTS.map((a) => (
-                <div key={a.id} className={`p-2 rounded-lg border text-center text-xs ${state.unlocked[a.id] ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200" : "bg-zinc-900/40 border-zinc-800 text-zinc-500"}`}>{a.name}</div>
+                <div
+                  key={a.id}
+                  className={(state.unlocked[a.id]
+                    ? "p-2 rounded-lg border text-center text-xs bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
+                    : "p-2 rounded-lg border text-center text-xs bg-zinc-900/40 border-zinc-800 text-zinc-500")}
+                >
+                  {a.name}
+                </div>
               ))}
             </div>
           </div>
@@ -1142,12 +1301,18 @@ export default function CookieCraze() {
         {/* Toasts */}
         <div className="fixed right-4 bottom-4 z-50 space-y-2">
           <AnimatePresence>
-            {state.toasts.map((t) => (
-              <motion.div key={t.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-                className={`px-3 py-2 rounded-lg text-sm shadow border ${t.tone === "success" ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200" : t.tone === "warn" ? "bg-red-500/20 border-red-400/40 text-red-200" : "bg-zinc-800/80 border-zinc-700 text-zinc-100"}`}>
-                {t.msg}
-              </motion.div>
-            ))}
+            {state.toasts.map((t) => {
+              const clsBase = "px-3 py-2 rounded-lg text-sm shadow border ";
+              const clsTone = t.tone === 'success'
+                ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                : (t.tone === 'warn' ? "bg-red-500/20 border-red-400/40 text-red-200" : "bg-zinc-800/80 border-zinc-700 text-zinc-100");
+              return (
+                <motion.div key={t.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                  className={clsBase + clsTone}>
+                  {t.msg}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       </div>
@@ -1176,7 +1341,7 @@ export default function CookieCraze() {
                 <motion.div
                   key={c.id}
                   className="absolute select-none"
-                  style={{ top: `${c.top}%`, left: `${c.left}%`, fontSize: c.size }}
+                  style={{ top: (c.top) + '%', left: (c.left) + '%', fontSize: c.size }}
                   initial={{ y: 0, opacity: 0 }}
                   animate={{ y: ["0%", "-20%", "0%"], opacity: [0.1, 0.6, 0.1] }}
                   transition={{ duration: c.duration, delay: c.delay, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
@@ -1199,7 +1364,7 @@ export default function CookieCraze() {
               {tutorialStep === 1 && (
                 <>
                   <div className="text-3xl font-extrabold text-amber-300">1) Tape sur le gros cookie</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Clique le cookie central <b>5 fois</b> pour passer à l’étape suivante.</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Clique le cookie central <b>5 fois</b> pour passer à l'étape suivante.</div>
                   <div className="mt-3 text-xs text-zinc-400">Astuce: essaie maintenant, la progression se mettra à jour.</div>
                   <button onClick={() => setTutorialInteract(true)} className="mt-6 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Cliquer le cookie</button>
                 </>
@@ -1207,7 +1372,7 @@ export default function CookieCraze() {
               {tutorialStep === 2 && (
                 <>
                   <div className="text-3xl font-extrabold text-amber-300">2) Achète des multiplicateurs</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Ouvre la Boutique et achète un item de <b>clic</b> (p.ex. Curseur). L’étape avançera après l’achat.</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Ouvre la Boutique et achète un item de <b>clic</b> (p.ex. Curseur). L'étape avançera après l'achat.</div>
                   <div className="mt-5 flex gap-3">
                     <button onClick={() => { setTutorialInteract(true); setTab('shop'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Ouvrir la Boutique</button>
                   </div>
@@ -1216,7 +1381,7 @@ export default function CookieCraze() {
               {tutorialStep === 3 && (
                 <>
                   <div className="text-3xl font-extrabold text-amber-300">3) Découvre les skins ✨</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Personnalise ton cookie : couleurs, styles, et plus. Ouvre l’onglet <b>Skins</b> pour voir.</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Personnalise ton cookie : couleurs, styles, et plus. Ouvre l'onglet <b>Skins</b> pour voir.</div>
                   <div className="mt-5 flex gap-3">
                     <button onClick={() => { setTutorialInteract(true); setTab('skins'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Voir Skins</button>
                   </div>
@@ -1225,7 +1390,7 @@ export default function CookieCraze() {
               {tutorialStep === 4 && (
                 <>
                   <div className="text-3xl font-extrabold text-amber-300">Bonne chance !</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Tu es prêt. Clique, achète, progresse et vise l’infini ✨</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Tu es prêt. Clique, achète, progresse et vise l'infini ✨</div>
                   <motion.div
                     initial={{ opacity: 0, y: 24, scale: 0.96, rotateX: 20 }}
                     animate={{ opacity: 1, y: [18, -6, 0], scale: [0.96, 1.05, 1], rotateX: [20, 6, 0] }}

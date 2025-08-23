@@ -9,13 +9,14 @@ const ProgressBar = ({ value, label }) => (
   </div>
 );
 
-export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep }) {
+export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep, modeFilter }) {
   return (
     <>
       <div className="text-sm font-semibold text-zinc-200 flex items-center justify-between">
-        <span>Boutique</span>
+        <span>{modeFilter === 'auto' ? 'Production auto' : 'Boutique'}</span>
         <span className="text-[11px] text-zinc-400">Astuce: <b>Shift</b>=×10 · <b>Ctrl</b>=×100</span>
       </div>
+      {modeFilter !== 'auto' && (<>
       <div className="mt-2 text-xs font-semibold text-zinc-300">Clics (manuels)</div>
       {ITEMS.filter((it) => it.mode === 'mult').map((it) => {
         const ownedCount = state.items[it.id] || 0;
@@ -38,6 +39,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
                 <div className="text-zinc-300">+{fmt((perItemMult[it.id] || 1) * (it.mult || 0))} CPC</div>
                 <div className="text-zinc-400">Coût: {isFirstFreeCursor ? "0" : fmt(price1)} · Suivant: {fmt(Math.ceil(price1 * it.growth))}</div>
                 <div className="text-zinc-500">{it.desc}</div>
+                {it.synergy && <div className="text-[11px] text-cyan-300/80">{it.synergy}</div>}
               </div>
             )}
             className="block"
@@ -80,6 +82,9 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
           </Tooltip>
         );
       })}
+      </>)}
+      {modeFilter === 'auto' && (
+      <>
       <div className="mt-3 text-xs font-semibold text-zinc-300">Auto (production passive)</div>
       {ITEMS.filter((it) => it.mode === 'cps').map((it) => {
         const ownedCount = state.items[it.id] || 0;
@@ -101,6 +106,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
                 <div className="text-zinc-300">+x{fmt((perItemMult[it.id] || 1) * it.cps)} CPS</div>
                 <div className="text-zinc-400">Coût: {fmt(price1)} · Suivant: {fmt(Math.ceil(price1 * it.growth))}</div>
                 <div className="text-zinc-500">{it.desc}</div>
+                {it.synergy && <div className="text-[11px] text-cyan-300/80">{it.synergy}</div>}
               </div>
             )}
             className="block"
@@ -138,6 +144,8 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
           </Tooltip>
         );
       })}
+      </>
+      )}
     </>
   );
 }
