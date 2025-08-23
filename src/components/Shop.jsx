@@ -7,7 +7,7 @@ const ProgressBar = ({ value, label }) => (
   </div>
 );
 
-export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp }) {
+export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep }) {
   return (
     <>
       <div className="text-sm font-semibold text-zinc-300 flex items-center justify-between">
@@ -23,16 +23,20 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
           state.flags.flash.itemId === it.id &&
           Date.now() < state.flags.flash.until;
         const price1 = costOf(it.id, 1);
+        const isFirstFreeCursor = (!state.ui.introSeen && tutorialStep === 2 && it.id === 'cursor' && ownedCount === 0 && price1 === 0);
         const preDiscountPrice = onFlash && state.flags.flash?.discount ? Math.ceil(price1 / (1 - state.flags.flash.discount)) : null;
         const affordable = state.cookies >= price1;
         return (
           <button
             key={it.id}
             onClick={(e) => buy(it.id, e.shiftKey ? 10 : e.ctrlKey ? 100 : 1)}
-            className={`relative w-full text-left p-3 rounded-xl border transition flex items-center gap-3 ${affordable ? "bg-zinc-800/70 hover:bg-zinc-800 border-zinc-700" : "bg-zinc-900/40 border-zinc-800 opacity-70"}`}
+            className={`relative w-full text-left p-3 rounded-xl border transition flex items-center gap-3 ${affordable ? "bg-zinc-800/70 hover:bg-zinc-800 border-zinc-700" : "bg-zinc-900/40 border-zinc-800 opacity-70"} ${isFirstFreeCursor ? "animate-pulse ring-2 ring-amber-400" : ""}`}
           >
             {onFlash && (
               <span className="absolute -top-2 -left-2 text-[10px] px-2 py-0.5 rounded-full bg-pink-600 border border-pink-300">-25% 20s</span>
+            )}
+            {isFirstFreeCursor && (
+              <span className="absolute -top-2 -right-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-600 border border-emerald-300">Gratuit</span>
             )}
             <div className="text-2xl">{it.emoji}</div>
             <div className="flex-1">
@@ -42,7 +46,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
                 </div>
                 <div className="text-amber-300 font-bold flex items-center gap-2">
                   {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(preDiscountPrice || singleBase)}</span>}
-                  <span>{fmt(price1)}</span>
+                  <span>{isFirstFreeCursor ? "0" : fmt(price1)}</span>
                 </div>
               </div>
               <div className="text-xs text-zinc-400">{it.desc}</div>

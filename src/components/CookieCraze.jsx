@@ -331,7 +331,7 @@ export default function CookieCraze() {
     if (state.ui.introSeen) return;
     if (tutorialStep !== 2) return;
     let total = 0; for (const it of ITEMS) if (it.mode === 'mult') total += (state.items[it.id] || 0);
-    if (total > tutorialManualBuyBase.current) { setTutorialStep(3); setTab('skins'); }
+    if (total > tutorialManualBuyBase.current) { setTutorialInteract(false); setTutorialStep(3); }
   }, [state.items, tutorialStep, state.ui.introSeen]);
 
   // Step 3: avance quand l'onglet skins est vu
@@ -339,7 +339,16 @@ export default function CookieCraze() {
     if (state.ui.introSeen) return;
     if (tutorialStep !== 3) return;
     if (tab === 'skins' && !tutorialVisitedSkins.current) {
-      tutorialVisitedSkins.current = true; setTimeout(() => setTutorialStep(4), 400);
+      tutorialVisitedSkins.current = true;
+      // Message central de bienvenue: image au centre, durée totale ~3s
+      setState((s) => ({
+        ...s,
+        fx: {
+          ...s.fx,
+          tag: { image: '/welcome.png', text: '', until: Date.now() + 3000, anim: { inMs: 300, outMs: 300 }, x: '25vw', y: '10vh' },
+        },
+      }));
+      setTimeout(() => setTutorialStep(4), 3000);
     }
   }, [tab, tutorialStep, state.ui.introSeen]);
 
@@ -916,10 +925,36 @@ export default function CookieCraze() {
             {/* Cinematic Banner */}
             <AnimatePresence>
               {state.fx.banner && Date.now() < state.fx.banner.until && (
-                <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }}
+                <motion.div
+                  initial={{ scale: 0.96, opacity: 0, y: (state.fx.banner.anim && state.fx.banner.anim.style === 'slide') ? -10 : 0 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  transition={{ duration: (state.fx.banner.anim && state.fx.banner.anim.inMs ? state.fx.banner.anim.inMs / 1000 : 0.25), ease: 'easeInOut' }}
+                  exit={{ opacity: 0, y: (state.fx.banner.anim && state.fx.banner.anim.style === 'slide') ? -20 : 0, transition: { duration: (state.fx.banner.anim && state.fx.banner.anim.outMs ? state.fx.banner.anim.outMs / 1000 : 0.25), ease: 'easeInOut' } }}
                   className="fixed left-1/2 top-24 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-amber-500/20 border border-amber-300/50 backdrop-blur text-amber-200 shadow-xl">
                   <div className="text-xs tracking-widest">{state.fx.banner.title}</div>
                   <div className="text-lg font-extrabold">{state.fx.banner.sub}</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Central Tag (graffiti-like or image) */}
+            <AnimatePresence>
+              {state.fx.tag && Date.now() < state.fx.tag.until && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92, rotateZ: -2 }}
+                  animate={{ opacity: 1, scale: 1, rotateZ: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, rotateZ: 2, transition: { duration: (state.fx.tag.anim?.outMs || 800) / 1000 } }}
+                  transition={{ duration: (state.fx.tag.anim?.inMs || 3000) / 1000, ease: 'easeInOut' }}
+                  className="fixed z-40"
+                  style={{ left: state.fx.tag.x || '50vw', top: state.fx.tag.y || '50vh', transform: 'translate(-50%, -50%)' }}
+                >
+                  {state.fx.tag.image ? (
+                    <img src={state.fx.tag.image} alt="Bienvenue" className="drop-shadow-2xl object-contain" style={{ maxWidth: 'min(80vw, 900px)', width: '100%', height: 'auto' }} />
+                  ) : (
+                    <div className="px-6 py-3 rounded-[28px] bg-amber-500/25 border border-amber-300/60 text-amber-200 font-extrabold text-4xl drop-shadow-xl shadow-amber-500/20 tracking-tight" style={{ textShadow: '0 2px 12px rgba(251,191,36,0.5)' }}>
+                      {state.fx.tag.text}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -942,6 +977,7 @@ export default function CookieCraze() {
                 perItemMult={perItemMult}
                 fmt={fmt}
                 clamp={clamp}
+                tutorialStep={tutorialStep}
               />
             )}
 
@@ -1073,8 +1109,8 @@ export default function CookieCraze() {
               )}
               {tutorialStep === 3 && (
                 <>
-                  <div className="text-3xl font-extrabold text-amber-300">3) Découvre les skins</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Va sur l’onglet <b>Skins</b> pour voir les personnalisations. L’étape avancera quand l’onglet sera ouvert.</div>
+                  <div className="text-3xl font-extrabold text-amber-300">3) Découvre les skins ✨</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Personnalise ton cookie : couleurs, styles, et plus. Ouvre l’onglet <b>Skins</b> pour voir.</div>
                   <div className="mt-5 flex gap-3">
                     <button onClick={() => { setTutorialInteract(true); setTab('skins'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Voir Skins</button>
                   </div>
@@ -1084,6 +1120,14 @@ export default function CookieCraze() {
                 <>
                   <div className="text-3xl font-extrabold text-amber-300">Bonne chance !</div>
                   <div className="mt-2 text-zinc-300 max-w-xl">Tu es prêt. Clique, achète, progresse et vise l’infini ✨</div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 24, scale: 0.96, rotateX: 20 }}
+                    animate={{ opacity: 1, y: [18, -6, 0], scale: [0.96, 1.05, 1], rotateX: [20, 6, 0] }}
+                    transition={{ duration: 1.2, ease: "easeInOut" }}
+                    className="mt-4 px-6 py-3 rounded-3xl bg-amber-500/20 border border-amber-300/50 text-amber-300 font-extrabold text-2xl shadow-xl backdrop-blur-sm drop-shadow"
+                  >
+                    Bon jeu et bon appétit 🍪
+                  </motion.div>
                   <div className="mt-5 flex gap-3">
                     <button onClick={() => { setTab('shop'); setTutorialInteract(true); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Aller à la Boutique</button>
                     <button onClick={skipIntro} className="px-6 py-3 rounded-2xl bg-emerald-500/90 hover:bg-emerald-400 text-zinc-900 font-bold border border-emerald-200 shadow-xl">Jouer</button>
