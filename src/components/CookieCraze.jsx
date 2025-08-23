@@ -9,7 +9,7 @@ import { UPGRADES } from "../data/upgrades.js";
 import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "../utils/calc.js";
 import tuning from "../data/tuning.json";
 import { ACHIEVEMENTS } from "../data/achievements.js";
-import { fmt, clamp } from "../utils/format.js";
+import { fmt, fmtInt, clamp } from "../utils/format.js";
 
 // --- Helpers for CPS recompute (module-level) ---
 // moved to utils/calc.js
@@ -785,8 +785,8 @@ export default function CookieCraze() {
           <div className="md:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
             <div className="flex flex-col items-center text-center">
               <div className="text-base md:text-xl text-zinc-300">Cookies en banque</div>
-              <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{Math.floor(state.cookies).toFixed(0)}</div>
-              <div className="text-sm text-zinc-500">Cuits au total: {Math.floor(state.lifetime).toFixed(0)}</div>
+              <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{fmtInt(state.cookies)}</div>
+              <div className="text-sm text-zinc-500">Cuits au total: {fmtInt(state.lifetime)}</div>
 
               {Date.now() < state.buffs.until && (
                 <div className="mt-3 text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
