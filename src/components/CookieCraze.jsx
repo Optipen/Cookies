@@ -634,16 +634,38 @@ export default function CookieCraze() {
 
   // Particles (clics)
   const [particles, setParticles] = useState([]);
+  const [crumbs, setCrumbs] = useState([]);
   const cookieWrapRef = useRef(null);
   const mousePos = useRef({ x: 0, y: 0 });
   useEffect(() => { const onMove = (e) => { mousePos.current = { x: e.clientX, y: e.clientY }; }; window.addEventListener("mousemove", onMove); return () => window.removeEventListener("mousemove", onMove); }, []);
-  const burstParticles = (n = 10, at = null) => {
+  const burstParticles = (n = 10, at = null, labelText = null) => {
     const rect = cookieWrapRef.current?.getBoundingClientRect();
     const base = at || (rect ? { x: rect.width / 2, y: rect.height / 2 } : { x: 0, y: 0 });
-    const arr = Array.from({ length: n }).map(() => ({ id: Math.random().toString(36).slice(2), x: base.x + (Math.random() - 0.5) * 80, y: base.y + (Math.random() - 0.5) * 80, vx: (Math.random() - 0.5) * 1.2, vy: -Math.random() * 2 - 1, life: 16 + Math.random() * 10, text: `+${fmt(cpc)}` }));
+    const arr = Array.from({ length: n }).map(() => ({ id: Math.random().toString(36).slice(2), x: base.x + (Math.random() - 0.5) * 80, y: base.y + (Math.random() - 0.5) * 80, vx: (Math.random() - 0.5) * 1.2, vy: -Math.random() * 2 - 1, life: 16 + Math.random() * 10, text: labelText != null ? labelText : `+${fmt(cpc)}` }));
     setParticles((p) => [...p, ...arr]);
   };
   useEffect(() => { const iv = setInterval(() => { setParticles((pp) => pp.map((p) => ({ ...p, x: p.x + p.vx * 4, y: p.y + p.vy * 4, life: p.life - 1 })).filter((p) => p.life > 0)); }, 16); return () => clearInterval(iv); }, []);
+
+  // Crumb particles (miettes visuelles)
+  const burstCrumbs = (n = 12, at = null) => {
+    const rect = cookieWrapRef.current?.getBoundingClientRect();
+    const base = at || (rect ? { x: rect.width / 2, y: rect.height / 2 } : { x: 0, y: 0 });
+    const colors = ["#8b5a2b", "#6b4423", "#a0522d", "#7b4a2e"]; // bruns variés
+    const arr = Array.from({ length: n }).map(() => ({
+      id: Math.random().toString(36).slice(2),
+      x: base.x + (Math.random() - 0.5) * 40,
+      y: base.y + (Math.random() - 0.5) * 40,
+      vx: (Math.random() - 0.5) * 2.2,
+      vy: -Math.random() * 2.8 - 0.6,
+      life: 22 + Math.random() * 14,
+      size: 3 + Math.random() * 6,
+      rot: Math.random() * 360,
+      vr: (Math.random() - 0.5) * 12,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    setCrumbs((p) => [...p, ...arr]);
+  };
+  useEffect(() => { const iv = setInterval(() => { setCrumbs((pp) => pp.map((p) => ({ ...p, x: p.x + p.vx * 3.6, y: p.y + p.vy * 3.6, vy: p.vy + 0.04, life: p.life - 1, rot: p.rot + p.vr })).filter((p) => p.life > 0)); }, 16); return () => clearInterval(iv); }, []);
 
   // Big cookie click
   const onCookieClick = () => {
@@ -652,7 +674,8 @@ export default function CookieCraze() {
       const gain = cpc;
       return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 } };
     });
-    burstParticles(2);
+    burstParticles(1, null, `x${clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`);
+    burstCrumbs(6);
   };
 
   // --- Cookie eaten handler + progress tracking ---
@@ -879,30 +902,45 @@ export default function CookieCraze() {
                   />
                 )}
 
-                {state.cookieEatEnabled ? (
-                  <CookieBiteMask
-                    skinSrc={SKINS[state.skin].src}
-                    clicks={state.stats.clicks}
-                    bitesTotal={80}
-                    enabled={state.cookieEatEnabled}
-                    onFinished={onCookieEaten}
-                    className="h-full w-full cursor-pointer select-none drop-shadow-xl"
-                    onClick={onCookieClick}
-                  />
-                ) : (
-                  <motion.img
-                    src={SKINS[state.skin].src}
-                    alt="Cookie"
-                    className="h-full w-full cursor-pointer select-none drop-shadow-xl"
-                    whileTap={{ scale: 0.92, rotate: -2 }}
-                    onClick={onCookieClick}
-                    draggable="false"
-                  />
-                )}
+                <motion.div
+                  whileTap={{ scale: 0.92, rotate: -2 }}
+                  className="h-full w-full"
+                >
+                  {state.cookieEatEnabled ? (
+                    <CookieBiteMask
+                      skinSrc={SKINS[state.skin].src}
+                      clicks={state.stats.clicks}
+                      bitesTotal={80}
+                      enabled={state.cookieEatEnabled}
+                      onFinished={onCookieEaten}
+                      className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                      onClick={onCookieClick}
+                    />
+                  ) : (
+                    <motion.img
+                      src={SKINS[state.skin].src}
+                      alt="Cookie"
+                      className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                      whileTap={{ scale: 0.92, rotate: -2 }}
+                      onClick={onCookieClick}
+                      draggable="false"
+                    />
+                  )}
+                </motion.div>
               </div>
               {/* Particles (confinées à la zone du cookie) */}
               <div className="pointer-events-none absolute inset-0">
                 <AnimatePresence>
+                  {crumbs.map((p) => (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute rounded-full drop-shadow"
+                      style={{ left: p.x, top: p.y, width: p.size, height: p.size, backgroundColor: p.color, rotate: p.rot }}
+                    />
+                  ))}
                   {particles.map((p) => (
                     <motion.div key={p.id} initial={{ opacity: 0, y: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute text-amber-300 text-xs font-bold drop-shadow" style={{ left: p.x, top: p.y }}>{p.text}</motion.div>
                   ))}
