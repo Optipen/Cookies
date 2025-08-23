@@ -6,7 +6,8 @@ import Upgrades from "./Upgrades.jsx";
 import Skins from "./Skins.jsx";
 import { ITEMS } from "../data/items.js";
 import { UPGRADES } from "../data/upgrades.js";
-import { cpsFrom, computePerItemMult } from "../utils/calc.js";
+import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "../utils/calc.js";
+import tuning from "../data/tuning.json";
 import { ACHIEVEMENTS } from "../data/achievements.js";
 import { fmt, clamp } from "../utils/format.js";
 
@@ -35,7 +36,7 @@ const DEFAULT_STATE = {
 
   lastTs: Date.now(),
   stats: { clicks: 0, lastPurchaseTs: Date.now() },
-  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0 },
+  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0 },
   buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
   combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
   prestige: { chips: 0 },
@@ -198,13 +199,12 @@ export default function CookieCraze() {
   // Dispose uniquement au démontage pour éviter de couper l'audio entre les rendus
   useEffect(() => () => dispose(), []);
 
-  // Advanced gate: visible si DEV ou ?advanced=1
+  // Advanced gate: visible UNIQUEMENT si ?advanced=1 (ou via menu)
   useEffect(() => {
     try {
-      const isDev = !!(import.meta?.env?.DEV);
       const url = new URL(window.location.href);
       const q = url.searchParams.get('advanced');
-      if (isDev || q === '1') setShowAdvanced(true);
+      if (q === '1') setShowAdvanced(true);
     } catch {}
   }, []);
 
@@ -216,7 +216,13 @@ export default function CookieCraze() {
   const baseCpsNoBuff = useMemo(() => cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeMulti), [state.items, state.upgrades, state.prestige.chips, stakeMulti]);
 
   const cpsWithBuff = useMemo(() => baseCpsNoBuff * (Date.now() < state.buffs.until ? state.buffs.cpsMulti : 1), [baseCpsNoBuff, state.buffs]);
-  const cpc = useMemo(() => (state.cpcBase * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * prestigeMulti * stakeMulti * state.combo.value * cpcMultFromUpgrades), [state.cpcBase, state.buffs, prestigeMulti, stakeMulti, state.combo.value, cpcMultFromUpgrades]);
+  const clickMult = useMemo(() => clickMultiplierFrom(state.items, state.upgrades), [state.items, state.upgrades]);
+  // Base CPC: dépend de max(1, CPS) puis × multiplicateurs de clic
+  const cpcBase = useMemo(() => (
+    Math.max(state.cpcBase || 1, baseCpsNoBuff) * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades
+  ), [state.cpcBase, baseCpsNoBuff, clickMult, state.buffs, cpcMultFromUpgrades]);
+  // CPC courant utilisé pour les gains (sans combo)
+  const cpc = useMemo(() => cpcBase, [cpcBase]);
 
   // Save
   useEffect(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }, [state]);
@@ -240,17 +246,10 @@ export default function CookieCraze() {
           crypto.balance = Number((crypto.balance + diff * crypto.perAmount).toFixed(6));
           flags.cryptoFlashUntil = now + 1500;
         }
-        // Combo decay
-        let combo = { ...s.combo };
-        if (combo.value > 1 && now - combo.lastClickTs > 900) combo.value = Math.max(1, combo.value - 0.25);
-        // Rush auto si combo >=5 (cooldown 20s)
-        let buffs = { ...s.buffs };
-        if (combo.value >= 5 && now - combo.lastRushTs > 20000) {
-          combo.lastRushTs = now; buffs = { ...buffs, cpcMulti: 2, until: now + 6000, label: "RUSH x2 CPC" };
-        }
         // Buff expiry
+        let buffs = { ...s.buffs };
         if (buffs.until && now >= buffs.until) buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
-        return { ...s, cookies, lifetime, combo, buffs, crypto, flags };
+        return { ...s, cookies, lifetime, buffs, crypto, flags };
       });
     }, 100);
     return () => clearInterval(iv);
@@ -275,11 +274,21 @@ export default function CookieCraze() {
 
     const now = Date.now();
     const dt = Math.max(0, (now - state.lastTs) / 1000);
-    if (dt > 3) {
+    if (dt > 3 && !state.flags.offlineCollected) {
       const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-      const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * dt * 0.05;
-      if (offlineGain > 0) toast(`+${fmt(offlineGain)} cookies gagnés hors-ligne`, "info");
-      setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
+      const mode = (tuning && tuning.mode) || 'standard';
+      const ocfg = (tuning && tuning[mode] && tuning[mode].offline) || {};
+      const maxSeconds = ocfg.max_seconds ?? 7200;
+      const cappedDt = Math.min(dt, maxSeconds);
+      const r0 = ocfg.ratio_0_10min ?? 0.10;
+      const r1 = ocfg.ratio_2h ?? 0.03;
+      const t0 = 600, t1 = maxSeconds;
+      const ratio = cappedDt <= t0 ? r0 : r0 - (r0 - r1) * ((cappedDt - t0) / (t1 - t0));
+      const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * cappedDt * ratio;
+      if (offlineGain > 0) {
+        toast(`+${fmt(offlineGain)} cookies gagnés hors-ligne`, "success", { ms: 3000 });
+        setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
+      }
     }
     scheduleGolden();
     scheduleRain();
@@ -331,14 +340,22 @@ export default function CookieCraze() {
   }, [state.cookies, state.items, state.stats.clicks, state.flags.offlineCollected]);
 
   // Toast helper
-  const toast = (msg, tone = "info") => {
+  const toast = (msg, tone = "info", options = {}) => {
     const id = Math.random().toString(36).slice(2);
     setState((s) => ({ ...s, toasts: [...s.toasts, { id, msg, tone }] }));
-    setTimeout(() => setState((s) => ({ ...s, toasts: s.toasts.filter((t) => t.id !== id) })), 2800);
+    const duration = options.ms || 2800;
+    setTimeout(() => setState((s) => ({ ...s, toasts: s.toasts.filter((t) => t.id !== id) })), duration);
   };
 
   // Golden cookie
-  const scheduleGolden = () => { const d = 20000 + Math.random() * 70000; setTimeout(() => setShowGolden(true), d); };
+  const scheduleGolden = () => {
+    const mode = (tuning && tuning.mode) || 'standard';
+    const cfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || null;
+    const min = cfg ? (cfg.cooldown_s?.[0] ?? 100) : 100;
+    const max = cfg ? (cfg.cooldown_s?.[1] ?? 150) : 150;
+    const d = (min + Math.random() * (max - min)) * 1000;
+    setTimeout(() => setShowGolden(true), d);
+  };
   const [showGolden, setShowGolden] = useState(false);
   const goldenRef = useRef({ left: "50%", top: "50%" });
   useEffect(() => {
@@ -351,43 +368,86 @@ export default function CookieCraze() {
   }, [showGolden]);
   const onGoldenClick = () => {
     setShowGolden(false); scheduleGolden(); ping(880, 0.1);
+    const now = Date.now();
+    const mode = (tuning && tuning.mode) || 'standard';
+    const gcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || {};
+    const drWindow = (gcfg.dr_window_s ?? 120) * 1000;
+    const recent = now - (state.flags.goldenLastTs || 0) < drWindow;
+    const stacks = recent ? (state.flags.goldenStacks || 0) + 1 : 0;
+    const drBase = gcfg.dr_factor ?? 0.85;
+    const dr = Math.pow(drBase, stacks);
     const roll = Math.random();
-    if (roll < 0.35) { applyBuff({ cpsMulti: 7, cpcMulti: 1, seconds: 20, label: "FRENZY x7" }); toast("FRENZY: CPS x7 pendant 20s !", "success"); }
-    else if (roll < 0.65) { applyBuff({ cpsMulti: 1, cpcMulti: 15, seconds: 12, label: "CLICK FRENZY x15" }); toast("CLICK FRENZY: CPC x15 pendant 12s !", "success"); }
+    if (roll < 0.35) {
+      const cpsMax = gcfg.cps_mult_max ?? 5;
+      const m = Math.max(1, Math.min(cpsMax, cpsMax * dr));
+      applyBuff({ cpsMulti: m, cpcMulti: 1, seconds: 20, label: `FRENZY x${Math.round(m)}` }); toast(`FRENZY: CPS x${Math.round(m)} pendant 20s !`, "success");
+    }
+    else if (roll < 0.65) {
+      const cpcMax = gcfg.cpc_mult_max ?? 10;
+      const m = Math.max(1, Math.min(cpcMax, cpcMax * dr));
+      applyBuff({ cpsMulti: 1, cpcMulti: m, seconds: 12, label: `CLICK FRENZY x${Math.round(m)}` }); toast(`CLICK FRENZY: CPC x${Math.round(m)} pendant 12s !`, "success");
+    }
     else if (roll < 0.85) {
       const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-      const bonus = Math.max(state.cookies * 0.15, cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * 15);
+      const cpsNow = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM);
+      const bankMin = gcfg.lucky_bank_min ?? 0.10;
+      const cpsMult = gcfg.lucky_cps_mult ?? 12;
+      const base = Math.max(state.cookies * bankMin, cpsNow * cpsMult);
+      const bonus = base * dr;
       setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Lucky +${fmt(bonus)} !`, "success");
     }
     else { burstParticles(30); const bonus = cpc * 30; setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Pluie de miettes +${fmt(bonus)} !`, "success"); }
+    setState((s) => ({ ...s, flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks } }));
   };
   const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => { const until = Date.now() + seconds * 1000; setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } })); };
 
   // Cookie Rain (événement toutes ~2–4 min)
   const [rainCrumbs, setRainCrumbs] = useState([]);
   const [rainUntil, setRainUntil] = useState(0);
-  const scheduleRain = () => { const d = 120000 + Math.random() * 120000; setTimeout(() => startRain(), d); };
+  const scheduleRain = () => {
+    const mode = (tuning && tuning.mode) || 'standard';
+    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
+    const min = rcfg.cooldown_s?.[0] ?? 120;
+    const max = rcfg.cooldown_s?.[1] ?? 240;
+    const d = (min + Math.random() * (max - min)) * 1000;
+    setTimeout(() => startRain(), d);
+  };
   const startRain = () => {
-    const until = Date.now() + 8000; setRainUntil(until);
+    const mode = (tuning && tuning.mode) || 'standard';
+    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
+    const dur = (rcfg.duration_s ?? 8) * 1000;
+    const until = Date.now() + dur; setRainUntil(until);
     const area = document.getElementById("game-area"); const r = area?.getBoundingClientRect();
     const width = r ? r.width : window.innerWidth;
     const arr = Array.from({ length: 50 }).map(() => ({ id: Math.random().toString(36).slice(2), x: Math.random() * (width - 40) + 20, y: -20, vy: 2 + Math.random() * 3 }));
-    setRainCrumbs(arr); setTimeout(() => { setRainCrumbs([]); scheduleRain(); }, 8000);
+    setRainCrumbs(arr); setTimeout(() => { setRainCrumbs([]); scheduleRain(); }, dur);
   };
   useEffect(() => {
     if (!rainCrumbs.length) return; const iv = setInterval(() => { setRainCrumbs((cc) => cc.map((c) => ({ ...c, y: c.y + c.vy * 3 })).filter((c) => c.y < window.innerHeight + 30)); }, 16);
     return () => clearInterval(iv);
   }, [rainCrumbs.length]);
-  const onCrumbClick = (id) => { setRainCrumbs((cc) => cc.filter((c) => c.id !== id)); const gain = cpc * 3; setState((s) => ({ ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain })); ping(740, 0.05); };
+  const onCrumbClick = (id) => {
+    setRainCrumbs((cc) => cc.filter((c) => c.id !== id));
+    const mode = (tuning && tuning.mode) || 'standard';
+    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
+    const factor = Array.isArray(rcfg.cpc_factor)
+      ? (rcfg.cpc_factor[0] + Math.random() * (rcfg.cpc_factor[1] - rcfg.cpc_factor[0]))
+      : (rcfg.cpc_factor || 3);
+    const gain = cpc * factor;
+    setState((s) => ({ ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain }));
+    ping(740, 0.05);
+  };
 
   // --- Pricing: Bulk + Milestone steepening ---
   const milestoneFactor = (owned) => {
+    const mode = (tuning && tuning.mode) || 'standard';
+    const mcfg = (tuning && tuning[mode] && tuning[mode].milestones) || {};
+    const th = mcfg.thresholds || [10, 25, 50, 100, 200];
+    const mults = mcfg.multipliers || [1.15, 1.4, 2.0, 3.5, 5.0];
     let m = 1;
-    if (owned >= 200) m *= 5.0;
-    else if (owned >= 100) m *= 3.5;
-    else if (owned >= 50) m *= 2.0;
-    else if (owned >= 25) m *= 1.4;
-    else if (owned >= 10) m *= 1.15;
+    for (let i = 0; i < th.length; i++) {
+      if (owned >= th[i]) m *= mults[i] || 1;
+    }
     return m;
   };
   const bulkCost = (it, owned, count) => {
@@ -421,18 +481,55 @@ export default function CookieCraze() {
     const spentRatio = price / Math.max(1, state.cookies);
     const big = spentRatio >= 0.4 || willCross || deltaCps >= cpsBefore * 0.35;
 
+    // Tirage EUPHORIA sur achat (divisé par 4): 7.5%x2.5, 5%x3, 2.5%x5, 0.5%x10
+    const r = Math.random();
+    let euphoriaMult = 0;
+    if (r < 0.075) euphoriaMult = 2.5;           // 7.5%
+    else if (r < 0.125) euphoriaMult = 3;        // +5% = 12.5%
+    else if (r < 0.150) euphoriaMult = 5;        // +2.5% = 15%
+    else if (r < 0.155) euphoriaMult = 10;       // +0.5% = 15.5%
+
+    // Prépare sous-texte bannière: CPS si achat auto, CPC si achat clic
+    const isManualClickItem = it && it.mode === 'mult';
+    let bannerSub = `+${fmt(deltaCps)} CPS (${((deltaCps/Math.max(1,cpsBefore))*100).toFixed(0)}%)`;
+    if (isManualClickItem) {
+      const beforeClickMult = clickMultiplierFrom(state.items, state.upgrades);
+      const afterClickMult = clickMultiplierFrom(newItems, state.upgrades);
+      // Recalcule CPC avant/après avec la même formule que l'UI
+      let cpcUpgradesMult = 1;
+      for (const upId in state.upgrades) {
+        if (!state.upgrades[upId]) continue;
+        const up = UPGRADES.find((u) => u.id === upId);
+        if (up && up.target === 'cpc' && up.type === 'mult') cpcUpgradesMult *= up.value;
+      }
+      const cpcBuffNow = (Date.now() < state.buffs.until) ? state.buffs.cpcMulti : 1;
+      const baseNoBuffBefore = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM);
+      const baseNoBuffAfter = cpsFrom(newItems, state.upgrades, state.prestige.chips, stakeM);
+      const cpcBefore = Math.max(state.cpcBase || 1, baseNoBuffBefore) * beforeClickMult * cpcUpgradesMult * cpcBuffNow;
+      const cpcAfter = Math.max(state.cpcBase || 1, baseNoBuffAfter) * afterClickMult * cpcUpgradesMult * cpcBuffNow;
+      const deltaCpc = cpcAfter - cpcBefore;
+      bannerSub = `+${fmt(deltaCpc)} CPC`;
+    }
+
     // Apply purchase
     ping(big ? 900 : 660, big ? 0.12 : 0.07);
-    setState((s) => ({
-      ...s,
-      cookies: s.cookies - price,
-      items: newItems,
-      stats: { ...s.stats, lastPurchaseTs: Date.now() },
-      flags: { ...s.flags, flash: null },
-      fx: big ? { banner: { title: "MEGA ACHAT", sub: `+${fmt(deltaCps)} CPS (${((deltaCps/Math.max(1,cpsBefore))*100).toFixed(0)}%)`, until: Date.now() + 2400 }, shakeUntil: Date.now() + 900 } : s.fx,
-      // purchase euphoria buff
-      buffs: big ? { ...s.buffs, cpsMulti: 2.5, cpcMulti: s.buffs.cpcMulti, until: Date.now() + 8000, label: "EUPHORIA x2.5" } : s.buffs,
-    }));
+    setState((s) => {
+      const now = Date.now();
+      let buffs = s.buffs;
+      if (euphoriaMult > 0) {
+        buffs = { ...buffs, cpcMulti: euphoriaMult, until: now + 8000, label: `EUPHORIA x${euphoriaMult} CPC` };
+      }
+      return {
+        ...s,
+        cookies: s.cookies - price,
+        items: newItems,
+        stats: { ...s.stats, lastPurchaseTs: Date.now() },
+        flags: { ...s.flags, flash: null },
+        fx: big ? { banner: { title: "MEGA ACHAT", sub: bannerSub, until: Date.now() + 2400 }, shakeUntil: Date.now() + 900 } : s.fx,
+        buffs,
+      };
+    });
+    if (euphoriaMult > 0) toast(`EUPHORIA: CPC x${euphoriaMult} pendant 8s`, "success");
     if (big) burstParticles(40);
   };
 
@@ -499,12 +596,9 @@ export default function CookieCraze() {
   // Big cookie click
   const onCookieClick = () => {
     crunch();
-    const now = Date.now();
     setState((s) => {
-      let combo = { ...s.combo };
-      if (now - combo.lastClickTs < 700) combo.value = clamp(combo.value + 0.15, 1, 10);
-      combo.lastClickTs = now; const gain = cpc;
-      return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 }, combo };
+      const gain = cpc;
+      return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 } };
     });
     burstParticles(2);
   };
@@ -641,11 +735,11 @@ export default function CookieCraze() {
             <div className="text-3xl">🍪</div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">Cookie Craze</h1>
           </div>
-          <div className="relative flex items-center gap-3 text-sm flex-wrap">
-            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">CPS: <b>{fmt(cpsWithBuff)}</b></span>
-            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">CPC: <b>{fmt(cpc)}</b></span>
+          <div className="relative flex items-center gap-3 text-sm flex-wrap pr-12 md:pr-16">
+            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
+            <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
             <span className="px-2 py-1 rounded-full bg-zinc-800/70 border border-zinc-700">Prestige: <b>{state.prestige.chips}</b></span>
-            <span className={`px-2 py-1 rounded-full border ${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"}`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
+            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60" : "bg-zinc-800/70 border-zinc-700"} px-2 py-1 rounded-full border`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
             <button
               onClick={() => setShowMenu(v => !v)}
               aria-haspopup="menu"
@@ -689,48 +783,39 @@ export default function CookieCraze() {
         {/* Top Stats */}
         <div className={`mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 ${shaking ? "animate-[wiggle_0.7s_ease]" : ""}`}>
           <div className="md:col-span-2 rounded-2xl p-4 bg-zinc-900/60 border border-zinc-800 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-zinc-400">Cookies en banque</div>
-                <div className="text-3xl md:text-5xl font-extrabold tracking-tight text-amber-300 drop-shadow">{fmt(state.cookies)}</div>
-                <div className="text-xs text-zinc-500">Cuits au total: {fmt(state.lifetime)}</div>
-              </div>
-              <div className="text-right space-y-2">
-                {Date.now() < state.buffs.until && (
-                  <div className="text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
-                    Boost <b>{state.buffs.label}</b> · {(buffTimeLeft/1000).toFixed(0)}s
-                  </div>
-                )}
-                {canPrestige && (
-                  <button onClick={doPrestige} className="text-xs px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 transition border border-purple-400/50 shadow">Prestige +{potentialChips - state.prestige.chips}</button>
-                )}
-                
-                {showAdvanced && (
-                  <div className="mt-2 flex items-center gap-2 justify-end text-xs">
-                    <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
-                    <label className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
-                      <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
-                    </label>
-                  </div>
-                )}
-              </div>
+            <div className="flex flex-col items-center text-center">
+              <div className="text-base md:text-xl text-zinc-300">Cookies en banque</div>
+              <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{Math.floor(state.cookies).toFixed(0)}</div>
+              <div className="text-sm text-zinc-500">Cuits au total: {Math.floor(state.lifetime).toFixed(0)}</div>
+
+              {Date.now() < state.buffs.until && (
+                <div className="mt-3 text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
+                  Boost <b>{state.buffs.label}</b> · {(buffTimeLeft/1000).toFixed(0)}s
+                </div>
+              )}
+              {canPrestige && (
+                <button onClick={doPrestige} className="mt-2 text-xs px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 transition border border-purple-400/50 shadow">Prestige +{potentialChips - state.prestige.chips}</button>
+              )}
+
+              {showAdvanced && (
+                <div className="mt-2 flex items-center gap-2 justify-center text-xs">
+                  <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
+                  <label className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
+                    <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
+                  </label>
+                </div>
+              )}
             </div>
 
-            {/* Progression de "mangé" */}
-            <div className="mt-6 mb-2 w-full max-w-md mx-auto">
-              <div className="h-2 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden">
-                <div
-                  className="h-full bg-amber-400 transition-all duration-150"
-                  style={{ width: `${Math.min(100, Math.floor((state.cookieBites?.length || 0) / 80 * 100))}%` }}
-                />
-              </div>
-              <div className="text-xs mt-1 text-center text-zinc-400">
-                {Math.min(100, Math.floor((state.cookieBites?.length || 0) / 80 * 100))}% mangé
+            {/* Compteur de cookies mangés (remplace la barre de progression) */}
+            <div className="mt-4 mb-1 w-full max-w-md mx-auto text-left">
+              <div className="text-xs md:text-sm text-zinc-400">
+                {/* Intentionnellement discret en haut; une version plus visible est en bas-gauche */}
               </div>
             </div>
 
             {/* Big Cookie */}
-            <div ref={cookieWrapRef} className="mt-4 flex items-center justify-center relative">
+            <div ref={cookieWrapRef} className="-mt-9 flex items-center justify-center relative">
               {state.cookieEatEnabled ? (
                 <CookieBiteMask
                   skinSrc={SKINS[state.skin].src}
@@ -738,14 +823,14 @@ export default function CookieCraze() {
                   bitesTotal={80}
                   enabled={state.cookieEatEnabled}
                   onFinished={onCookieEaten}
-                  className="h-72 w-72 md:h-96 md:w-96 cursor-pointer select-none drop-shadow-xl"
+                  className="h-96 w-96 md:h-[30rem] md:w-[30rem] cursor-pointer select-none drop-shadow-xl"
                   onClick={onCookieClick}
                 />
               ) : (
                 <motion.img
                   src={SKINS[state.skin].src}
                   alt="Cookie"
-                  className="h-72 w-72 md:h-96 md:w-96 cursor-pointer select-none drop-shadow-xl"
+                  className="h-96 w-96 md:h-[30rem] md:w-[30rem] cursor-pointer select-none drop-shadow-xl"
                   whileTap={{ scale: 0.92, rotate: -2 }}
                   onClick={onCookieClick}
                   draggable="false"
@@ -759,9 +844,11 @@ export default function CookieCraze() {
                   ))}
                 </AnimatePresence>
               </div>
-              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-lg text-zinc-400">
-                Combo x{state.combo.value.toFixed(2)}
+              {/* Compteur en bas à gauche */}
+              <div className="absolute bottom-2 left-2 text-sm md:text-base text-zinc-300">
+                Cookies mangés: <b>{state.cookieEatenCount || 0}</b>
               </div>
+              {/* Combo supprimé */}
             </div>
 
             {/* Golden Cookie */}
@@ -856,11 +943,11 @@ export default function CookieCraze() {
             <div className="text-sm font-semibold text-zinc-300">Infos & astuces</div>
             <ul className="mt-2 text-xs text-zinc-400 space-y-1 list-disc list-inside">
               <li>Les <b>cookies dorés</b> apparaissent au hasard. Clique vite !</li>
-              <li>Le <b>Rush combo</b> déclenche un boost si tu maintiens un bon rythme.</li>
+              {/* Rush combo supprimé */}
               <li>Les <b>soldes flash</b> arrivent si tu stagne trop longtemps.</li>
               <li>Les <b>améliorations</b> et les <b>synergies</b> gardent utiles les vieux bâtiments.</li>
               <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
-              <li>Hors-ligne : tu gagnes 5% de tes CPS.</li>
+              <li>Hors-ligne : 10% sur 10 min, décroissance vers 3% (cap 2h).</li>
             </ul>
           </div>
         </div>
