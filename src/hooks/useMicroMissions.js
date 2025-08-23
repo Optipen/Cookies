@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { MICRO_MISSIONS, MISSIONS } from "../data/missions.js";
+import tuning from "../data/tuning.json";
 import { fmt } from "../utils/format.js";
 import { rewardAdapter, applyRewards } from "../utils/rewardAdapter.js";
 
@@ -13,8 +14,18 @@ export function useMicroMissions(state, setState, toast) {
   }
 
   // Pick a random micro mission different from the current
-  const pickNext = (excludeId, forbiddenTags = []) => {
+  const pickNext = (excludeId, forbiddenTags = [], stateRef = state) => {
     const pool = MICRO_MISSIONS.filter((m) => m.id !== excludeId && !(m.tags || []).some(t => forbiddenTags.includes(t)));
+    // Early-game bias: privilégie les missions taguées 'early' pendant la fenêtre early
+    try {
+      const mode = (tuning && tuning.mode) || 'standard';
+      const earlyCfg = (tuning && tuning[mode] && tuning[mode].early) || {};
+      const earlyActive = stateRef.createdAt && (Date.now() - stateRef.createdAt) / 1000 < (earlyCfg.window_s || 0);
+      if (earlyActive) {
+        const earlyPool = pool.filter((m) => (m.tags || []).includes('early'));
+        if (earlyPool.length) return earlyPool[Math.floor(Math.random() * earlyPool.length)];
+      }
+    } catch {}
     return pool[Math.floor(Math.random() * pool.length)];
   };
 
@@ -22,7 +33,7 @@ export function useMicroMissions(state, setState, toast) {
   useEffect(() => {
     // Assure qu'il y a toujours une micro-mission active
     if (!state.activeMicroMission || !state.activeMicroMission.id) {
-      const m = pickNext(undefined, []);
+      const m = pickNext(undefined, [], state);
       const meta = m.start ? m.start(state) : {};
       metaRef.current = meta;
       setState((s) => ({ ...s, activeMicroMission: { id: m.id, startedAt: Date.now(), meta } }));
@@ -66,7 +77,7 @@ export function useMicroMissions(state, setState, toast) {
       const now = Date.now();
       setState((s) => {
         const mainTags = (MISSIONS.find(x => x.id === s.mission?.id)?.tags) || [];
-        const nx = pickNext(m.id, mainTags);
+        const nx = pickNext(m.id, mainTags, s);
         const nextMeta = nx.start ? nx.start(s) : {};
         metaRef.current = nextMeta;
         

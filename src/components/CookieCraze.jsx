@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Tooltip from "./Tooltip.jsx";
 import CookieBiteMask from "./CookieBiteMask.jsx";
 import Shop from "./Shop.jsx";
 import Upgrades from "./Upgrades.jsx";
@@ -537,7 +538,17 @@ export default function CookieCraze() {
     const min = earlyActive && ecfg ? (ecfg.cooldown_s?.[0] ?? baseMin) : baseMin;
     const max = earlyActive && ecfg ? (ecfg.cooldown_s?.[1] ?? baseMax) : baseMax;
     const d = (min + Math.random() * (max - min)) * 1000;
-    goldenTimerRef.current = setTimeout(() => setShowGolden(true), d);
+    goldenTimerRef.current = setTimeout(() => {
+      try { play('/sounds/golden_appear.mp3', 0.25); } catch {}
+      setState((s) => ({
+        ...s,
+        fx: {
+          ...s.fx,
+          banner: { title: 'Cookie doré !', sub: 'Clique vite ✨', until: Date.now() + 1400, anim: { style: 'slide', inMs: 160, outMs: 160 } },
+        },
+      }));
+      setShowGolden(true);
+    }, d);
   };
   const [showGolden, setShowGolden] = useState(false);
   const goldenRef = useRef({ left: "50%", top: "50%" });
@@ -1110,7 +1121,7 @@ export default function CookieCraze() {
   const shaking = Date.now() < state.fx.shakeUntil;
   const cryptoFlash = Date.now() < state.flags.cryptoFlashUntil;
   return (
-    <div key={viewKey} id="game-area" className="min-h-screen w-full bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 text-amber-950 select-none overflow-hidden">
+    <div key={viewKey} id="game-area" className={(state.ui.highContrast ? "high-contrast " : "") + "min-h-screen w-full bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 text-amber-950 select-none overflow-hidden"}>
       {/* Composant d'accessibilité pour les annonces de timer */}
       <TimerAnnouncer />
       <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
@@ -1123,10 +1134,30 @@ export default function CookieCraze() {
           <div className="relative flex items-center gap-4 text-sm flex-wrap pr-12 md:pr-16">
             <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
             <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
-            <span className="px-2 py-1 rounded-full badge-warm">Prestige: <b>{state.prestige.chips}</b></span>
-            <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60 badge-glow" : "badge-warm"} px-2 py-1 rounded-full border relative group`} aria-label="Solde CRMB" tabIndex={0}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b>
-              <span className="pointer-events-none absolute left-0 mt-1 translate-y-full opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-64">Le faucet crédite automatiquement des CRMB selon les cookies cuits. Tu peux les stake pour booster toute ta production.</span>
-            </span>
+            <Tooltip
+              className="inline-block"
+              position="bottom"
+              panel={(
+                <div className="space-y-1">
+                  <div className="font-semibold">Prestige</div>
+                  <div className="text-zinc-300">Gagne des « chips célestes » en prestige. Chaque chip = +2% production permanente. Débloqué quand tu as assez en banque.</div>
+                </div>
+              )}
+            >
+              <span className="px-2 py-1 rounded-full badge-warm cursor-help">Prestige: <b>{state.prestige.chips}</b></span>
+            </Tooltip>
+            <Tooltip
+              className="inline-block"
+              position="bottom"
+              panel={(
+                <div className="space-y-1">
+                  <div className="font-semibold">CRMB (CrumbCoin)</div>
+                  <div className="text-zinc-300">Le faucet crédite des CRMB selon les cookies cuits (0.001 / 20k). Stake des CRMB pour +50% d’effet par unité stakée sur toute la production.</div>
+                </div>
+              )}
+            >
+              <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60 badge-glow" : "badge-warm"} px-2 py-1 rounded-full border cursor-help`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
+            </Tooltip>
             <button
               onClick={() => setShowMenu(v => !v)}
               aria-haspopup="menu"
@@ -1145,6 +1176,13 @@ export default function CookieCraze() {
                   className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors first:rounded-t-xl"
                 >
                   {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => setState(s => ({ ...s, ui:{...s.ui, highContrast: !s.ui.highContrast} }))}
+                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors"
+                >
+                  {state.ui.highContrast ? "🟨 Contraste élevé ON" : "⬜ Contraste élevé OFF"}
                 </button>
 
                 <button
@@ -1389,11 +1427,30 @@ export default function CookieCraze() {
               )}
             </AnimatePresence>
 
+            {/* Micro‑mission floating badge (visibility) */}
+            {isFeatureEnabled('ENABLE_MICRO_MISSIONS') && state.activeMicroMission && (
+              <div className="fixed top-24 right-4 z-30 px-3 py-2 rounded-xl bg-emerald-600/20 border border-emerald-400/50 text-xs text-emerald-100 shadow">
+                {(() => {
+                  const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
+                  const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
+                  return (
+                    <>
+                      <div className="font-bold">🎯 {cur?.title || 'Micro‑mission'}</div>
+                      <div className="mt-1 h-1.5 rounded-full bg-emerald-900/40 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* Speed Challenge CTA and progress */}
             {!speedChallenge.active && speedChallenge.visible && (
               <div className="fixed bottom-24 right-4 z-30">
-                <button onClick={startSpeedChallenge} className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm border border-cyan-300/50 shadow">
-                  Démarrer défi de vitesse
+                <button onClick={startSpeedChallenge} className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm border border-cyan-300/50 shadow relative group" title="Objectif: 25 clics en 20s. Récompense: +20% CPC (20s)">
+                  ⚡ Défi: 25 clics en 20s
+                  <span className="pointer-events-none absolute right-0 top-full mt-2 opacity-0 group-hover:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-60 text-left">Récompense: +20% CPC pendant 20s</span>
                 </button>
               </div>
             )}

@@ -36,6 +36,9 @@ export const DEFAULT_STATE = {
   combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
   prestige: { chips: 0 },
   ui: { sounds: true, introSeen: false },
+  // Accessibilité
+  // Mode contraste élevé désactivé par défaut
+  ui: { sounds: true, introSeen: false, highContrast: false },
   toasts: [],
   unlocked: {},
   fx: { banner: null, shakeUntil: 0 },

@@ -85,6 +85,24 @@ export const MICRO_MISSIONS = [
     reward: (s) => ({ type: "buff", kind: "cpc", value: 1.2, seconds: 30, label: "+20% CPC" }),
   },
   {
+    id: "reach_140",
+    title: "Petit cap",
+    desc: "Atteins 140 cookies en banque.",
+    check: (s) => ({ progress: Math.min(s.cookies || 0, 140), target: 140, done: (s.cookies || 0) >= 140 }),
+    reward: (s) => ({ type: "buff", kind: "cpc", value: 1.15, seconds: 20, label: "+15% CPC" }),
+  },
+  {
+    id: "100_clicks",
+    title: "Échauffement",
+    desc: "Réalise 100 clics.",
+    start: (s) => ({ clicksAtStart: s.stats.clicks || 0 }),
+    checkDelta: (s, meta) => {
+      const diff = (s.stats.clicks || 0) - (meta?.clicksAtStart || 0);
+      return { progress: Math.min(Math.max(0, diff), 100), target: 100, done: diff >= 100 };
+    },
+    reward: (s) => ({ type: "discount", value: 0.10, seconds: 15, label: "-10% coûts" }),
+  },
+  {
     id: "cursor_3",
     title: "Mini‑atelier",
     desc: "Achète 3 Curseurs pour renforcer le clic.",

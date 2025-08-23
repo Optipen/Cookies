@@ -399,3 +399,15 @@ html, body, #root { height: 100%; }
     display: none;  /* Safari and Chrome */
   }
 }
+
+/* High contrast accessibility mode */
+.high-contrast {
+  filter: none;
+}
+.high-contrast .text-zinc-400 { color: #52525b !important; }
+.high-contrast .text-amber-700 { color: #78350f !important; }
+.high-contrast .text-amber-800 { color: #78350f !important; }
+.high-contrast .text-amber-800\/80 { color: rgba(120, 53, 15, 0.95) !important; }
+.high-contrast .text-amber-900 { color: #451a03 !important; }
+.high-contrast .badge-warm { border-color: rgba(120,53,15,0.5) !important; color: #451a03 !important; }
+.high-contrast .glass-warm { border-color: rgba(120,53,15,0.5) !important; }

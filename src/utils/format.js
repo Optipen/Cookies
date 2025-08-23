@@ -13,10 +13,13 @@ export const fmtInt = (n) => {
   if (!isFinite(n)) return "∞";
   const suf = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
   let i = 0;
-  let s = Math.max(0, Math.floor(n));
-  while (s >= 1000 && i < suf.length - 1) {
-    s = Math.round(s / 1000);
+  let value = Math.max(0, n);
+  while (value >= 1000 && i < suf.length - 1) {
+    value /= 1000;
     i++;
   }
-  return s.toLocaleString(undefined, { maximumFractionDigits: 0 }) + suf[i];
+  if (i === 0) {
+    return Math.floor(value).toLocaleString(undefined, { maximumFractionDigits: 0 }) + suf[i];
+  }
+  return (Math.round(value * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suf[i];
 };

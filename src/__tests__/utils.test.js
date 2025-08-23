@@ -22,9 +22,9 @@ describe('clamp', () => {
 
 describe('cpsFrom', () => {
   it('computes cookies per second without upgrades', () => {
-    const items = { cursor: 1 };
+    const items = { oven: 1 };
     const upgrades = {};
     const cps = cpsFrom(items, upgrades, 0);
-    expect(cps).toBeCloseTo(0.22);
+    expect(cps).toBeCloseTo(0.6);
   });
 });

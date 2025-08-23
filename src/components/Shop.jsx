@@ -66,7 +66,15 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
                 </div>
                 <div className="text-amber-900 font-extrabold flex items-center gap-2">
                   {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(preDiscountPrice || singleBase)}</span>}
-                  <span className="px-2 py-0.5 rounded-md badge-warm-price">{isFirstFreeCursor ? "0" : fmt(price1)}</span>
+                  <span
+                    className="px-2 py-0.5 rounded-md badge-warm-price inline-flex items-center gap-1"
+                    aria-label={`Coût: ${isFirstFreeCursor ? "0" : fmt(price1)} cookies`}
+                    title="Coût en cookies"
+                  >
+                    <span className="text-[10px] uppercase tracking-wide">Coût</span>
+                    <span aria-hidden>🍪</span>
+                    <span>{isFirstFreeCursor ? "0" : fmt(price1)}</span>
+                  </span>
                 </div>
               </div>
               <div className="text-xs text-amber-700">{it.desc}</div>
@@ -125,7 +133,15 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
                 </div>
                 <div className="text-amber-900 font-extrabold flex items-center gap-2">
                   {onFlash && <span className="line-through text-zinc-500 text-xs">{fmt(preDiscountPrice || singleBase)}</span>}
-                  <span className="px-2 py-0.5 rounded-md badge-warm-price">{fmt(price1)}</span>
+                  <span
+                    className="px-2 py-0.5 rounded-md badge-warm-price inline-flex items-center gap-1"
+                    aria-label={`Coût: ${fmt(price1)} cookies`}
+                    title="Coût en cookies"
+                  >
+                    <span className="text-[10px] uppercase tracking-wide">Coût</span>
+                    <span aria-hidden>🍪</span>
+                    <span>{fmt(price1)}</span>
+                  </span>
                 </div>
               </div>
               <div className="text-xs text-amber-700">{it.desc}</div>
