@@ -177,6 +177,11 @@ export default function CookieCraze() {
   const [tab, setTab] = useState('shop');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialInteract, setTutorialInteract] = useState(false);
+  const tutorialClicksBase = useRef(0);
+  const tutorialManualBuyBase = useRef(0);
+  const tutorialVisitedSkins = useRef(false);
   useEffect(() => {
     const onEsc = (e) => e.key === 'Escape' && setShowMenu(false);
     window.addEventListener('keydown', onEsc);
@@ -300,6 +305,43 @@ export default function CookieCraze() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [state.ui.introSeen]);
+
+  // Tutorial step baselines
+  useEffect(() => {
+    if (state.ui.introSeen) return;
+    if (tutorialStep === 1) {
+      tutorialClicksBase.current = state.stats.clicks || 0;
+    } else if (tutorialStep === 2) {
+      // total des items manuels (mode: 'mult')
+      let total = 0; for (const it of ITEMS) if (it.mode === 'mult') total += (state.items[it.id] || 0);
+      tutorialManualBuyBase.current = total;
+    }
+  }, [tutorialStep, state.ui.introSeen]);
+
+  // Step 1: avance après 5 clics
+  useEffect(() => {
+    if (state.ui.introSeen) return;
+    if (tutorialStep !== 1) return;
+    const diff = (state.stats.clicks || 0) - (tutorialClicksBase.current || 0);
+    if (diff >= 5) { setTutorialInteract(false); setTutorialStep(2); }
+  }, [state.stats.clicks, tutorialStep, state.ui.introSeen]);
+
+  // Step 2: avance après un achat manuel
+  useEffect(() => {
+    if (state.ui.introSeen) return;
+    if (tutorialStep !== 2) return;
+    let total = 0; for (const it of ITEMS) if (it.mode === 'mult') total += (state.items[it.id] || 0);
+    if (total > tutorialManualBuyBase.current) { setTutorialStep(3); setTab('skins'); }
+  }, [state.items, tutorialStep, state.ui.introSeen]);
+
+  // Step 3: avance quand l'onglet skins est vu
+  useEffect(() => {
+    if (state.ui.introSeen) return;
+    if (tutorialStep !== 3) return;
+    if (tab === 'skins' && !tutorialVisitedSkins.current) {
+      tutorialVisitedSkins.current = true; setTimeout(() => setTutorialStep(4), 400);
+    }
+  }, [tab, tutorialStep, state.ui.introSeen]);
 
   // Track timestamp for offline Save
   useEffect(() => {
@@ -461,6 +503,8 @@ export default function CookieCraze() {
   // Purchase logic + Flash sale + Qty modifiers + Wow FX
   const costOf = (id, count) => {
     const it = ITEMS.find((x) => x.id === id); const owned = state.items[id] || 0; let price = bulkCost(it, owned, count);
+    // Tutoriel: premier achat de Curseur gratuit à la toute première partie (une seule fois)
+    if (!state.ui.introSeen && id === 'cursor' && owned === 0) price = 0;
     // Flash discount applies on total
     if (state.flags.flash && state.flags.flash.itemId === id && Date.now() < state.flags.flash.until) price *= (1 - state.flags.flash.discount);
     return Math.ceil(price);
@@ -519,6 +563,7 @@ export default function CookieCraze() {
       if (euphoriaMult > 0) {
         buffs = { ...buffs, cpcMulti: euphoriaMult, until: now + 8000, label: `EUPHORIA x${euphoriaMult} CPC` };
       }
+      // Si le tutoriel étape 2 est actif, l'achat manuel valide l'étape (géré aussi par effet), rien à faire ici
       return {
         ...s,
         cookies: s.cookies - price,
@@ -967,7 +1012,7 @@ export default function CookieCraze() {
 
       {/* Intro Overlay */}
       <AnimatePresence>
-        {!state.ui.introSeen && (
+        {!state.ui.introSeen && !tutorialInteract && (
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -992,52 +1037,60 @@ export default function CookieCraze() {
                   style={{ top: `${c.top}%`, left: `${c.left}%`, fontSize: c.size }}
                   initial={{ y: 0, opacity: 0 }}
                   animate={{ y: ["0%", "-20%", "0%"], opacity: [0.1, 0.6, 0.1] }}
-                  transition={{
-                    duration: c.duration,
-                    delay: c.delay,
-                    repeat: Infinity,
-                    repeatType: "mirror",
-                    ease: "easeInOut",
-                  }}
+                  transition={{ duration: c.duration, delay: c.delay, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
                 >
                   🍪
                 </motion.div>
               ))}
             </div>
             <div className="relative h-full w-full flex flex-col items-center justify-center text-center px-6">
-              <motion.h1
-                id="intro-title"
-                initial={{ scale: 0.8, rotateX: 25, opacity: 0 }}
-                animate={{ scale: 1, rotateX: 0, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 120, damping: 14 }}
-                className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow"
-              >
-                COOKIE CRAZE
-              </motion.h1>
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="mt-3 text-zinc-300 max-w-xl"
-              >
-                Forge des cookies, <b>mine</b> des <span className="text-emerald-300">CrumbCoins</span>, et monte vers l'infini.
-              </motion.div>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={skipIntro}
-                className="mt-8 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl"
-              >
-                Entrer
-              </motion.button>
-              <div className="mt-3 text-xs text-zinc-500">
-                Appuie sur <b>Entrée</b> ou <b>Espace</b> pour commencer
-              </div>
-              <button
-                aria-pressed={state.ui.sounds}
-                onClick={() => setState(s => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
-                className="mt-2 text-xs px-3 py-1 rounded-xl bg-zinc-800/70 border border-zinc-700"
-              >
+              {tutorialStep === 0 && (
+                <>
+                  <motion.h1 id="intro-title" initial={{ scale: 0.8, rotateX: 25, opacity: 0 }} animate={{ scale: 1, rotateX: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 120, damping: 14 }} className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow">COOKIE CRAZE</motion.h1>
+                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="mt-3 text-zinc-300 max-w-xl">Bienvenue ! Fais cuire des cookies et améliore‑toi pour aller à l'infini.</motion.div>
+                  <div className="mt-6 flex gap-3">
+                    <button onClick={() => setTutorialStep(1)} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Commencer</button>
+                    <button onClick={skipIntro} className="px-4 py-3 rounded-2xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100 border border-zinc-700">Ignorer</button>
+                  </div>
+                </>
+              )}
+              {tutorialStep === 1 && (
+                <>
+                  <div className="text-3xl font-extrabold text-amber-300">1) Tape sur le gros cookie</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Clique le cookie central <b>5 fois</b> pour passer à l’étape suivante.</div>
+                  <div className="mt-3 text-xs text-zinc-400">Astuce: essaie maintenant, la progression se mettra à jour.</div>
+                  <button onClick={() => setTutorialInteract(true)} className="mt-6 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Cliquer le cookie</button>
+                </>
+              )}
+              {tutorialStep === 2 && (
+                <>
+                  <div className="text-3xl font-extrabold text-amber-300">2) Achète des multiplicateurs</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Ouvre la Boutique et achète un item de <b>clic</b> (p.ex. Curseur). L’étape avançera après l’achat.</div>
+                  <div className="mt-5 flex gap-3">
+                    <button onClick={() => { setTutorialInteract(true); setTab('shop'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Ouvrir la Boutique</button>
+                  </div>
+                </>
+              )}
+              {tutorialStep === 3 && (
+                <>
+                  <div className="text-3xl font-extrabold text-amber-300">3) Découvre les skins</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Va sur l’onglet <b>Skins</b> pour voir les personnalisations. L’étape avancera quand l’onglet sera ouvert.</div>
+                  <div className="mt-5 flex gap-3">
+                    <button onClick={() => { setTutorialInteract(true); setTab('skins'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Voir Skins</button>
+                  </div>
+                </>
+              )}
+              {tutorialStep === 4 && (
+                <>
+                  <div className="text-3xl font-extrabold text-amber-300">Bonne chance !</div>
+                  <div className="mt-2 text-zinc-300 max-w-xl">Tu es prêt. Clique, achète, progresse et vise l’infini ✨</div>
+                  <div className="mt-5 flex gap-3">
+                    <button onClick={() => { setTab('shop'); setTutorialInteract(true); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Aller à la Boutique</button>
+                    <button onClick={skipIntro} className="px-6 py-3 rounded-2xl bg-emerald-500/90 hover:bg-emerald-400 text-zinc-900 font-bold border border-emerald-200 shadow-xl">Jouer</button>
+                  </div>
+                </>
+              )}
+              <button aria-pressed={state.ui.sounds} onClick={() => setState(s => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))} className="mt-6 text-xs px-3 py-1 rounded-xl bg-zinc-800/70 border border-zinc-700">
                 {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
               </button>
             </div>
