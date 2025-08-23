@@ -2,6 +2,14 @@
   "mode": "standard",
   "standard": {
     "softcaps": { "mult_rational_k": 12 },
+    "early": {
+      "window_s": 300,
+      "cps_discount": 0.35,
+      "free_first_auto": true,
+      "cpc_base_mult": 1.5,
+      "golden": { "cooldown_s": [60, 100] },
+      "flash": { "no_purchase_threshold_s": 30, "discount": 0.30 }
+    },
     "events": {
       "golden": {
         "cooldown_s": [140, 220],

@@ -9,6 +9,7 @@ import { UPGRADES } from "../data/upgrades.js";
 import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "../utils/calc.js";
 import tuning from "../data/tuning.json";
 import { ACHIEVEMENTS } from "../data/achievements.js";
+import { MISSIONS, getInitialMission, nextMissionId } from "../data/missions.js";
 import { fmt, fmtInt, clamp } from "../utils/format.js";
 
 // --- Helpers for CPS recompute (module-level) ---
@@ -16,9 +17,11 @@ import { fmt, fmtInt, clamp } from "../utils/format.js";
 
 // === Skins ===
 const SKINS = {
-  default: { id: "default", name: "Choco", price: 0, src: "/cookie.png" },
-  ice:     { id: "ice",     name: "Ice",   price: 200_000, src: "/cookie-ice.png" },
-  fire:    { id: "fire",    name: "Lava",  price: 1_000_000, src: "/cookie-fire.png" },
+  default: { id: "default", name: "Choco",   price: 0,       src: "/cookie.png" },
+  caramel: { id: "caramel", name: "Caramel", price: 10_000,  src: "/cookie.png", className: "saturate-125 hue-rotate-[18deg]" },
+  noir:    { id: "noir",    name: "Noir",    price: 100_000, src: "/cookie.png", className: "brightness-[0.92] contrast-125" },
+  ice:     { id: "ice",     name: "Ice",     price: 200_000, src: "/cookie-ice.png" },
+  fire:    { id: "fire",    name: "Lava",    price: 1_000_000, src: "/cookie-fire.png" },
 };
 
 // === Game Data ===
@@ -32,10 +35,11 @@ const DEFAULT_STATE = {
   upgrades: {},
   // Skins state
   skin: "default",
-  skinsOwned: { default: true, ice: false, fire: false },
+  skinsOwned: { default: true, caramel: false, noir: false, ice: false, fire: false },
 
   lastTs: Date.now(),
-  stats: { clicks: 0, lastPurchaseTs: Date.now() },
+  createdAt: Date.now(),
+  stats: { clicks: 0, lastPurchaseTs: Date.now(), goldenClicks: 0 },
   flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0 },
   buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
   combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
@@ -58,6 +62,7 @@ const DEFAULT_STATE = {
   // Cookie eat progress & counters
   cookieEatenCount: 0,
   cookieBites: [],
+  mission: getInitialMission(),
 };
 
 const SAVE_KEY = "cookieCrazeSaveV4";
@@ -173,6 +178,7 @@ export default function CookieCraze() {
     return { ...DEFAULT_STATE };
   });
   const { ping, crunch, dispose } = useAudio(state.ui.sounds);
+  const [previewSkin, setPreviewSkin] = useState(null);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   const [tab, setTab] = useState('shop');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -223,9 +229,13 @@ export default function CookieCraze() {
   const cpsWithBuff = useMemo(() => baseCpsNoBuff * (Date.now() < state.buffs.until ? state.buffs.cpsMulti : 1), [baseCpsNoBuff, state.buffs]);
   const clickMult = useMemo(() => clickMultiplierFrom(state.items, state.upgrades), [state.items, state.upgrades]);
   // Base CPC: dépend UNIQUEMENT du cpcBase initial × multiplicateurs de clic (indépendant du CPS auto)
-  const cpcBase = useMemo(() => (
-    (state.cpcBase || 1) * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades
-  ), [state.cpcBase, clickMult, state.buffs, cpcMultFromUpgrades]);
+  const cpcBase = useMemo(() => {
+    const mode = (tuning && tuning.mode) || 'standard';
+    const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
+    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < (ecfg.window_s || 0);
+    const earlyMult = earlyActive ? (ecfg.cpc_base_mult || 1) : 1;
+    return (state.cpcBase || 1) * earlyMult * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades;
+  }, [state.cpcBase, clickMult, state.buffs, cpcMultFromUpgrades, state.createdAt]);
   // CPC courant utilisé pour les gains (sans combo)
   const cpc = useMemo(() => cpcBase, [cpcBase]);
 
@@ -306,6 +316,13 @@ export default function CookieCraze() {
     return () => window.removeEventListener('keydown', onKey);
   }, [state.ui.introSeen]);
 
+  // Skin preview events (from Skins.jsx)
+  useEffect(() => {
+    const handler = (e) => setPreviewSkin(e.detail || null);
+    window.addEventListener('skin-preview', handler);
+    return () => window.removeEventListener('skin-preview', handler);
+  }, []);
+
   // Tutorial step baselines
   useEffect(() => {
     if (state.ui.introSeen) return;
@@ -360,15 +377,20 @@ export default function CookieCraze() {
     return () => { window.removeEventListener("beforeunload", h); clearInterval(iv); };
   }, []);
 
-  // Flash Sale scheduler (si pas d'achat depuis 60s)
+  // Flash Sale scheduler (early-game boost configurable)
   useEffect(() => {
     const iv = setInterval(() => {
       setState((s) => {
         const now = Date.now();
+        const mode = (tuning && tuning.mode) || 'standard';
+        const ecfg = (tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.flash) || {};
+        const earlyActive = s.createdAt && (now - s.createdAt) / 1000 < ((tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.window_s) || 0);
+        const thresholdMs = earlyActive ? (ecfg.no_purchase_threshold_s || 30) * 1000 : 60000;
         const noSale = !s.flags.flash || now >= s.flags.flash.until;
-        if (now - (s.stats.lastPurchaseTs || s.lastTs) > 60000 && noSale) {
+        if (now - (s.stats.lastPurchaseTs || s.lastTs) > thresholdMs && noSale) {
           const pick = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-          return { ...s, flags: { ...s.flags, flash: { itemId: pick.id, discount: 0.25, until: now + 20000 } } };
+          const discount = earlyActive ? (ecfg.discount || 0.3) : 0.25;
+          return { ...s, flags: { ...s.flags, flash: { itemId: pick.id, discount, until: now + 20000 } } };
         }
         return s;
       });
@@ -390,6 +412,23 @@ export default function CookieCraze() {
     });
   }, [state.cookies, state.items, state.stats.clicks, state.flags.offlineCollected]);
 
+  // Mission engine: une mission active à la fois
+  useEffect(() => {
+    setState((s) => {
+      const current = MISSIONS.find((m) => m.id === (s.mission?.id));
+      if (!current) return { ...s, mission: getInitialMission() };
+      const { progress, target, done } = current.check(s);
+      if (done && !s.mission.completed) {
+        // Applique la récompense et prépare la suivante
+        current.reward(s, setState, toast);
+        const nextId = nextMissionId(current.id);
+        return { ...s, mission: { id: nextId, startedAt: Date.now(), completed: false } };
+      }
+      // Stocke progression live
+      return { ...s, mission: { ...s.mission, progress, target, completed: !!done } };
+    });
+  }, [state.cookies, state.items, state.stats.goldenClicks]);
+
   // Toast helper
   const toast = (msg, tone = "info", options = {}) => {
     const id = Math.random().toString(36).slice(2);
@@ -399,13 +438,22 @@ export default function CookieCraze() {
   };
 
   // Golden cookie
+  const goldenTimerRef = useRef(null);
+  const goldenHideTimerRef = useRef(null);
+  const goldenClickLockRef = useRef(0);
+
   const scheduleGolden = () => {
+    try { if (goldenTimerRef.current) { clearTimeout(goldenTimerRef.current); goldenTimerRef.current = null; } } catch {}
     const mode = (tuning && tuning.mode) || 'standard';
     const cfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || null;
-    const min = cfg ? (cfg.cooldown_s?.[0] ?? 100) : 100;
-    const max = cfg ? (cfg.cooldown_s?.[1] ?? 150) : 150;
+    const ecfg = (tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.golden) || null;
+    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < ((tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.window_s) || 0);
+    const baseMin = cfg ? (cfg.cooldown_s?.[0] ?? 100) : 100;
+    const baseMax = cfg ? (cfg.cooldown_s?.[1] ?? 150) : 150;
+    const min = earlyActive && ecfg ? (ecfg.cooldown_s?.[0] ?? baseMin) : baseMin;
+    const max = earlyActive && ecfg ? (ecfg.cooldown_s?.[1] ?? baseMax) : baseMax;
     const d = (min + Math.random() * (max - min)) * 1000;
-    setTimeout(() => setShowGolden(true), d);
+    goldenTimerRef.current = setTimeout(() => setShowGolden(true), d);
   };
   const [showGolden, setShowGolden] = useState(false);
   const goldenRef = useRef({ left: "50%", top: "50%" });
@@ -413,11 +461,14 @@ export default function CookieCraze() {
     if (showGolden) {
       const area = document.getElementById("game-area");
       if (area) { const r = area.getBoundingClientRect(); const left = Math.random() * (r.width - 120) + 60; const top = Math.random() * (r.height - 200) + 120; goldenRef.current = { left: `${left}px`, top: `${top}px` }; }
-      const hide = setTimeout(() => { setShowGolden(false); scheduleGolden(); }, 10000);
-      return () => clearTimeout(hide);
+      goldenHideTimerRef.current = setTimeout(() => { setShowGolden(false); scheduleGolden(); }, 10000);
+      return () => { try { if (goldenHideTimerRef.current) clearTimeout(goldenHideTimerRef.current); } catch {} };
     }
   }, [showGolden]);
   const onGoldenClick = () => {
+    const nowClick = Date.now();
+    if (nowClick < goldenClickLockRef.current) return; // anti double-click
+    goldenClickLockRef.current = nowClick + 800;
     setShowGolden(false); scheduleGolden(); ping(880, 0.1);
     const now = Date.now();
     const mode = (tuning && tuning.mode) || 'standard';
@@ -448,7 +499,7 @@ export default function CookieCraze() {
       setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Lucky +${fmt(bonus)} !`, "success");
     }
     else { burstParticles(30); const bonus = cpc * 30; setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Pluie de miettes +${fmt(bonus)} !`, "success"); }
-    setState((s) => ({ ...s, flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks } }));
+    setState((s) => ({ ...s, stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 }, flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks } }));
   };
   const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => { const until = Date.now() + seconds * 1000; setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } })); };
 
@@ -512,6 +563,14 @@ export default function CookieCraze() {
   // Purchase logic + Flash sale + Qty modifiers + Wow FX
   const costOf = (id, count) => {
     const it = ITEMS.find((x) => x.id === id); const owned = state.items[id] || 0; let price = bulkCost(it, owned, count);
+    const mode = (tuning && tuning.mode) || 'standard';
+    const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
+    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < (ecfg.window_s || 0);
+    if (earlyActive && it && it.mode === 'cps') {
+      const totalCpsOwned = ITEMS.filter(x => x.mode === 'cps').reduce((acc, x) => acc + (state.items[x.id] || 0), 0);
+      if (ecfg.free_first_auto && totalCpsOwned === 0 && state.ui.introSeen) price = 0;
+      else price *= (1 - (ecfg.cps_discount || 0));
+    }
     // Tutoriel: premier achat de Curseur gratuit à la toute première partie (une seule fois)
     if (!state.ui.introSeen && id === 'cursor' && owned === 0) price = 0;
     // Flash discount applies on total
@@ -861,7 +920,7 @@ export default function CookieCraze() {
             <div className="flex flex-col items-center text-center">
               <div className="text-base md:text-xl text-zinc-300">Cookies en banque</div>
               <div className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-300 drop-shadow">{fmtInt(state.cookies)}</div>
-              <div className="text-sm text-zinc-500">Cuits au total: {fmtInt(state.lifetime)}</div>
+              <div className="text-sm text-zinc-500">Cuits au total: {fmtInt(state.lifetime)}{baseCpsNoBuff > 0 ? ` · ${fmt(baseCpsNoBuff)} CPS` : ''}</div>
 
               {Date.now() < state.buffs.until && (
                 <div className="mt-3 text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
@@ -889,6 +948,18 @@ export default function CookieCraze() {
               </div>
             </div>
 
+            {/* Mission en cours */}
+            <div className="mt-3 w-full max-w-md mx-auto">
+              <div className="text-xs text-zinc-300 font-semibold">Mission</div>
+              <div className="mt-1 rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
+                <div className="text-sm font-bold text-zinc-100">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
+                <div className="text-xs text-zinc-400">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
+                <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: `${Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))}%` }} />
+                </div>
+              </div>
+            </div>
+
             {/* Big Cookie */}
             <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
               {/* Wrapper carré aux dimensions du cookie pour un centrage parfait */}
@@ -908,19 +979,19 @@ export default function CookieCraze() {
                 >
                   {state.cookieEatEnabled ? (
                     <CookieBiteMask
-                      skinSrc={SKINS[state.skin].src}
+                      skinSrc={SKINS[previewSkin || state.skin].src}
                       clicks={state.stats.clicks}
                       bitesTotal={80}
                       enabled={state.cookieEatEnabled}
                       onFinished={onCookieEaten}
-                      className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                      className={`h-full w-full cursor-pointer select-none drop-shadow-xl ${SKINS[previewSkin || state.skin].className || ""}`}
                       onClick={onCookieClick}
                     />
                   ) : (
                     <motion.img
-                      src={SKINS[state.skin].src}
+                      src={SKINS[previewSkin || state.skin].src}
                       alt="Cookie"
-                      className="h-full w-full cursor-pointer select-none drop-shadow-xl"
+                      className={`h-full w-full cursor-pointer select-none drop-shadow-xl ${SKINS[previewSkin || state.skin].className || ""}`}
                       whileTap={{ scale: 0.92, rotate: -2 }}
                       onClick={onCookieClick}
                       draggable="false"
@@ -946,9 +1017,17 @@ export default function CookieCraze() {
                   ))}
                 </AnimatePresence>
               </div>
-              {/* Compteur en bas à gauche */}
-              <div className="absolute bottom-2 left-2 text-sm md:text-base text-zinc-300">
-                Cookies mangés: <b>{state.cookieEatenCount || 0}</b>
+              {/* Compteur en bas à gauche + aide */}
+              <div className="absolute bottom-2 left-2 text-sm md:text-base text-zinc-300 flex items-center gap-2">
+                <span>Cookies mangés: <b>{state.cookieEatenCount || 0}</b></span>
+                <div className="relative group">
+                  <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-zinc-800 border border-zinc-700 text-[11px] cursor-default">?</span>
+                  <div className="absolute bottom-full mb-2 left-0 w-64 opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                    <div className="rounded-lg px-3 py-2 text-xs bg-zinc-900/90 border border-zinc-700 shadow-xl">
+                      Clique le gros cookie et les bonus pour grignoter le biscuit. Chaque cookie mangé octroie un bonus immédiat et peut débloquer des surprises.
+                    </div>
+                  </div>
+                </div>
               </div>
               {/* Combo supprimé */}
             </div>
@@ -1055,6 +1134,7 @@ export default function CookieCraze() {
               <li>Les <b>améliorations</b> et les <b>synergies</b> gardent utiles les vieux bâtiments.</li>
               <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
               <li>Hors-ligne : 10% sur 10 min, décroissance vers 3% (cap 2h).</li>
+              <li><b>Cookies mangés</b> : chaque portion croquée offre un bonus immédiat (parfois massif) et progresse vers des surprises visuelles. Clique souvent et vise les bonus pour accélérer.</li>
             </ul>
           </div>
         </div>

@@ -3,7 +3,7 @@ import React from "react";
 export default function Upgrades({ state, UPGRADES, buyUpgrade, canBuyUpgrade, ITEMS, fmt, stake, unstake, cryptoFlash }) {
   return (
     <>
-      <div className="text-sm font-semibold text-zinc-300 mb-2">Améliorations</div>
+      <div className="text-sm font-semibold text-zinc-200 mb-2">Améliorations</div>
       <div className="grid grid-cols-1 gap-3">
         {UPGRADES.map((u) => {
           const available = canBuyUpgrade(u);
@@ -13,12 +13,12 @@ export default function Upgrades({ state, UPGRADES, buyUpgrade, canBuyUpgrade, I
               key={u.id}
               disabled={purchased || !available || state.cookies < u.cost}
               onClick={() => buyUpgrade(u)}
-              className={`p-3 rounded-xl border text-left transition ${
+              className={`p-3 rounded-2xl border text-left btn-pressable card-shadow transition ${
                 purchased
                   ? "bg-emerald-600/20 border-emerald-400/40 text-emerald-200"
                   : available
                   ? state.cookies >= u.cost
-                    ? "bg-zinc-800/70 hover:bg-zinc-800 border-zinc-700"
+                    ? "glass-neon hover:border-sky-400/60"
                     : "bg-zinc-900/40 border-zinc-800"
                   : "bg-zinc-900/30 border-zinc-900 opacity-60"
               }`}
@@ -31,8 +31,12 @@ export default function Upgrades({ state, UPGRADES, buyUpgrade, canBuyUpgrade, I
                   ? "Puissance de clic"
                   : `Boost ${ITEMS.find((i) => i.id === u.target)?.name}`}
               </div>
-              <div className="text-sm mt-1 text-amber-300">
-                {purchased ? "Acheté" : `Coût: ${fmt(u.cost)}`}
+              <div className="text-sm mt-1 text-cyan-200 font-extrabold drop-shadow">
+                {purchased ? (
+                  <span className="px-2 py-0.5 rounded-md badge-neon-green">Acheté</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md badge-neon-amber">Coût: {fmt(u.cost)}</span>
+                )}
               </div>
             </button>
           );
@@ -41,14 +45,14 @@ export default function Upgrades({ state, UPGRADES, buyUpgrade, canBuyUpgrade, I
 
       <div className="mt-4">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-zinc-300">
+          <div className="text-sm font-semibold text-zinc-200">
             {state.crypto.name} <span className="text-zinc-500">({state.crypto.symbol})</span>
           </div>
           <div
             className={`text-sm px-2 py-1 rounded-lg border ${
               cryptoFlash
-                ? "bg-emerald-600/30 border-emerald-400/60"
-                : "bg-zinc-800/70 border-zinc-700"
+                ? "bg-emerald-600/20 border-emerald-400/60"
+                : "glass-neon"
             }`}
           >
             Solde: <b>{(state.crypto.balance || 0).toFixed(3)} {state.crypto.symbol}</b>
@@ -64,14 +68,14 @@ export default function Upgrades({ state, UPGRADES, buyUpgrade, canBuyUpgrade, I
           <button
             onClick={() => stake(0.001)}
             disabled={(state.crypto.balance || 0) < 0.001}
-            className="text-xs px-3 py-1 rounded-lg bg-emerald-700/30 border border-emerald-500/40 disabled:opacity-50"
+            className="text-xs px-3 py-1 rounded-lg bg-emerald-600/20 border border-emerald-400/40 hover:bg-emerald-500/25 btn-pressable disabled:opacity-50"
           >
             Stake +0.001
           </button>
           <button
             onClick={() => unstake(0.001)}
             disabled={(state.crypto.staked || 0) < 0.001}
-            className="text-xs px-3 py-1 rounded-lg bg-zinc-800 border border-zinc-700 disabled:opacity-50"
+            className="text-xs px-3 py-1 rounded-lg glass-neon hover:border-sky-400/60 btn-pressable disabled:opacity-50"
           >
             Unstake -0.001
           </button>
