@@ -18,8 +18,8 @@ import { fmt, fmtInt, clamp } from "../utils/format.js";
 // === Skins ===
 const SKINS = {
   default: { id: "default", name: "Choco",   price: 0,       src: "/cookie.png" },
-  caramel: { id: "caramel", name: "Caramel", price: 10_000,  src: "/cookie.png", className: "saturate-125 hue-rotate-[18deg]" },
-  noir:    { id: "noir",    name: "Noir",    price: 100_000, src: "/cookie.png", className: "brightness-[0.92] contrast-125" },
+  caramel: { id: "caramel", name: "Caramel", price: 10_000,  src: "/cookie-caramel.png", className: "saturate-125 hue-rotate-[18deg]" },
+  noir:    { id: "noir",    name: "Noir",    price: 100_000, src: "/cookie-noir.png", className: "brightness-[0.92] contrast-125" },
   ice:     { id: "ice",     name: "Ice",     price: 200_000, src: "/cookie-ice.png" },
   fire:    { id: "fire",    name: "Lava",    price: 1_000_000, src: "/cookie-fire.png" },
 };
