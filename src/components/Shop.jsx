@@ -1,5 +1,7 @@
 import React from "react";
 import Tooltip from "./Tooltip.jsx";
+import ShopTooltip from "./ShopTooltip.jsx";
+import { generateItemTooltip } from "../utils/shopHelpers.js";
 
 const ProgressBar = ({ value, label }) => (
   <div className="w-full rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/60 relative">
@@ -9,7 +11,7 @@ const ProgressBar = ({ value, label }) => (
   </div>
 );
 
-export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep, modeFilter }) {
+export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clamp, tutorialStep, modeFilter, purchaseFlash }) {
   return (
     <>
       <div className="text-sm font-semibold text-zinc-200 flex items-center justify-between">
@@ -29,19 +31,14 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
         const isFirstFreeCursor = (!state.ui.introSeen && tutorialStep === 2 && it.id === 'cursor' && ownedCount === 0 && price1 === 0);
         const preDiscountPrice = onFlash && state.flags.flash?.discount ? Math.ceil(price1 / (1 - state.flags.flash.discount)) : null;
         const affordable = state.cookies >= price1;
+        const tooltipData = generateItemTooltip(it.id, state, costOf);
         return (
-          <Tooltip
+          <ShopTooltip
             key={it.id}
-            position="right"
-            panel={(
-              <div className="max-w-[220px] space-y-1">
-                <div className="font-semibold text-zinc-100">{it.name}</div>
-                <div className="text-zinc-300">+{fmt((perItemMult[it.id] || 1) * (it.mult || 0))} CPC</div>
-                <div className="text-zinc-400">Coût: {isFirstFreeCursor ? "0" : fmt(price1)} · Suivant: {fmt(Math.ceil(price1 * it.growth))}</div>
-                <div className="text-zinc-500">{it.desc}</div>
-                {it.synergy && <div className="text-[11px] text-cyan-300/80">{it.synergy}</div>}
-              </div>
-            )}
+            title={tooltipData?.title || `${it.emoji} ${it.name}`}
+            lines={tooltipData?.lines || []}
+            side="right"
+            delay={200}
             className="block"
           >
           <button
@@ -51,7 +48,9 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
               affordable
                 ? "glass-neon hover:border-sky-400/60"
                 : "bg-zinc-900/40 border-zinc-800 opacity-70"
-            } ${isFirstFreeCursor ? "animate-pulse ring-2 ring-cyan-300/60" : ""} card-shadow`}
+            } ${isFirstFreeCursor ? "animate-pulse ring-2 ring-cyan-300/60" : ""} ${
+              purchaseFlash && purchaseFlash[it.id] ? "ring-2 ring-emerald-400/80 bg-emerald-500/20" : ""
+            } card-shadow`}
           >
             {onFlash && (
               <span className="absolute -top-2 -left-2 text-[10px] px-2 py-0.5 rounded-full bg-pink-600/80 border border-pink-300/70 shadow">-25% 20s</span>
@@ -79,7 +78,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
               <span className="px-2 py-1 rounded-md badge-neon-amber inline-block">+{fmt((perItemMult[it.id] || 1) * (it.mult || 0))} CPC</span>
             </div>
           </button>
-          </Tooltip>
+          </ShopTooltip>
         );
       })}
       </>)}
@@ -96,19 +95,14 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
         const price1 = costOf(it.id, 1);
         const preDiscountPrice = onFlash && state.flags.flash?.discount ? Math.ceil(price1 / (1 - state.flags.flash.discount)) : null;
         const affordable = state.cookies >= price1;
+        const tooltipDataCPS = generateItemTooltip(it.id, state, costOf);
         return (
-          <Tooltip
+          <ShopTooltip
             key={it.id}
-            position="right"
-            panel={(
-              <div className="max-w-[220px] space-y-1">
-                <div className="font-semibold text-zinc-100">{it.name}</div>
-                <div className="text-zinc-300">+x{fmt((perItemMult[it.id] || 1) * it.cps)} CPS</div>
-                <div className="text-zinc-400">Coût: {fmt(price1)} · Suivant: {fmt(Math.ceil(price1 * it.growth))}</div>
-                <div className="text-zinc-500">{it.desc}</div>
-                {it.synergy && <div className="text-[11px] text-cyan-300/80">{it.synergy}</div>}
-              </div>
-            )}
+            title={tooltipDataCPS?.title || `${it.emoji} ${it.name}`}
+            lines={tooltipDataCPS?.lines || []}
+            side="right"
+            delay={200}
             className="block"
           >
           <button
@@ -116,6 +110,8 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
             onClick={(e) => buy(it.id, e.shiftKey ? 10 : e.ctrlKey ? 100 : 1)}
             className={`relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 btn-pressable transition ${
               affordable ? "glass-neon hover:border-sky-400/60" : "bg-zinc-900/40 border-zinc-800 opacity-70"
+            } ${
+              purchaseFlash && purchaseFlash[it.id] ? "ring-2 ring-emerald-400/80 bg-emerald-500/20" : ""
             } card-shadow`}
           >
             {onFlash && (
@@ -141,7 +137,7 @@ export default function Shop({ state, ITEMS, buy, costOf, perItemMult, fmt, clam
               <span className="px-2 py-1 rounded-md badge-neon-amber inline-block">x{fmt((perItemMult[it.id] || 1) * it.cps)}</span>
             </div>
           </button>
-          </Tooltip>
+          </ShopTooltip>
         );
       })}
       </>

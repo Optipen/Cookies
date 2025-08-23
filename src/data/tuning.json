@@ -7,12 +7,12 @@
       "cps_discount": 0.35,
       "free_first_auto": true,
       "cpc_base_mult": 1.5,
-      "golden": { "cooldown_s": [60, 100] },
+      "golden": { "cooldown_s": [90, 150] },
       "flash": { "no_purchase_threshold_s": 30, "discount": 0.30 }
     },
     "events": {
       "golden": {
-        "cooldown_s": [140, 220],
+        "cooldown_s": [240, 420],
         "dr_factor": 0.80,
         "dr_window_s": 180,
         "cps_mult_max": 4,
@@ -23,7 +23,7 @@
       "rain": {
         "cpc_factor": [1.8, 2.6],
         "duration_s": 7,
-        "cooldown_s": [150, 270]
+        "cooldown_s": [120, 180]
       }
     },
     "offline": {

@@ -27,6 +27,28 @@ export const MISSIONS = [
     },
   },
   {
+    id: "equip_first_skin",
+    title: "Équipe ton 1er skin",
+    desc: "Personnalise ton cookie en équipant un skin (autre que Choco).",
+    check: (s) => {
+      const hasNonDefaultSkin = s.skin && s.skin !== "default";
+      return { 
+        progress: hasNonDefaultSkin ? 1 : 0, 
+        target: 1, 
+        done: hasNonDefaultSkin 
+      };
+    },
+    reward: (s, setState, toast) => {
+      const bonus = Math.max(1000, s.cookies * 0.1); // 10% des cookies actuels, min 1000
+      setState((st) => ({ 
+        ...st, 
+        cookies: st.cookies + bonus,
+        lifetime: st.lifetime + bonus
+      }));
+      toast(`Mission accomplie: Style personnalisé ! +${Math.floor(bonus)} cookies bonus`, "success");
+    },
+  },
+  {
     id: "3_golden",
     title: "Gagner 3 cookies dorés",
     desc: "Clique 3 cookies dorés.",

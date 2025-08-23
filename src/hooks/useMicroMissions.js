@@ -1,10 +1,16 @@
 import { useEffect, useRef } from "react";
 import { MICRO_MISSIONS, MISSIONS } from "../data/missions.js";
 import { fmt } from "../utils/format.js";
+import { rewardAdapter, applyRewards } from "../utils/rewardAdapter.js";
 
 export function useMicroMissions(state, setState, toast) {
   const metaRef = useRef({});
   const awardingRef = useRef(false);
+  
+  // Si state est null/undefined (feature disabled), ne rien faire
+  if (!state) {
+    return;
+  }
 
   // Pick a random micro mission different from the current
   const pickNext = (excludeId, forbiddenTags = []) => {
@@ -12,8 +18,9 @@ export function useMicroMissions(state, setState, toast) {
     return pool[Math.floor(Math.random() * pool.length)];
   };
 
-  // Ensure we always have one active
+  // Ensure we always have one active (always, regardless of main mission)
   useEffect(() => {
+    // Assure qu'il y a toujours une micro-mission active
     if (!state.activeMicroMission || !state.activeMicroMission.id) {
       const m = pickNext(undefined, []);
       const meta = m.start ? m.start(state) : {};
@@ -27,6 +34,7 @@ export function useMicroMissions(state, setState, toast) {
   useEffect(() => {
     const curId = state.activeMicroMission?.id;
     if (!curId) return;
+    
     const m = MICRO_MISSIONS.find((x) => x.id === curId);
     if (!m) return;
 
@@ -47,43 +55,33 @@ export function useMicroMissions(state, setState, toast) {
 
     if (res && res.done && !awardingRef.current) {
       awardingRef.current = true;
-      const rw = m.reward(state) || {};
+      
+      // Nouveau système de récompenses adaptatif
+      const adaptiveRewards = rewardAdapter(state, m);
+      
+      // Applique les récompenses avec le nouveau système
+      applyRewards(state, adaptiveRewards, setState, toast);
+      
+      // Prépare la prochaine mission (logique existante)
       const now = Date.now();
-      const until = now + ((rw.seconds || 20) * 1000);
-      const addCookies = Math.max(25, Math.floor((state.cookies || 0) * 0.05));
-
       setState((s) => {
-        let buffs = { ...s.buffs };
-        if (rw.type === "buff") {
-          if (rw.kind === "cps") buffs.cpsMulti = (buffs.cpsMulti || 1) * (rw.value || 1.2);
-          else buffs.cpcMulti = (buffs.cpcMulti || 1) * (rw.value || 1.2);
-          buffs.until = Math.max(buffs.until || 0, until);
-          buffs.label = rw.label || "MICRO";
-        }
-        let flags = { ...s.flags };
-        if (rw.type === "discount") {
-          flags.discountAll = { value: rw.value || 0.1, until };
-        }
         const mainTags = (MISSIONS.find(x => x.id === s.mission?.id)?.tags) || [];
         const nx = pickNext(m.id, mainTags);
         const nextMeta = nx.start ? nx.start(s) : {};
         metaRef.current = nextMeta;
+        
         return {
           ...s,
-          buffs,
-          flags,
-          cookies: s.cookies + addCookies,
-          lifetime: s.lifetime + addCookies,
           activeMicroMission: { id: nx.id, startedAt: now, meta: nextMeta, progress: 0, target: undefined },
         };
       });
-      toast(`Micro‑mission: ${m.title} ✓ (+${fmt(addCookies)} cookies)`, "success");
+      
       // Libère le verrou après le cycle
       setTimeout(() => { awardingRef.current = false; }, 50);
     }
 
     return () => {};
-  }, [state.cookies, state.items, state.stats.clicks, state.activeMicroMission?.id]);
+  }, [state.cookies, state.items, state.stats.clicks, state.activeMicroMission?.id, state.mission?.completed, state.mission?.id]);
 
   // Cleanup on unmount
   useEffect(() => () => {}, []);

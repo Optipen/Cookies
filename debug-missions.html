@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Missions</title>
+</head>
+<body>
+    <h1>Debug État des Missions</h1>
+    <p>Ouvrez la console et regardez les logs [DEBUG]</p>
+    <p>Puis ouvrez le jeu et regardez l'état des missions.</p>
+    
+    <script>
+        console.log('=== INSTRUCTIONS DEBUG ===');
+        console.log('1. Ouvrez le jeu Cookie Craze');
+        console.log('2. Ouvrez la console du navigateur (F12)');
+        console.log('3. Regardez les logs [DEBUG] qui montrent l\'état des missions');
+        console.log('4. Vérifiez localStorage:');
+        console.log('   localStorage.getItem("cookie-craze-save")');
+        console.log('5. Testez les commandes:');
+        console.log('   exclusivityTests.help()');
+        console.log('   exclusivityTests.priority()');
+        
+        // Si on a accès au localStorage du jeu
+        try {
+            const save = localStorage.getItem('cookie-craze-save');
+            if (save) {
+                const state = JSON.parse(save);
+                console.log('=== ÉTAT ACTUEL ===');
+                console.log('Mission:', state.mission);
+                console.log('Micro-mission:', state.activeMicroMission);
+                console.log('Mission active?', state.mission && state.mission.id && !state.mission.completed);
+            } else {
+                console.log('Aucune sauvegarde trouvée');
+            }
+        } catch (e) {
+            console.log('Erreur lecture save:', e.message);
+        }
+    </script>
+</body>
+</html>

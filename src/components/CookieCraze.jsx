@@ -12,7 +12,33 @@ import { ACHIEVEMENTS } from "../data/achievements.js";
 import { MISSIONS, getInitialMission, nextMissionId, MICRO_MISSIONS } from "../data/missions.js";
 import { useSound } from "../hooks/useSound.js";
 import { useMicroMissions } from "../hooks/useMicroMissions.js";
+import { useCountdown } from "../hooks/useCountdown.js";
 import { fmt, fmtInt, clamp } from "../utils/format.js";
+import { 
+  FEATURES, 
+  loadState, 
+  migrate, 
+  saveState, 
+  isFeatureEnabled, 
+  withFeatureFlag,
+  createResetState,
+  createIncompleteSave,
+  createCorruptedSave,
+  SAVE_KEY,
+  PENDING_RESET_KEY
+} from "../utils/state.js";
+// Import des tests en mode DEV uniquement
+if (import.meta?.env?.DEV || new URLSearchParams(window.location.search).get('dev') === '1') {
+  import("../utils/test-scenarios.js");
+  import("../utils/timer-test.js");
+  import("../utils/test-rewards.js");
+  import("../utils/test-tooltips.js");
+  import("../utils/test-mission-exclusivity.js");
+  import("../utils/juicy-demo.js");
+  import("../utils/skin-test.js");
+  import("../utils/tabs-test.js");
+  import("../utils/golden-test.js");
+}
 
 // --- Helpers for CPS recompute (module-level) ---
 // moved to utils/calc.js
@@ -20,56 +46,16 @@ import { fmt, fmtInt, clamp } from "../utils/format.js";
 // === Skins ===
 const SKINS = {
   default: { id: "default", name: "Choco",   price: 0,       src: "/cookie.png" },
-  caramel: { id: "caramel", name: "Caramel", price: 10_000,  src: "/cookie-caramel.png", className: "saturate-125 hue-rotate-[18deg]" },
-  noir:    { id: "noir",    name: "Noir",    price: 100_000, src: "/cookie-noir.png", className: "brightness-[0.92] contrast-125" },
-  ice:     { id: "ice",     name: "Ice",     price: 200_000, src: "/cookie-ice.png" },
-  fire:    { id: "fire",    name: "Lava",    price: 1_000_000, src: "/cookie-fire.png" },
+  starter: { id: "starter", name: "Starter", price: 1_000,   src: "/cookie-caramel.png", className: "saturate-110 hue-rotate-[12deg] brightness-110", description: "Ton premier skin personnalisé !" },
+  early:   { id: "early",   name: "Early",   price: 10_000,  src: "/cookie-noir.png", className: "brightness-[0.95] contrast-115 sepia-[0.1]", description: "Pour les joueurs ambitieux" },
+  caramel: { id: "caramel", name: "Caramel", price: 50_000,  src: "/cookie-caramel.png", className: "saturate-125 hue-rotate-[18deg]", description: "Douceur caramélisée" },
+  noir:    { id: "noir",    name: "Noir",    price: 200_000, src: "/cookie-noir.png", className: "brightness-[0.92] contrast-125", description: "Élégance sombre" },
+  ice:     { id: "ice",     name: "Ice",     price: 500_000, src: "/cookie-ice.png", description: "Fraîcheur glaciale" },
+  fire:    { id: "fire",    name: "Lava",    price: 2_000_000, src: "/cookie-fire.png", description: "Puissance volcanique" },
 };
 
 // === Game Data ===
-
-const DEFAULT_STATE = {
-  version: 4,
-  cookies: 0,
-  lifetime: 0,
-  cpcBase: 1,
-  items: {},
-  upgrades: {},
-  // Skins state
-  skin: "default",
-  skinsOwned: { default: true, caramel: false, noir: false, ice: false, fire: false },
-
-  lastTs: Date.now(),
-  createdAt: Date.now(),
-  stats: { clicks: 0, lastPurchaseTs: Date.now(), goldenClicks: 0 },
-  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0 },
-  buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
-  combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
-  prestige: { chips: 0 },
-  ui: { sounds: true, introSeen: false },
-  toasts: [],
-  unlocked: {},
-  fx: { banner: null, shakeUntil: 0 },
-  crypto: { 
-    name: "CrumbCoin", 
-    symbol: "CRMB", 
-    balance: 0, 
-    staked: 0, 
-    mintedUnits: 0, 
-    perCookies: 20000, 
-    perAmount: 0.001 
-  },
-  // Feature flags
-  cookieEatEnabled: true,
-  // Cookie eat progress & counters
-  cookieEatenCount: 0,
-  cookieBites: [],
-  mission: getInitialMission(),
-  activeMicroMission: null,
-};
-
-const SAVE_KEY = "cookieCrazeSaveV4";
-const PENDING_RESET_KEY = "cookieCrazePendingReset";
+// DEFAULT_STATE et constantes déplacées vers src/utils/state.js
 
 const useAudio = (enabled) => {
   const ctxRef = useRef(null);
@@ -171,19 +157,68 @@ const useAudio = (enabled) => {
   return { ping, crunch, dispose };
 };
 
+// === Timer Announcer pour l'accessibilité ===
+function TimerAnnouncer() {
+  return (
+    <div 
+      id="timer-announcer"
+      aria-live="polite"
+      aria-atomic="true"
+      className="sr-only"
+    />
+  );
+}
+
+// === Timer Component pour Micro-missions ===
+function MicroMissionTimer({ endTimestamp }) {
+  const { remainingMs, percentage, isActive, timeText } = useCountdown(endTimestamp);
+  
+  if (!isActive) return null;
+  
+  return (
+    <div className="mt-1.5 space-y-1">
+      {/* Compteur de temps */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-yellow-300 font-mono">⏱️ Temps restant</span>
+        <span className="text-xs font-bold text-yellow-200 font-mono" aria-live="polite">
+          {timeText}
+        </span>
+      </div>
+      
+      {/* Barre de timer qui se vide */}
+      <div className="h-1 rounded-full bg-zinc-800 overflow-hidden" 
+           aria-label={`Timer: ${timeText} restant`} 
+           role="progressbar" 
+           aria-valuemin={0} 
+           aria-valuemax={100} 
+           aria-valuenow={Math.round(100 - percentage)}>
+        <div 
+          className="h-full bg-gradient-to-r from-yellow-400 to-red-500 transition-all duration-200 ease-linear" 
+          style={{ width: Math.max(0, 100 - percentage) + '%' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // === Component ===
 export default function CookieCraze() {
-  const [state, setState] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem("cookieCrazeSaveV3") || localStorage.getItem("cookieCrazeSaveV2") || localStorage.getItem("cookieCrazeSaveV1");
-      if (raw) return migrate(JSON.parse(raw));
-    } catch {}
-    return { ...DEFAULT_STATE };
-  });
-  const { ping, crunch, dispose } = useAudio(state.ui.sounds);
-  const { play } = useSound(state.ui.sounds);
+  const [state, setState] = useState(() => loadState());
+  const soundsEnabled = isFeatureEnabled('ENABLE_SOUNDS') && state.ui.sounds;
+  const { ping, crunch, dispose } = useAudio(soundsEnabled);
+  const { play } = useSound(soundsEnabled);
   const [previewSkin, setPreviewSkin] = useState(null);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
+  
+  // Listen for skin preview events from Skins component
+  useEffect(() => {
+    const handleSkinPreview = (event) => {
+      setPreviewSkin(event.detail);
+    };
+    
+    window.addEventListener('skinPreview', handleSkinPreview);
+    return () => window.removeEventListener('skinPreview', handleSkinPreview);
+  }, []);
   const [tab, setTab] = useState('shop');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -193,9 +228,40 @@ export default function CookieCraze() {
   const tutorialManualBuyBase = useRef(0);
   const tutorialVisitedSkins = useRef(false);
   useEffect(() => {
-    const onEsc = (e) => e.key === 'Escape' && setShowMenu(false);
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
+    const onKeyDown = (e) => {
+      // Escape pour fermer le menu
+      if (e.key === 'Escape') {
+        setShowMenu(false);
+        return;
+      }
+      
+      // Raccourcis clavier pour les onglets (Ctrl/Cmd + 1-4)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        switch(e.key) {
+          case '1':
+            e.preventDefault();
+            setTab('shop');
+            break;
+          case '2':
+            e.preventDefault();
+            setTab('auto');
+            break;
+          case '3':
+            e.preventDefault();
+            setTab('upgrades');
+            break;
+          case '4':
+            if (isFeatureEnabled('ENABLE_SKINS')) {
+              e.preventDefault();
+              setTab('skins');
+            }
+            break;
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   const cookieField = useMemo(
@@ -249,7 +315,7 @@ export default function CookieCraze() {
   const skinSrc = (SKINS[skinKey] && SKINS[skinKey].src) ? SKINS[skinKey].src : SKINS.default.src;
 
   // Save
-  useEffect(() => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }, [state]);
+  useEffect(() => { saveState(state); }, [state]);
 
   // Main loop 100ms (uses ONLY s.* so reset works)
   useEffect(() => {
@@ -287,11 +353,7 @@ export default function CookieCraze() {
       if (raw) {
         const { preserve, prestige, sounds } = JSON.parse(raw);
         sessionStorage.removeItem(PENDING_RESET_KEY);
-        setState(() => ({
-          ...DEFAULT_STATE,
-          prestige: preserve ? { chips: prestige || 0 } : { chips: 0 },
-          ui: { sounds: !!sounds, introSeen: false },
-        }));
+        setState(() => createResetState(preserve, !!sounds, preserve ? (prestige || 0) : 0));
         setViewKey((k) => k + 1);
       }
     } catch {}
@@ -314,8 +376,10 @@ export default function CookieCraze() {
         setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
       }
     }
-    scheduleGolden();
-    scheduleRain();
+    if (isFeatureEnabled('ENABLE_EVENTS')) {
+      scheduleGolden();
+      scheduleRain();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -428,6 +492,13 @@ export default function CookieCraze() {
       if (!current) return { ...s, mission: getInitialMission() };
       const { progress, target, done } = current.check(s);
       if (done && !s.mission.completed) {
+        // Mission completed effects
+        try { play('/sounds/golden_appear.mp3', 0.8); } catch {} // Mission success sound
+        if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
+          burstParticles(80); // Confetti-like effect
+        }
+        ping(1200, 0.15); // High-pitched success ping
+        
         // Applique la récompense et prépare la suivante
         current.reward(s, setState, toast);
         const nextId = nextMissionId(current.id);
@@ -439,7 +510,8 @@ export default function CookieCraze() {
   }, [state.cookies, state.items, state.stats.goldenClicks]);
 
   // Micro missions engine
-  useMicroMissions(state, setState, toast);
+  const microMissionsEnabled = isFeatureEnabled('ENABLE_MICRO_MISSIONS');
+  useMicroMissions(microMissionsEnabled ? state : null, microMissionsEnabled ? setState : () => {}, microMissionsEnabled ? toast : () => {});
 
   // Toast helper (function declaration to allow hoisting before first use)
   function toast(msg, tone = "info", options = {}) {
@@ -481,7 +553,15 @@ export default function CookieCraze() {
     const nowClick = Date.now();
     if (nowClick < goldenClickLockRef.current) return; // anti double-click
     goldenClickLockRef.current = nowClick + 800;
-    setShowGolden(false); scheduleGolden(); ping(880, 0.1); try { play('/sounds/golden_appear.mp3', 0.45); } catch {}
+    setShowGolden(false); scheduleGolden(); 
+    
+    // Enhanced golden sounds and effects
+    ping(880, 0.1); 
+    try { play('/sounds/golden_appear.mp3', 0.6); } catch {}
+    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
+      burstParticles(50); // More particles for golden cookies
+    }
+    
     const now = Date.now();
     const mode = (tuning && tuning.mode) || 'standard';
     const gcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || {};
@@ -491,15 +571,30 @@ export default function CookieCraze() {
     const drBase = gcfg.dr_factor ?? 0.85;
     const dr = Math.pow(drBase, stacks);
     const roll = Math.random();
+    
+    // Mise à jour commune de l'état avec goldenClicks
+    const updateState = (additionalUpdates = {}) => {
+      setState((s) => ({
+        ...s,
+        stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 },
+        flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks },
+        ...additionalUpdates
+      }));
+    };
+    
     if (roll < 0.35) {
       const cpsMax = gcfg.cps_mult_max ?? 5;
       const m = Math.max(1, Math.min(cpsMax, cpsMax * dr));
-      applyBuff({ cpsMulti: m, cpcMulti: 1, seconds: 20, label: `FRENZY x${Math.round(m)}` }); toast(`FRENZY: CPS x${Math.round(m)} pendant 20s !`, "success");
+      applyBuff({ cpsMulti: m, cpcMulti: 1, seconds: 20, label: `FRENZY x${Math.round(m)}` }); 
+      updateState();
+      toast(`FRENZY: CPS x${Math.round(m)} pendant 20s !`, "success");
     }
     else if (roll < 0.65) {
       const cpcMax = gcfg.cpc_mult_max ?? 10;
       const m = Math.max(1, Math.min(cpcMax, cpcMax * dr));
-      applyBuff({ cpsMulti: 1, cpcMulti: m, seconds: 12, label: `CLICK FRENZY x${Math.round(m)}` }); toast(`CLICK FRENZY: CPC x${Math.round(m)} pendant 12s !`, "success");
+      applyBuff({ cpsMulti: 1, cpcMulti: m, seconds: 12, label: `CLICK FRENZY x${Math.round(m)}` }); 
+      updateState();
+      toast(`CLICK FRENZY: CPC x${Math.round(m)} pendant 12s !`, "success");
     }
     else if (roll < 0.85) {
       const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
@@ -508,10 +603,15 @@ export default function CookieCraze() {
       const cpsMult = gcfg.lucky_cps_mult ?? 12;
       const base = Math.max(state.cookies * bankMin, cpsNow * cpsMult);
       const bonus = base * dr;
-      setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Lucky +${fmt(bonus)} !`, "success");
+      updateState({ cookies: state.cookies + bonus, lifetime: state.lifetime + bonus });
+      toast(`Lucky +${fmt(bonus)} !`, "success");
     }
-    else { burstParticles(30); const bonus = cpc * 30; setState((s) => ({ ...s, cookies: s.cookies + bonus, lifetime: s.lifetime + bonus })); toast(`Pluie de miettes +${fmt(bonus)} !`, "success"); }
-    setState((s) => ({ ...s, stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 }, flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks } }));
+    else { 
+      burstParticles(30); 
+      const bonus = cpc * 30; 
+      updateState({ cookies: state.cookies + bonus, lifetime: state.lifetime + bonus });
+      toast(`Pluie de miettes +${fmt(bonus)} !`, "success"); 
+    }
   };
   const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => { const until = Date.now() + seconds * 1000; setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } })); };
 
@@ -551,6 +651,11 @@ export default function CookieCraze() {
     setFlyingCookie(null);
     applyBuff({ cpsMulti: 1, cpcMulti: 1.2, seconds: 15, label: 'VITESSE +20% CPC' });
     toast('Vitesse: +20% CPC (15s)', 'success');
+    // Compte comme un cookie doré pour les missions
+    setState((s) => ({
+      ...s,
+      stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 }
+    }));
   };
 
   // Idle detection + speed challenge
@@ -660,10 +765,30 @@ export default function CookieCraze() {
     if (state.flags.flash && state.flags.flash.itemId === id && Date.now() < state.flags.flash.until) price *= (1 - state.flags.flash.discount);
     return Math.ceil(price);
   };
+  // Purchase flash animation state
+  const [purchaseFlash, setPurchaseFlash] = useState({});
+  
   const buy = (id, count = 1) => {
     const it = ITEMS.find((x) => x.id === id);
     const price = costOf(id, count);
-    if (state.cookies < price) return toast("Pas assez de cookies…", "warn");
+    if (state.cookies < price) {
+      // Failed purchase sound
+      try { play('/crunch.mp3', 0.15); } catch {}
+      return toast("Pas assez de cookies…", "warn");
+    }
+
+    // Purchase success sound
+    try { play('/crunch-1.mp3', 0.4); } catch {}
+    
+    // Purchase flash animation
+    setPurchaseFlash(prev => ({ ...prev, [id]: Date.now() }));
+    setTimeout(() => {
+      setPurchaseFlash(prev => {
+        const newFlash = { ...prev };
+        delete newFlash[id];
+        return newFlash;
+      });
+    }, 300);
 
     // Wow-moment detection
     const ownedBefore = state.items[id] || 0;
@@ -675,6 +800,11 @@ export default function CookieCraze() {
     const deltaCps = cpsAfter - cpsBefore;
     const spentRatio = price / Math.max(1, state.cookies);
     const big = spentRatio >= 0.4 || willCross || deltaCps >= cpsBefore * 0.35;
+    
+    // Big purchase extra sound
+    if (big) {
+      try { play('/crunch-2.mp3', 0.6); } catch {}
+    }
 
     // Tirage EUPHORIA sur achat (divisé par 4): 7.5%x2.5, 5%x3, 2.5%x5, 0.5%x10
     const r = Math.random();
@@ -759,7 +889,17 @@ export default function CookieCraze() {
     const skin = SKINS[skinId];
     if (!skin) return;
     if (state.skinsOwned[skinId]) return toast("Skin déjà acheté", "warn");
-    if (state.cookies < skin.price) return toast("Pas assez de cookies…", "warn");
+    if (state.cookies < skin.price) {
+      try { play('/crunch.mp3', 0.15); } catch {}
+      return toast("Pas assez de cookies…", "warn");
+    }
+
+    // Purchase success effects
+    try { play('/crunch-1.mp3', 0.5); } catch {}
+    ping(1000, 0.1);
+    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
+      burstParticles(20);
+    }
 
     setState((s) => ({
       ...s,
@@ -771,7 +911,13 @@ export default function CookieCraze() {
 
   const selectSkin = (skinId) => {
     if (!state.skinsOwned[skinId]) return toast("Skin non débloqué", "warn");
+    
+    // Skin equip sound
+    try { play('/sounds/golden_appear.mp3', 0.3); } catch {}
+    ping(800, 0.08);
+    
     setState((s) => ({ ...s, skin: skinId }));
+    toast(`Skin équipé: ${SKINS[skinId]?.name}`, "success");
   };
 
   // Particles (clics)
@@ -809,15 +955,39 @@ export default function CookieCraze() {
   };
   useEffect(() => { const iv = setInterval(() => { setCrumbs((pp) => pp.map((p) => ({ ...p, x: p.x + p.vx * 3.6, y: p.y + p.vy * 3.6, vy: p.vy + 0.04, life: p.life - 1, rot: p.rot + p.vr })).filter((p) => p.life > 0)); }, 16); return () => clearInterval(iv); }, []);
 
-  // Big cookie click
+  // Big cookie click with enhanced feedback
+  const [cookieScale, setCookieScale] = useState(1);
+  const [cookieRotation, setCookieRotation] = useState(0);
+  const cookieClickAnimRef = useRef(null);
+  
   const onCookieClick = () => {
+    // Audio feedback
     crunch();
+    try { play('/crunch.mp3', 0.3); } catch {}
+    
+    // Visual feedback - cookie animation
+    if (cookieClickAnimRef.current) {
+      clearTimeout(cookieClickAnimRef.current);
+    }
+    
+    // Animation: scale + rotation temporaire, puis retour à l'état de base
+    setCookieScale(1.1);
+    const randomRotation = Math.random() > 0.5 ? 15 : -15;
+    setCookieRotation(randomRotation);
+    
+    cookieClickAnimRef.current = setTimeout(() => {
+      setCookieScale(1);
+      setCookieRotation(0); // Retour à la position de base (0°)
+    }, 150);
+    
     setState((s) => {
       const gain = cpc;
       return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 } };
     });
-    burstParticles(1, null, `x${clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`);
-    burstCrumbs(6);
+    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
+      burstParticles(1, null, `x${clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`);
+      burstCrumbs(6);
+    }
   };
 
   // --- Cookie eaten handler + progress tracking ---
@@ -922,11 +1092,7 @@ export default function CookieCraze() {
     setParticles([]);
 
     // Applique localement
-    setState(() => (
-      preserve
-        ? { ...DEFAULT_STATE, prestige: { chips }, ui: { sounds, introSeen: false } }
-        : { ...DEFAULT_STATE, prestige: { chips: 0 }, ui: { sounds, introSeen: false } }
-    ));
+    setState(() => createResetState(preserve, sounds, preserve ? chips : 0));
 
     toast(preserve ? "Partie réinitialisée." : "Tout remis à zéro.", "success");
 
@@ -945,6 +1111,8 @@ export default function CookieCraze() {
   const cryptoFlash = Date.now() < state.flags.cryptoFlashUntil;
   return (
     <div key={viewKey} id="game-area" className="min-h-screen w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100 select-none overflow-hidden">
+      {/* Composant d'accessibilité pour les annonces de timer */}
+      <TimerAnnouncer />
       <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
@@ -1028,11 +1196,55 @@ export default function CookieCraze() {
               )}
 
               {showAdvanced && (
-                <div className="mt-2 flex items-center gap-2 justify-center text-xs">
+                <div className="mt-2 flex items-center gap-2 justify-center text-xs flex-wrap">
                   <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
                   <label className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
                     <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
                   </label>
+                  
+                  {/* Dev Tools */}
+                  {(import.meta?.env?.DEV || new URLSearchParams(window.location.search).get('dev') === '1') && (
+                    <>
+                      <button 
+                        onClick={() => {
+                          try {
+                            localStorage.removeItem(SAVE_KEY);
+                            window.location.reload();
+                          } catch {}
+                        }}
+                        className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 border border-red-400 text-red-100"
+                        title="Supprime la sauvegarde et recharge la page"
+                      >
+                        🔄 Reset Save
+                      </button>
+                      <button 
+                        onClick={() => {
+                          try {
+                            const incompleteSave = createIncompleteSave();
+                            localStorage.setItem(SAVE_KEY, JSON.stringify(incompleteSave));
+                            window.location.reload();
+                          } catch {}
+                        }}
+                        className="px-2 py-1 rounded-lg bg-yellow-600 hover:bg-yellow-500 border border-yellow-400 text-yellow-100"
+                        title="Charge une sauvegarde incomplète pour tester la migration"
+                      >
+                        📝 Test Migration
+                      </button>
+                      <button 
+                        onClick={() => {
+                          try {
+                            const corruptedSave = createCorruptedSave();
+                            localStorage.setItem(SAVE_KEY, corruptedSave);
+                            window.location.reload();
+                          } catch {}
+                        }}
+                        className="px-2 py-1 rounded-lg bg-red-800 hover:bg-red-700 border border-red-600 text-red-100"
+                        title="Charge une sauvegarde corrompue pour tester le fallback"
+                      >
+                        💥 Test Corrupted
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1044,37 +1256,7 @@ export default function CookieCraze() {
               </div>
             </div>
 
-            {/* Mission en cours */}
-            <div className="mt-3 w-full max-w-md mx-auto">
-              <div className="text-xs text-zinc-300 font-semibold">Mission</div>
-              <div className="mt-1 rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
-                <div className="text-sm font-bold text-zinc-100">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
-                <div className="text-xs text-zinc-400">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
-                <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
-                </div>
-              </div>
-            </div>
 
-            {/* Micro‑mission en cours */}
-            <div className="mt-3 w-full max-w-md mx-auto">
-              <div className="text-xs text-zinc-300 font-semibold">Micro‑mission</div>
-              <div className="mt-1 rounded-xl border border-zinc-700/70 bg-zinc-900/60 p-3">
-                {(() => {
-                  const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
-                  const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
-                  return (
-                    <>
-                      <div className="text-sm font-bold text-zinc-100">{cur?.title || "—"}</div>
-                      {cur?.desc && <div className="text-xs text-zinc-400">{cur.desc}</div>}
-                      <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
-                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
 
             {/* Big Cookie */}
             <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
@@ -1090,6 +1272,17 @@ export default function CookieCraze() {
                 )}
 
                 <motion.div
+                  ref={cookieWrapRef}
+                  id="game-area"
+                  animate={{ 
+                    scale: cookieScale,
+                    rotate: cookieRotation
+                  }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 500, 
+                    damping: 30 
+                  }}
                   whileTap={{ scale: 0.92, rotate: -2 }}
                   className="h-full w-full"
                 >
@@ -1214,12 +1407,106 @@ export default function CookieCraze() {
 
           {/* Right panel with tabs */}
           <div className="rounded-2xl p-0 bg-zinc-900/60 border border-zinc-800 shadow-xl flex flex-col max-h-[520px] md:max-h-[620px] overflow-hidden">
-            {/* Fixed tabs bar */}
-            <div className="sticky top-0 z-10 bg-zinc-900/80 backdrop-blur px-3 py-2 border-b border-zinc-800 flex gap-1 text-xs" role="tablist" aria-label="Navigation boutique">
-              <button role="tab" aria-selected={tab==='shop'} onClick={() => setTab('shop')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='shop' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Boutique</button>
-              <button role="tab" aria-selected={tab==='auto'} onClick={() => setTab('auto')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='auto' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Auto</button>
-              <button role="tab" aria-selected={tab==='upgrades'} onClick={() => setTab('upgrades')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='upgrades' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Améliorations</button>
-              <button role="tab" aria-selected={tab==='skins'} onClick={() => setTab('skins')} className={"px-3 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 " + (tab==='skins' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800')}>Skins</button>
+            
+            {/* Missions en haut du panneau de droite */}
+            <div className="px-3 py-2 border-b border-zinc-800 space-y-2">
+              {/* Mission en cours */}
+              {isFeatureEnabled('ENABLE_MISSIONS') && (
+                <div className="rounded-lg border border-zinc-700/70 bg-zinc-900/40 p-2">
+                  <div className="text-xs text-zinc-300 font-semibold">Mission</div>
+                  <div className="text-xs font-bold text-zinc-100">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
+                  <div className="text-[10px] text-zinc-400 leading-tight">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
+                  <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Micro‑mission (prioritaire à l'affichage si présente) */}
+              {isFeatureEnabled('ENABLE_MICRO_MISSIONS') && state.activeMicroMission && (
+                <div className="rounded-lg border border-zinc-700/70 bg-zinc-900/40 p-2">
+                  <div className="text-xs text-zinc-300 font-semibold">Micro‑mission</div>
+                  {(() => {
+                    const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
+                    const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
+                    
+                    // Timer pour missions chronométrées
+                    const isTimedMission = cur?.checkTimed && state.activeMicroMission?.meta?.until;
+                    const timerEndTimestamp = isTimedMission ? state.activeMicroMission.meta.until : null;
+                    
+                    return (
+                      <>
+                        <div className="text-xs font-bold text-zinc-100">{cur?.title || "—"}</div>
+                        {cur?.desc && <div className="text-[10px] text-zinc-400 leading-tight">{cur.desc}</div>}
+                        
+                        {/* Barre de progression normale */}
+                        <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
+                          <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
+                        </div>
+                        
+                        {/* Timer pour missions chronométrées */}
+                        {isTimedMission && <MicroMissionTimer endTimestamp={timerEndTimestamp} />}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* Fixed tabs bar - Mobile responsive with horizontal scroll */}
+            <div className="sticky top-0 z-10 bg-zinc-900/80 backdrop-blur border-b border-zinc-800" role="tablist" aria-label="Navigation boutique">
+              <div className="flex gap-1 px-3 py-2 text-xs overflow-x-auto scrollbar-hide snap-x snap-mandatory">
+                <button 
+                  role="tab" 
+                  aria-selected={tab==='shop'} 
+                  onClick={() => setTab('shop')} 
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                    tab==='shop' 
+                      ? 'bg-zinc-800 text-white border border-zinc-700' 
+                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                  }`}
+                >
+                  🛍️ Boutique
+                </button>
+                <button 
+                  role="tab" 
+                  aria-selected={tab==='auto'} 
+                  onClick={() => setTab('auto')} 
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                    tab==='auto' 
+                      ? 'bg-zinc-800 text-white border border-zinc-700' 
+                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                  }`}
+                >
+                  ⚙️ Auto
+                </button>
+                <button 
+                  role="tab" 
+                  aria-selected={tab==='upgrades'} 
+                  onClick={() => setTab('upgrades')} 
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                    tab==='upgrades' 
+                      ? 'bg-zinc-800 text-white border border-zinc-700' 
+                      : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                  }`}
+                >
+                  ⬆️ Améliorations
+                </button>
+                {isFeatureEnabled('ENABLE_SKINS') && (
+                  <button 
+                    role="tab" 
+                    aria-selected={tab==='skins'} 
+                    onClick={() => setTab('skins')} 
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 snap-start ${
+                      tab==='skins' 
+                        ? 'bg-zinc-800 text-white border border-zinc-700' 
+                        : 'bg-zinc-900/40 text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                    }`}
+                  >
+                    👔 Skins
+                  </button>
+                )}
+              </div>
             </div>
             <div className="p-4 flex-1 overflow-auto">
 
@@ -1234,6 +1521,7 @@ export default function CookieCraze() {
                 clamp={clamp}
                 tutorialStep={tutorialStep}
                 modeFilter={tab}
+                purchaseFlash={purchaseFlash}
               />
             )}
 
@@ -1251,7 +1539,7 @@ export default function CookieCraze() {
               />
             )}
 
-            {tab === 'skins' && (
+            {tab === 'skins' && isFeatureEnabled('ENABLE_SKINS') && (
               <Skins
                 state={state}
                 SKINS={SKINS}
@@ -1416,27 +1704,4 @@ export default function CookieCraze() {
   );
 }
 
-// === Migration helper ===
-function migrate(s) {
-  let merged = { ...DEFAULT_STATE, ...s };
-  merged.items = merged.items || {}; merged.stats = merged.stats || { clicks: 0, lastPurchaseTs: Date.now() };
-  merged.flags = { offlineCollected: false, flash: null, cryptoFlashUntil: 0, ...(merged.flags||{}) };
-  merged.buffs = merged.buffs || { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
-  merged.combo = merged.combo || { value: 1, lastClickTs: 0, lastRushTs: 0 };
-  merged.prestige = merged.prestige || { chips: 0 }; merged.ui = { sounds: true, introSeen: false, ...(merged.ui||{}) };
-  merged.upgrades = merged.upgrades || {}; merged.unlocked = merged.unlocked || {};
-  merged.fx = merged.fx || { banner: null, shakeUntil: 0 };
-  merged.crypto = merged.crypto || { name: "CrumbCoin", symbol: "CRMB", balance: 0, staked: 0, mintedUnits: 0, perCookies: 20000, perAmount: 0.001 };
-
-  // Skins migration (compat anciennes saves)
-  merged.skin = merged.skin || "default";
-  merged.skinsOwned = { default: true, ice: false, fire: false, ...(merged.skinsOwned || {}) };
-
-  // Feature flags defaults
-  merged.cookieEatEnabled = merged.cookieEatEnabled ?? true;
-  merged.cookieEatenCount = merged.cookieEatenCount ?? 0;
-  merged.cookieBites = Array.isArray(merged.cookieBites) ? merged.cookieBites : [];
-
-  merged.version = 4;
-  return merged;
-}
+// === Migration helper déplacée vers src/utils/state.js ===
