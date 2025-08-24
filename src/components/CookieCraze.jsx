@@ -22,6 +22,9 @@ import { useCookieRain } from "../hooks/useCookieRain.js";
 import { useGoldenEvents } from "../hooks/useGoldenEvents.js";
 import { useParticles } from "../hooks/useParticles.js";
 import { useCountdown } from "../hooks/useCountdown.js";
+import { buildPlayerContext } from "../missions/context.js";
+import { selectMainMission, evaluateMainProgress, rewardFromMain } from "../missions/selector.js";
+import { applyRewards } from "../utils/rewardAdapter.js";
 import { fmt, fmtInt, clamp } from "../utils/format.js";
 import { 
   FEATURES, 
@@ -305,7 +308,10 @@ export default function CookieCraze() {
   const cpcMultFromUpgrades = useMemo(() => { let m = 1; for (const id in state.upgrades) { const up = UPGRADES.find((u) => u.id === id); if (up && state.upgrades[id] && up.target === "cpc" && up.type === "mult") m *= up.value; } return m; }, [state.upgrades]);
   const baseCpsNoBuff = useMemo(() => cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeMulti), [state.items, state.upgrades, state.prestige.chips, stakeMulti]);
 
-  const cpsWithBuff = useMemo(() => baseCpsNoBuff * (Date.now() < state.buffs.until ? state.buffs.cpsMulti : 1), [baseCpsNoBuff, state.buffs]);
+  const cpsWithBuff = useMemo(() => {
+    const buffMult = (Date.now() < state.buffs.until && state.buffs.cpsMulti) ? state.buffs.cpsMulti : 1;
+    return baseCpsNoBuff * buffMult;
+  }, [baseCpsNoBuff, state.buffs.until, state.buffs.cpsMulti]);
   const clickMult = useMemo(() => clickMultiplierFrom(state.items, state.upgrades), [state.items, state.upgrades]);
   // Base CPC: dépend UNIQUEMENT du cpcBase initial × multiplicateurs de clic (indépendant du CPS auto)
   const cpcBase = useMemo(() => {
@@ -469,33 +475,30 @@ export default function CookieCraze() {
     });
   }, [state.cookies, state.items, state.stats.clicks, state.flags.offlineCollected]);
 
-  // Mission engine: une mission active à la fois
+  // Mission engine unifié (version sécurisée)
   useEffect(() => {
-    setState((s) => {
-      const current = MISSIONS.find((m) => m.id === (s.mission?.id));
-      if (!current) return { ...s, mission: getInitialMission() };
-      const { progress, target, done } = current.check(s);
-      if (done && !s.mission.completed) {
-        // Mission completed effects
-        try { play('/sounds/golden_appear.mp3', 0.8); } catch {} // Mission success sound
-        if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
-          burstParticles(80); // Confetti-like effect
-        }
-        ping(1200, 0.15); // High-pitched success ping
-        
-        // Applique la récompense et prépare la suivante
-        current.reward(s, setState, toast);
-        const nextId = nextMissionId(current.id);
-        return { ...s, mission: { id: nextId, startedAt: Date.now(), completed: false } };
+    if (!isFeatureEnabled('ENABLE_ADAPTIVE_MISSIONS')) return;
+    
+    let timeoutId;
+    const runEngine = async () => {
+      try {
+        const { MissionEngine } = await import("../missions/engine.js");
+        const engine = new MissionEngine(state, setState, toast);
+        engine.update();
+      } catch (e) {
+        console.warn('[MISSIONS] Erreur engine:', e);
       }
-      // Stocke progression live
-      return { ...s, mission: { ...s.mission, progress, target, completed: !!done } };
-    });
-  }, [state.cookies, state.items, state.stats.goldenClicks]);
+    };
+    
+    // Débounce pour éviter les boucles
+    timeoutId = setTimeout(runEngine, 100);
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [state.cookies, state.items, state.stats.clicks]);
 
-  // Micro missions engine
-  const microMissionsEnabled = isFeatureEnabled('ENABLE_MICRO_MISSIONS');
-  useMicroMissions(microMissionsEnabled ? state : null, microMissionsEnabled ? setState : () => {}, microMissionsEnabled ? toast : () => {});
+  // Micro missions gérées par le moteur unifié
 
   // Toast via hook
   
@@ -585,17 +588,29 @@ export default function CookieCraze() {
     const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < (ecfg.window_s || 0);
     if (earlyActive && it && it.mode === 'cps') {
       const totalCpsOwned = ITEMS.filter(x => x.mode === 'cps').reduce((acc, x) => acc + (state.items[x.id] || 0), 0);
-      if (ecfg.free_first_auto && totalCpsOwned === 0 && state.ui.introSeen) price = 0;
-      else price *= (1 - (ecfg.cps_discount || 0));
+      const candidateId = state.flags.freeFirstAutoItemId || (ITEMS.find(x => x.mode === 'cps')?.id);
+      if (
+        ecfg.free_first_auto &&
+        totalCpsOwned === 0 &&
+        state.ui.introSeen &&
+        !state.flags.freeFirstAutoGiven &&
+        id === candidateId &&
+        count === 1
+      ) {
+        price = 0;
+      } else {
+        price *= (1 - (ecfg.cps_discount || 0));
+      }
     }
     // Discount global temporaire (micro‑missions)
     if (state.flags.discountAll && Date.now() < state.flags.discountAll.until) {
       price *= (1 - (state.flags.discountAll.value || 0));
     }
     // Tutoriel: premier achat de Curseur gratuit à la toute première partie (une seule fois)
-    if (!state.ui.introSeen && id === 'cursor' && owned === 0) price = 0;
-    // Flash discount applies on total
+    if (!state.ui.introSeen && id === 'cursor' && owned === 0 && count === 1) price = 0;
+    // Flash discount applies on total (mais jamais en dessous de 1 si pas explicitement gratuit)
     if (state.flags.flash && state.flags.flash.itemId === id && Date.now() < state.flags.flash.until) price *= (1 - state.flags.flash.discount);
+    if (price > 0) price = Math.max(1, Math.floor(price));
     return Math.ceil(price);
   };
   // Purchase flash animation state
@@ -672,6 +687,14 @@ export default function CookieCraze() {
     setState((s) => {
       const now = Date.now();
       let buffs = s.buffs;
+      // Marque l'utilisation du gratuit premier auto si applicable et pas encore utilisé
+      try {
+        const mode = (tuning && tuning.mode) || 'standard';
+        const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
+        if (price === 0 && it && it.mode === 'cps' && ecfg.free_first_auto && !s.flags.freeFirstAutoGiven) {
+          s = { ...s, flags: { ...s.flags, freeFirstAutoGiven: true, freeFirstAutoItemId: it.id } };
+        }
+      } catch {}
       if (euphoriaMult > 0) {
         buffs = { ...buffs, cpcMulti: euphoriaMult, until: now + 8000, label: `EUPHORIA x${euphoriaMult} CPC` };
       }
@@ -924,7 +947,7 @@ export default function CookieCraze() {
           </div>
           <div className="relative flex items-center gap-4 text-sm flex-wrap pr-12 md:pr-16">
             <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>{cpc.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</b></span>
-            <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
+            <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS{cpsWithBuff === 0 ? ' ⚠️' : ''}</span>
             <Tooltip
               className="inline-block"
               position="bottom"
@@ -1002,7 +1025,7 @@ export default function CookieCraze() {
             <div className="flex flex-col items-center text-center">
               <div className="text-base md:text-xl text-amber-900 font-medium">Cookies en banque</div>
               <div className="text-5xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-500 value-highlight">{fmtInt(state.cookies)}</div>
-              <div className="text-sm text-amber-800/80 flex items-center gap-1">Cuits au total: <span className="font-semibold text-amber-900">{fmtInt(state.lifetime)}</span>{baseCpsNoBuff > 0 ? (<span className="text-amber-700"> · {fmt(baseCpsNoBuff)} CPS</span>) : ''}
+              <div className="text-sm text-amber-800/80 flex items-center gap-1">Cuits au total: <span className="font-semibold text-amber-900">{fmtInt(state.lifetime)}</span>{cpsWithBuff > 0 ? (<span className="text-amber-700"> · {fmt(cpsWithBuff)} CPS</span>) : ''}
                 <span
                   className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-800/70 border border-zinc-700 text-[10px] cursor-help group relative"
                   aria-label="Cookies mangés — aide"
@@ -1215,9 +1238,10 @@ export default function CookieCraze() {
                 {(() => {
                   const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
                   const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
+                  const title = state.activeMicroMission?.title || cur?.title || 'Micro‑mission';
                   return (
                     <>
-                      <div className="font-bold">🎯 {cur?.title || 'Micro‑mission'}</div>
+                      <div className="font-bold">🎯 {title}</div>
                       <div className="mt-1 h-1.5 rounded-full bg-emerald-900/40 overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
                       </div>
@@ -1271,11 +1295,17 @@ export default function CookieCraze() {
               {isFeatureEnabled('ENABLE_MISSIONS') && (
                 <div className="rounded-lg border border-amber-300/50 bg-white/80 backdrop-blur p-3 shadow-sm">
                   <div className="text-xs text-amber-700 font-semibold">Mission</div>
-                  <div className="text-sm font-bold text-amber-950">{(MISSIONS.find(m => m.id === state.mission?.id)?.title) || "—"}</div>
-                  <div className="text-xs text-amber-800/80 leading-tight">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
-                  <div className="mt-2 h-2 rounded-full bg-amber-200/50 overflow-hidden shadow-inner">
-                    <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
-            </div>
+                  {state.activeMission ? (
+                    <>
+                      <div className="text-sm font-bold text-amber-950">{state.activeMission.title || 'Mission'}</div>
+                      {!!state.activeMission.desc && <div className="text-xs text-amber-800/80 leading-tight">{state.activeMission.desc}</div>}
+                      <div className="mt-2 h-2 rounded-full bg-amber-200/50 overflow-hidden shadow-inner">
+                        <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style={{ width: (Math.min(100, Math.floor(((state.activeMission?.progress||0) / Math.max(1,(state.activeMission?.target||1))) * 100))) + '%' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-amber-800">Chargement...</div>
+                  )}
                 </div>
               )}
 
@@ -1284,17 +1314,16 @@ export default function CookieCraze() {
                 <div className="rounded-lg border border-emerald-300/50 bg-emerald-50/80 backdrop-blur p-3 shadow-sm">
                   <div className="text-xs text-emerald-700 font-semibold">Micro‑mission</div>
                   {(() => {
-                    const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
                     const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
                     
-                    // Timer pour missions chronométrées
-                    const isTimedMission = cur?.checkTimed && state.activeMicroMission?.meta?.until;
-                    const timerEndTimestamp = isTimedMission ? state.activeMicroMission.meta.until : null;
+                    // Timer pour missions chronométrées avec timeLeft
+                    const hasTimer = state.activeMicroMission?.meta?.timed && state.activeMicroMission?.meta?.until;
+                    const timerEndTimestamp = hasTimer ? state.activeMicroMission.meta.until : null;
                     
                     return (
                       <>
-                        <div className="text-sm font-bold text-emerald-950">{cur?.title || "—"}</div>
-                        {cur?.desc && <div className="text-xs text-emerald-800/80 leading-tight">{cur.desc}</div>}
+                        <div className="text-sm font-bold text-emerald-950">{state.activeMicroMission?.title || "Micro‑mission"}</div>
+                        {state.activeMicroMission?.desc && <div className="text-xs text-emerald-800/80 leading-tight">{state.activeMicroMission.desc}</div>}
                         
                         {/* Barre de progression normale */}
                         <div className="mt-2 h-2 rounded-full bg-emerald-200/50 overflow-hidden shadow-inner" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
@@ -1302,7 +1331,7 @@ export default function CookieCraze() {
                         </div>
                         
                         {/* Timer pour missions chronométrées */}
-                        {isTimedMission && <MicroMissionTimer endTimestamp={timerEndTimestamp} />}
+                        {hasTimer && <MicroMissionTimer endTimestamp={timerEndTimestamp} />}
                       </>
                     );
                   })()}
@@ -1447,12 +1476,12 @@ export default function CookieCraze() {
         <div className="fixed right-4 bottom-4 z-50 space-y-2">
           <AnimatePresence>
             {state.toasts.map((t) => {
-              const clsBase = "px-3 py-2 rounded-lg text-sm shadow border ";
+              const clsBase = "px-4 py-3 rounded-xl text-sm font-medium shadow-lg border-2 backdrop-blur-sm ";
               const clsTone = t.tone === 'success'
-                ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
-                : (t.tone === 'warn' ? "bg-red-500/20 border-red-400/40 text-red-200" : "bg-zinc-800/80 border-zinc-700 text-zinc-100");
+                ? "bg-emerald-600/95 border-emerald-400 text-white shadow-emerald-500/50"
+                : (t.tone === 'warn' ? "bg-red-600/95 border-red-400 text-white shadow-red-500/50" : "bg-zinc-800/95 border-zinc-600 text-white shadow-zinc-500/50");
               return (
-              <motion.div key={t.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              <motion.div key={t.id} initial={{ opacity: 0, x: 20, scale: 0.9 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 20, scale: 0.9 }}
                   className={clsBase + clsTone}>
                 {t.msg}
               </motion.div>

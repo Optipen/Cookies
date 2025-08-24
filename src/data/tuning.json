@@ -48,6 +48,17 @@
     "milestones": {
       "thresholds": [10, 25, 50, 100, 200, 400],
       "multipliers": [1.2, 1.5, 2.2, 4.0, 6.0, 8.0]
+    },
+    "cooldowns": {
+      "micro": {
+        "buy_affordable_building": 40,
+        "gain_bank_fraction": 35,
+        "clicks_burst": 30
+      },
+      "main": {
+        "reach_bank_dynamic": 120,
+        "reach_cps_milestone": 180
+      }
     }
   }
 }

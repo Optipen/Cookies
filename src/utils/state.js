@@ -14,6 +14,8 @@ export const FEATURES = {
   ENABLE_GOLDEN_COOKIES: false,
   ENABLE_EVENTS: true, // rain, flash sales, etc.
   ENABLE_RAIN: false,  // pluie de cookies désactivée
+  // Nouveau: active le système de micro‑missions adaptatives
+  ENABLE_ADAPTIVE_MISSIONS: true,
 };
 
 // === Default State ===
@@ -32,7 +34,7 @@ export const DEFAULT_STATE = {
   lastTs: Date.now(),
   createdAt: Date.now(),
   stats: { clicks: 0, lastPurchaseTs: Date.now(), goldenClicks: 0 },
-  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0 },
+  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0, freeFirstAutoGiven: false, freeFirstAutoItemId: null },
   buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
   combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
   prestige: { chips: 0 },
@@ -58,8 +60,15 @@ export const DEFAULT_STATE = {
   // Cookie eat progress & counters
   cookieEatenCount: 0,
   cookieBites: [],
-  mission: null, // Sera initialisé par migrate()
+  // Missions unifiées adaptatives
+  activeMission: null,
   activeMicroMission: null,
+  missionsState: {
+    cooldowns: {}, // par template ID
+    microCooldowns: {},
+    history: [],
+    microHistory: [],
+  },
   
   // Micro missions state
   microMissions: {
@@ -68,6 +77,7 @@ export const DEFAULT_STATE = {
     attempted: [],
     history: [],
     lastRewardAt: 0,
+    cooldowns: {},
   },
   
   // Settings avec feature flags runtime
@@ -200,15 +210,15 @@ export function migrate(savedState) {
     merged.cookieEatenCount = merged.cookieEatenCount ?? 0;
     merged.cookieBites = Array.isArray(merged.cookieBites) ? merged.cookieBites : [];
     
-    // Missions
-    if (!merged.mission) {
-      try {
-        merged.mission = getInitialMission();
-      } catch (error) {
-        console.error("[MIGRATE] Erreur lors de l'initialisation de la mission:", error);
-        merged.mission = { id: "first_click", startedAt: Date.now(), completed: false };
-      }
-    }
+    // Missions unifiées
+    merged.activeMission = merged.activeMission || null;
+    merged.missionsState = {
+      cooldowns: {},
+      microCooldowns: {},
+      history: [],
+      microHistory: [],
+      ...(merged.missionsState || {})
+    };
     
     // Micro missions
     merged.activeMicroMission = merged.activeMicroMission || null;
@@ -287,13 +297,6 @@ export function withFeatureFlag(featureName, component, fallback = null) {
 // === Reset Helpers ===
 export function createResetState(preservePrestige = true, preserveSounds = true, prestigeChips = 0) {
   const resetState = { ...DEFAULT_STATE };
-  
-  try {
-    resetState.mission = getInitialMission();
-  } catch (error) {
-    console.error("[RESET] Erreur lors de l'initialisation de la mission:", error);
-    resetState.mission = { id: "first_click", startedAt: Date.now(), completed: false };
-  }
   
   if (preservePrestige) {
     resetState.prestige = { chips: prestigeChips };
