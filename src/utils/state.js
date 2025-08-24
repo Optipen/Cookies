@@ -11,8 +11,9 @@ export const FEATURES = {
   ENABLE_SKINS: true,
   ENABLE_MISSIONS: true,
   ENABLE_ACHIEVEMENTS: true,
-  ENABLE_GOLDEN_COOKIES: true,
+  ENABLE_GOLDEN_COOKIES: false,
   ENABLE_EVENTS: true, // rain, flash sales, etc.
+  ENABLE_RAIN: false,  // pluie de cookies désactivée
 };
 
 // === Default State ===
@@ -35,8 +36,7 @@ export const DEFAULT_STATE = {
   buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
   combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
   prestige: { chips: 0 },
-  ui: { sounds: true, introSeen: false },
-  // Accessibilité
+  // Accessibilité & UI
   // Mode contraste élevé désactivé par défaut
   ui: { sounds: true, introSeen: false, highContrast: false },
   toasts: [],
@@ -162,7 +162,7 @@ export function migrate(savedState) {
     
     // Prestige et UI
     merged.prestige = merged.prestige || { chips: 0 };
-    merged.ui = { sounds: true, introSeen: false, ...(merged.ui || {}) };
+    merged.ui = { sounds: true, introSeen: false, highContrast: false, ...(merged.ui || {}) };
     
     // Upgrades et achievements
     merged.upgrades = merged.upgrades || {};

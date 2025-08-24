@@ -13,6 +13,14 @@ import { ACHIEVEMENTS } from "../data/achievements.js";
 import { MISSIONS, getInitialMission, nextMissionId, MICRO_MISSIONS } from "../data/missions.js";
 import { useSound } from "../hooks/useSound.js";
 import { useMicroMissions } from "../hooks/useMicroMissions.js";
+import { useAutosave } from "../hooks/useAutosave.js";
+import { useGameLoop } from "../hooks/useGameLoop.js";
+import { useCrypto } from "../hooks/useCrypto.js";
+import { useToast } from "../hooks/useToast.js";
+import { useFlyingCookie } from "../hooks/useFlyingCookie.js";
+import { useCookieRain } from "../hooks/useCookieRain.js";
+import { useGoldenEvents } from "../hooks/useGoldenEvents.js";
+import { useParticles } from "../hooks/useParticles.js";
 import { useCountdown } from "../hooks/useCountdown.js";
 import { fmt, fmtInt, clamp } from "../utils/format.js";
 import { 
@@ -41,8 +49,7 @@ if (import.meta?.env?.DEV || new URLSearchParams(window.location.search).get('de
   import("../utils/golden-test.js");
 }
 
-// --- Helpers for CPS recompute (module-level) ---
-// moved to utils/calc.js
+// Helpers calcul déportés dans utils/calc.js
 
 // === Skins ===
 const SKINS = {
@@ -208,6 +215,7 @@ export default function CookieCraze() {
   const soundsEnabled = isFeatureEnabled('ENABLE_SOUNDS') && state.ui.sounds;
   const { ping, crunch, dispose } = useAudio(soundsEnabled);
   const { play } = useSound(soundsEnabled);
+  const { toast } = useToast(setState);
   const [previewSkin, setPreviewSkin] = useState(null);
   const [viewKey, setViewKey] = useState(0); // force remount on reset
   
@@ -315,36 +323,11 @@ export default function CookieCraze() {
   const skinClass = (SKINS[skinKey] && SKINS[skinKey].className) ? SKINS[skinKey].className : "";
   const skinSrc = (SKINS[skinKey] && SKINS[skinKey].src) ? SKINS[skinKey].src : SKINS.default.src;
 
-  // Save
-  useEffect(() => { saveState(state); }, [state]);
+  // Autosave via hook
+  useAutosave(state, saveState);
 
-  // Main loop 100ms (uses ONLY s.* so reset works)
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setState((s) => {
-        const now = Date.now();
-        const stakeM = 1 + (s.crypto?.staked || 0) * 0.5;
-        const cpsNow = cpsFrom(s.items, s.upgrades, s.prestige.chips, stakeM) * (Date.now() < s.buffs.until ? s.buffs.cpsMulti : 1);
-        let cookies = s.cookies + cpsNow / 10;
-        let lifetime = s.lifetime + cpsNow / 10;
-        // Crypto faucet (0.001 CRMB / 20k cookies cuits)
-        let crypto = { ...s.crypto };
-        let flags = { ...s.flags };
-        const units = Math.floor(lifetime / crypto.perCookies);
-        if (units > crypto.mintedUnits) {
-          const diff = units - crypto.mintedUnits;
-          crypto.mintedUnits = units;
-          crypto.balance = Number((crypto.balance + diff * crypto.perAmount).toFixed(6));
-          flags.cryptoFlashUntil = now + 1500;
-        }
-        // Buff expiry
-        let buffs = { ...s.buffs };
-        if (buffs.until && now >= buffs.until) buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
-        return { ...s, cookies, lifetime, buffs, crypto, flags };
-      });
-    }, 100);
-    return () => clearInterval(iv);
-  }, []);
+  // Main loop via hook avec accumulation/commit
+  useGameLoop(state, setState, { tickMs: 300, commitEveryMs: 600 });
 
   // Intro gate + offline progress + schedulers
   useEffect(() => {
@@ -378,8 +361,8 @@ export default function CookieCraze() {
       }
     }
     if (isFeatureEnabled('ENABLE_EVENTS')) {
-      scheduleGolden();
-      scheduleRain();
+    scheduleGolden();
+      if (isFeatureEnabled('ENABLE_RAIN')) scheduleRain();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -514,160 +497,24 @@ export default function CookieCraze() {
   const microMissionsEnabled = isFeatureEnabled('ENABLE_MICRO_MISSIONS');
   useMicroMissions(microMissionsEnabled ? state : null, microMissionsEnabled ? setState : () => {}, microMissionsEnabled ? toast : () => {});
 
-  // Toast helper (function declaration to allow hoisting before first use)
-  function toast(msg, tone = "info", options = {}) {
-    const id = Math.random().toString(36).slice(2);
-    setState((s) => ({ ...s, toasts: [...s.toasts, { id, msg, tone }] }));
-    const duration = options.ms || 2800;
-    setTimeout(() => setState((s) => ({ ...s, toasts: s.toasts.filter((t) => t.id !== id) })), duration);
-  }
+  // Toast via hook
+  
+  // Particules/FX via hook (doit être initialisé avant les événements golden qui l'utilisent)
+  const { particles, setParticles, crumbs, setCrumbs, cookieWrapRef, burstParticles, burstCrumbs } = useParticles(cpc, fmt);
 
-  // Golden cookie
-  const goldenTimerRef = useRef(null);
-  const goldenHideTimerRef = useRef(null);
-  const goldenClickLockRef = useRef(0);
-
-  const scheduleGolden = () => {
-    try { if (goldenTimerRef.current) { clearTimeout(goldenTimerRef.current); goldenTimerRef.current = null; } } catch {}
-    const mode = (tuning && tuning.mode) || 'standard';
-    const cfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || null;
-    const ecfg = (tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.golden) || null;
-    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < ((tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.window_s) || 0);
-    const baseMin = cfg ? (cfg.cooldown_s?.[0] ?? 100) : 100;
-    const baseMax = cfg ? (cfg.cooldown_s?.[1] ?? 150) : 150;
-    const min = earlyActive && ecfg ? (ecfg.cooldown_s?.[0] ?? baseMin) : baseMin;
-    const max = earlyActive && ecfg ? (ecfg.cooldown_s?.[1] ?? baseMax) : baseMax;
-    const d = (min + Math.random() * (max - min)) * 1000;
-    goldenTimerRef.current = setTimeout(() => {
-      try { play('/sounds/golden_appear.mp3', 0.25); } catch {}
-      setState((s) => ({
-        ...s,
-        fx: {
-          ...s.fx,
-          banner: { title: 'Cookie doré !', sub: 'Clique vite ✨', until: Date.now() + 1400, anim: { style: 'slide', inMs: 160, outMs: 160 } },
-        },
-      }));
-      setShowGolden(true);
-    }, d);
+  // Helper commun pour appliquer un buff (utilisé par divers hooks)
+  const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => {
+    const until = Date.now() + seconds * 1000;
+    setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } }));
   };
-  const [showGolden, setShowGolden] = useState(false);
-  const goldenRef = useRef({ left: "50%", top: "50%" });
-  useEffect(() => {
-    if (showGolden) {
-      const area = document.getElementById("game-area");
-      if (area) { const r = area.getBoundingClientRect(); const left = Math.random() * (r.width - 120) + 60; const top = Math.random() * (r.height - 200) + 120; goldenRef.current = { left: `${left}px`, top: `${top}px` }; }
-      goldenHideTimerRef.current = setTimeout(() => { setShowGolden(false); scheduleGolden(); }, 10000);
-      return () => { try { if (goldenHideTimerRef.current) clearTimeout(goldenHideTimerRef.current); } catch {} };
-    }
-  }, [showGolden]);
-  const onGoldenClick = () => {
-    const nowClick = Date.now();
-    if (nowClick < goldenClickLockRef.current) return; // anti double-click
-    goldenClickLockRef.current = nowClick + 800;
-    setShowGolden(false); scheduleGolden(); 
-    
-    // Enhanced golden sounds and effects
-    ping(880, 0.1); 
-    try { play('/sounds/golden_appear.mp3', 0.6); } catch {}
-    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
-      burstParticles(50); // More particles for golden cookies
-    }
-    
-    const now = Date.now();
-    const mode = (tuning && tuning.mode) || 'standard';
-    const gcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.golden) || {};
-    const drWindow = (gcfg.dr_window_s ?? 120) * 1000;
-    const recent = now - (state.flags.goldenLastTs || 0) < drWindow;
-    const stacks = recent ? (state.flags.goldenStacks || 0) + 1 : 0;
-    const drBase = gcfg.dr_factor ?? 0.85;
-    const dr = Math.pow(drBase, stacks);
-    const roll = Math.random();
-    
-    // Mise à jour commune de l'état avec goldenClicks
-    const updateState = (additionalUpdates = {}) => {
-      setState((s) => ({
-        ...s,
-        stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 },
-        flags: { ...s.flags, goldenLastTs: now, goldenStacks: stacks },
-        ...additionalUpdates
-      }));
-    };
-    
-    if (roll < 0.35) {
-      const cpsMax = gcfg.cps_mult_max ?? 5;
-      const m = Math.max(1, Math.min(cpsMax, cpsMax * dr));
-      applyBuff({ cpsMulti: m, cpcMulti: 1, seconds: 20, label: `FRENZY x${Math.round(m)}` }); 
-      updateState();
-      toast(`FRENZY: CPS x${Math.round(m)} pendant 20s !`, "success");
-    }
-    else if (roll < 0.65) {
-      const cpcMax = gcfg.cpc_mult_max ?? 10;
-      const m = Math.max(1, Math.min(cpcMax, cpcMax * dr));
-      applyBuff({ cpsMulti: 1, cpcMulti: m, seconds: 12, label: `CLICK FRENZY x${Math.round(m)}` }); 
-      updateState();
-      toast(`CLICK FRENZY: CPC x${Math.round(m)} pendant 12s !`, "success");
-    }
-    else if (roll < 0.85) {
-      const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-      const cpsNow = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM);
-      const bankMin = gcfg.lucky_bank_min ?? 0.10;
-      const cpsMult = gcfg.lucky_cps_mult ?? 12;
-      const base = Math.max(state.cookies * bankMin, cpsNow * cpsMult);
-      const bonus = base * dr;
-      updateState({ cookies: state.cookies + bonus, lifetime: state.lifetime + bonus });
-      toast(`Lucky +${fmt(bonus)} !`, "success");
-    }
-    else { 
-      burstParticles(30); 
-      const bonus = cpc * 30; 
-      updateState({ cookies: state.cookies + bonus, lifetime: state.lifetime + bonus });
-      toast(`Pluie de miettes +${fmt(bonus)} !`, "success"); 
-    }
-  };
-  const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => { const until = Date.now() + seconds * 1000; setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } })); };
 
-  // Cookie Rain (événement toutes ~2–4 min)
-  const [rainCrumbs, setRainCrumbs] = useState([]);
-  const [rainUntil, setRainUntil] = useState(0);
-  const [flyingCookie, setFlyingCookie] = useState(null);
+  // Golden events via hook (utilise burstParticles)
+  const { showGolden, setShowGolden, goldenRef, onGoldenClick, scheduleGolden } = useGoldenEvents(state, setState, { isFeatureEnabled, toast, burstParticles, ping, play, cpc });
+
+  // Cookie Rain & Flying Cookie via hooks
+  const { rainCrumbs, rainUntil, scheduleRain, startRain, onCrumbClick } = useCookieRain(cpc, ping, setState);
+  const { flyingCookie, setFlyingCookie, onFlyingCookieClick } = useFlyingCookie(play, applyBuff, toast, setState);
   const [speedChallenge, setSpeedChallenge] = useState({ idleSince: Date.now(), visible: false, active: false, clicks: 0, until: 0 });
-  const scheduleRain = () => {
-    const mode = (tuning && tuning.mode) || 'standard';
-    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
-    const min = rcfg.cooldown_s?.[0] ?? 120;
-    const max = rcfg.cooldown_s?.[1] ?? 240;
-    const d = (min + Math.random() * (max - min)) * 1000;
-    setTimeout(() => startRain(), d);
-  };
-  // Flying cookie scheduler (rare)
-  useEffect(() => {
-    const iv = setInterval(() => {
-      if (flyingCookie || Date.now() < (speedChallenge.until || 0)) return;
-      if (Math.random() < 0.035) {
-        const area = document.getElementById('game-area'); const r = area?.getBoundingClientRect();
-        const left = (r ? (Math.random() * (r.width - 120) + 60) : (Math.random() * 400 + 60));
-        const top = (r ? (Math.random() * (r.height - 260) + 120) : (Math.random() * 240 + 120));
-        setFlyingCookie({ id: Math.random().toString(36).slice(2), left, top, until: Date.now() + 3000 });
-        try { play('/sounds/golden_appear.mp3', 0.35); } catch {}
-      }
-    }, 4000);
-    return () => clearInterval(iv);
-  }, [flyingCookie, speedChallenge.until]);
-  useEffect(() => {
-    if (!flyingCookie) return; const t = setTimeout(() => setFlyingCookie(null), Math.max(0, flyingCookie.until - Date.now()));
-    return () => clearTimeout(t);
-  }, [flyingCookie]);
-  const onFlyingCookieClick = () => {
-    if (!flyingCookie) return;
-    setFlyingCookie(null);
-    applyBuff({ cpsMulti: 1, cpcMulti: 1.2, seconds: 15, label: 'VITESSE +20% CPC' });
-    toast('Vitesse: +20% CPC (15s)', 'success');
-    // Compte comme un cookie doré pour les missions
-    setState((s) => ({
-      ...s,
-      stats: { ...s.stats, goldenClicks: (s.stats.goldenClicks || 0) + 1 }
-    }));
-  };
 
   // Idle detection + speed challenge
   useEffect(() => {
@@ -709,31 +556,6 @@ export default function CookieCraze() {
     window.addEventListener('click', inc);
     return () => window.removeEventListener('click', inc);
   }, [speedChallenge.active]);
-  const startRain = () => {
-    const mode = (tuning && tuning.mode) || 'standard';
-    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
-    const dur = (rcfg.duration_s ?? 8) * 1000;
-    const until = Date.now() + dur; setRainUntil(until);
-    const area = document.getElementById("game-area"); const r = area?.getBoundingClientRect();
-    const width = r ? r.width : window.innerWidth;
-    const arr = Array.from({ length: 50 }).map(() => ({ id: Math.random().toString(36).slice(2), x: Math.random() * (width - 40) + 20, y: -20, vy: 2 + Math.random() * 3 }));
-    setRainCrumbs(arr); setTimeout(() => { setRainCrumbs([]); scheduleRain(); }, dur);
-  };
-  useEffect(() => {
-    if (!rainCrumbs.length) return; const iv = setInterval(() => { setRainCrumbs((cc) => cc.map((c) => ({ ...c, y: c.y + c.vy * 3 })).filter((c) => c.y < window.innerHeight + 30)); }, 16);
-    return () => clearInterval(iv);
-  }, [rainCrumbs.length]);
-  const onCrumbClick = (id) => {
-    setRainCrumbs((cc) => cc.filter((c) => c.id !== id));
-    const mode = (tuning && tuning.mode) || 'standard';
-    const rcfg = (tuning && tuning[mode] && tuning[mode].events && tuning[mode].events.rain) || {};
-    const factor = Array.isArray(rcfg.cpc_factor)
-      ? (rcfg.cpc_factor[0] + Math.random() * (rcfg.cpc_factor[1] - rcfg.cpc_factor[0]))
-      : (rcfg.cpc_factor || 3);
-    const gain = cpc * factor;
-    setState((s) => ({ ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain }));
-    ping(740, 0.05);
-  };
 
   // --- Pricing: Bulk + Milestone steepening ---
   const milestoneFactor = (owned) => {
@@ -868,23 +690,8 @@ export default function CookieCraze() {
     if (big) burstParticles(40);
   };
 
-  // Crypto stake/unstake
-  const stake = (amt = 0.001) => {
-    setState((s) => {
-      if ((s.crypto.balance || 0) < amt) return s;
-      const balance = Number((s.crypto.balance - amt).toFixed(6));
-      const staked = Number(((s.crypto.staked || 0) + amt).toFixed(6));
-      return { ...s, crypto: { ...s.crypto, balance, staked } };
-    });
-  };
-  const unstake = (amt = 0.001) => {
-    setState((s) => {
-      if ((s.crypto.staked || 0) < amt) return s;
-      const balance = Number((s.crypto.balance + amt).toFixed(6));
-      const staked = Number(((s.crypto.staked || 0) - amt).toFixed(6));
-      return { ...s, crypto: { ...s.crypto, balance, staked } };
-    });
-  };
+  // Crypto stake/unstake via hook
+  const { stake, unstake } = useCrypto(setState);
 
   // Upgrades
   const canBuyUpgrade = (u) => !state.upgrades[u.id] && u.unlock(state);
@@ -931,45 +738,13 @@ export default function CookieCraze() {
     toast(`Skin équipé: ${SKINS[skinId]?.name}`, "success");
   };
 
-  // Particles (clics)
-  const [particles, setParticles] = useState([]);
-  const [crumbs, setCrumbs] = useState([]);
-  const cookieWrapRef = useRef(null);
-  const mousePos = useRef({ x: 0, y: 0 });
-  useEffect(() => { const onMove = (e) => { mousePos.current = { x: e.clientX, y: e.clientY }; }; window.addEventListener("mousemove", onMove); return () => window.removeEventListener("mousemove", onMove); }, []);
-  const burstParticles = (n = 10, at = null, labelText = null) => {
-    const rect = cookieWrapRef.current?.getBoundingClientRect();
-    const base = at || (rect ? { x: rect.width / 2, y: rect.height / 2 } : { x: 0, y: 0 });
-    const arr = Array.from({ length: n }).map(() => ({ id: Math.random().toString(36).slice(2), x: base.x + (Math.random() - 0.5) * 80, y: base.y + (Math.random() - 0.5) * 80, vx: (Math.random() - 0.5) * 1.2, vy: -Math.random() * 2 - 1, life: 16 + Math.random() * 10, text: labelText != null ? labelText : `+${fmt(cpc)}` }));
-    setParticles((p) => [...p, ...arr]);
-  };
-  useEffect(() => { const iv = setInterval(() => { setParticles((pp) => pp.map((p) => ({ ...p, x: p.x + p.vx * 4, y: p.y + p.vy * 4, life: p.life - 1 })).filter((p) => p.life > 0)); }, 16); return () => clearInterval(iv); }, []);
-
-  // Crumb particles (miettes visuelles)
-  const burstCrumbs = (n = 12, at = null) => {
-    const rect = cookieWrapRef.current?.getBoundingClientRect();
-    const base = at || (rect ? { x: rect.width / 2, y: rect.height / 2 } : { x: 0, y: 0 });
-    const colors = ["#8b5a2b", "#6b4423", "#a0522d", "#7b4a2e"]; // bruns variés
-    const arr = Array.from({ length: n }).map(() => ({
-      id: Math.random().toString(36).slice(2),
-      x: base.x + (Math.random() - 0.5) * 40,
-      y: base.y + (Math.random() - 0.5) * 40,
-      vx: (Math.random() - 0.5) * 2.2,
-      vy: -Math.random() * 2.8 - 0.6,
-      life: 22 + Math.random() * 14,
-      size: 3 + Math.random() * 6,
-      rot: Math.random() * 360,
-      vr: (Math.random() - 0.5) * 12,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    }));
-    setCrumbs((p) => [...p, ...arr]);
-  };
-  useEffect(() => { const iv = setInterval(() => { setCrumbs((pp) => pp.map((p) => ({ ...p, x: p.x + p.vx * 3.6, y: p.y + p.vy * 3.6, vy: p.vy + 0.04, life: p.life - 1, rot: p.rot + p.vr })).filter((p) => p.life > 0)); }, 16); return () => clearInterval(iv); }, []);
+  // Particules/FX via hook (déjà initialisé plus haut)
 
   // Big cookie click with enhanced feedback
   const [cookieScale, setCookieScale] = useState(1);
   const [cookieRotation, setCookieRotation] = useState(0);
   const cookieClickAnimRef = useRef(null);
+  const clickFxCounterRef = useRef(0);
   
   const onCookieClick = () => {
     // Audio feedback
@@ -996,13 +771,17 @@ export default function CookieCraze() {
       return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 } };
     });
     if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
-      burstParticles(1, null, `x${clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`);
-      burstCrumbs(6);
+      clickFxCounterRef.current = (clickFxCounterRef.current + 1) % 5;
+      if (clickFxCounterRef.current === 0) {
+        burstParticles(1, null, `+${cpc.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
+      }
+      burstCrumbs(2);
     }
   };
 
   // --- Cookie eaten handler + progress tracking ---
   const onCookieEaten = () => {
+    let shouldSpawnGolden = false;
     setState((s) => {
       const count = (s.cookieEatenCount || 0) + 1;
       let bonus = 0;
@@ -1010,9 +789,21 @@ export default function CookieCraze() {
       else if (count % 5 === 0) bonus = cpc * 100;
       else bonus = cpc * 10;
       const cookies = s.cookies + bonus;
+      if (isFeatureEnabled('ENABLE_EVENTS') && (count % 2 === 0)) shouldSpawnGolden = true;
       toast(`🍪 Cookie mangé ! +${fmt(bonus)}`, "success");
       return { ...s, cookies, lifetime: s.lifetime + bonus, cookieEatenCount: count, cookieBites: [] };
     });
+    if (shouldSpawnGolden) {
+      try { play('/sounds/golden_appear.mp3', 0.25); } catch {}
+      setState((s) => ({
+        ...s,
+        fx: {
+          ...s.fx,
+          banner: { title: 'Cookie doré !', sub: 'Clique vite ✨', until: Date.now() + 1400, anim: { style: 'slide', inMs: 160, outMs: 160 } },
+        },
+      }));
+      setShowGolden(true);
+    }
   };
 
   const prevClickForBites = useRef(state.stats.clicks);
@@ -1132,7 +923,7 @@ export default function CookieCraze() {
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cookie Craze</h1>
           </div>
           <div className="relative flex items-center gap-4 text-sm flex-wrap pr-12 md:pr-16">
-            <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>x{clickMult.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}</b></span>
+            <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>{cpc.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</b></span>
             <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS</span>
             <Tooltip
               className="inline-block"
@@ -1287,7 +1078,7 @@ export default function CookieCraze() {
               )}
             </div>
 
-            {/* Compteur de cookies mangés (remplace la barre de progression) */}
+            {/* Compteur de cookies mangés */}
             <div className="mt-4 mb-1 w-full max-w-md mx-auto text-left">
               <div className="text-xs md:text-sm text-zinc-400">
                 {/* Intentionnellement discret en haut; une version plus visible est en bas-gauche */}
@@ -1298,11 +1089,11 @@ export default function CookieCraze() {
 
             {/* Big Cookie */}
             <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
-              {/* Wrapper carré aux dimensions du cookie pour un centrage parfait */}
+              {/* Wrapper carré aux dimensions du cookie */}
               <div className="relative h-96 w-96 md:h-[32rem] md:w-[32rem] float-animation">
-                {/* Glow ambiant autour du cookie */}
+                {/* Glow ambiant */}
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 via-orange-500/10 to-transparent rounded-full blur-3xl cookie-glow pulse-animation"></div>
-                {/* welcome.png centré au-dessus du cookie quand fx.tag est actif */}
+                {/* welcome.png au-dessus du cookie quand fx.tag est actif */}
                 {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
                   <img
                     src={state.fx.tag.image}
@@ -1313,7 +1104,6 @@ export default function CookieCraze() {
 
                 <motion.div
                   ref={cookieWrapRef}
-                  id="game-area"
                   animate={{ 
                     scale: cookieScale,
                     rotate: cookieRotation
@@ -1381,15 +1171,7 @@ export default function CookieCraze() {
               {/* Combo supprimé */}
             </div>
 
-            {/* Golden Cookie */}
-            <AnimatePresence>
-              {showGolden && (
-                <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} onClick={onGoldenClick}
-                  className="fixed z-20 h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-4 border-yellow-200 shadow-xl" style={{ left: goldenRef.current.left, top: goldenRef.current.top }}>
-                  <div className="absolute inset-0 rounded-full" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), transparent 40%)" }} />⭐
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {/* Golden Cookie déplacé hors du conteneur animé pour éviter les problèmes de stacking/fixed */}
 
             {/* Flying Cookie (mini-jeu) */}
             <AnimatePresence>
@@ -1445,6 +1227,22 @@ export default function CookieCraze() {
               </div>
             )}
 
+            {/* Golden Cookie (overlay fixed) */}
+            <AnimatePresence>
+              {showGolden && (
+                <motion.button
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  onClick={onGoldenClick}
+                  className="fixed z-30 h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-4 border-yellow-200 shadow-xl"
+                  style={{ left: goldenRef.current.left, top: goldenRef.current.top }}
+                >
+                  <div className="absolute inset-0 rounded-full" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), transparent 40%)" }} />⭐
+                </motion.button>
+              )}
+            </AnimatePresence>
+
             {/* Speed Challenge CTA and progress */}
             {!speedChallenge.active && speedChallenge.visible && (
               <div className="fixed bottom-24 right-4 z-30">
@@ -1477,7 +1275,7 @@ export default function CookieCraze() {
                   <div className="text-xs text-amber-800/80 leading-tight">{(MISSIONS.find(m => m.id === state.mission?.id)?.desc) || "—"}</div>
                   <div className="mt-2 h-2 rounded-full bg-amber-200/50 overflow-hidden shadow-inner">
                     <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style={{ width: (Math.min(100, Math.floor(((state.mission?.progress||0) / Math.max(1,(state.mission?.target||1))) * 100))) + '%' }} />
-                  </div>
+            </div>
                 </div>
               )}
 
@@ -1654,10 +1452,10 @@ export default function CookieCraze() {
                 ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
                 : (t.tone === 'warn' ? "bg-red-500/20 border-red-400/40 text-red-200" : "bg-zinc-800/80 border-zinc-700 text-zinc-100");
               return (
-                <motion.div key={t.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              <motion.div key={t.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
                   className={clsBase + clsTone}>
-                  {t.msg}
-                </motion.div>
+                {t.msg}
+              </motion.div>
               );
             })}
           </AnimatePresence>

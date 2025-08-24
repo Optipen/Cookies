@@ -26,6 +26,20 @@
         "cooldown_s": [120, 180]
       }
     },
+    "loops": {
+      "autosave_ms": 3000,
+      "loop_tick_ms": 300,
+      "loop_commit_ms": 600,
+      "flying_cookie_check_ms": 4000,
+      "speed_idle_threshold_ms": 10000,
+      "speed_check_ms": 250,
+      "particles_step_ms": 16
+    },
+    "particles": {
+      "burst_speed": 4,
+      "crumbs_speed": 3.6,
+      "crumbs_gravity": 0.04
+    },
     "offline": {
       "ratio_0_10min": 0.08,
       "ratio_2h": 0.02,

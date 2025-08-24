@@ -49,14 +49,14 @@ export const MISSIONS = [
     },
   },
   {
-    id: "3_golden",
-    title: "Gagner 3 cookies dorés",
-    desc: "Clique 3 cookies dorés.",
-    check: (s) => ({ progress: Math.min(s.stats.goldenClicks || 0, 3), target: 3, done: (s.stats.goldenClicks || 0) >= 3 }),
+    id: "reach_5000",
+    title: "Atteindre 5 000 cookies",
+    desc: "Fais grossir ta banque jusqu'à 5 000.",
+    check: (s) => ({ progress: Math.min(s.cookies, 5000), target: 5000, done: s.cookies >= 5000 }),
     reward: (s, setState, toast) => {
       const seconds = 20;
-      setState((st) => ({ ...st, flags: { ...st.flags, discountAll: { value: 0.15, until: Date.now() + seconds * 1000 } } }));
-      toast(`Mission accomplie: -15% sur tous les achats pendant ${seconds}s`, "success");
+      setState((st) => ({ ...st, buffs: { ...st.buffs, cpsMulti: (st.buffs.cpsMulti || 1) * 1.25, until: Date.now() + seconds * 1000, label: "+25% CPS" } }));
+      toast(`Mission accomplie: +25% CPS pendant ${seconds}s`, "success");
     },
   },
 ];
@@ -134,15 +134,11 @@ export const MICRO_MISSIONS = [
     reward: (s) => ({ type: "buff", kind: "cps", value: 1.2, seconds: 20, label: "+20% CPS" }),
   },
   {
-    id: "golden_1",
-    title: "Coup d’éclat",
-    desc: "Clique 1 cookie doré.",
-    start: (s) => ({ goldenAtStart: s.stats.goldenClicks || 0 }),
-    checkDelta: (s, meta) => {
-      const diff = (s.stats.goldenClicks || 0) - (meta?.goldenAtStart || 0);
-      return { progress: Math.min(Math.max(0,diff), 1), target: 1, done: diff >= 1 };
-    },
-    reward: (s) => ({ type: "discount", value: 0.15, seconds: 15, label: "-15% coûts" }),
+    id: "buy_10_cursor",
+    title: "Main agile",
+    desc: "Achète 10 Curseurs.",
+    check: (s) => ({ progress: Math.min(s.items.cursor || 0, 10), target: 10, done: (s.items.cursor || 0) >= 10 }),
+    reward: (s) => ({ type: "buff", kind: "cpc", value: 1.15, seconds: 25, label: "+15% CPC" }),
   },
 ];
 
