@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 
 // JWT Configuration for production
 const getJWTSecret = () => {
-  const secretString = process.env.REACT_APP_JWT_SECRET || 'default-dev-secret-change-in-production-minimum-256-bits';
+  const secretString = import.meta.env.VITE_JWT_SECRET || 'default-dev-secret-change-in-production-minimum-256-bits';
   return new TextEncoder().encode(secretString);
 };
 
@@ -33,10 +33,10 @@ function timeToSeconds(timeStr) {
 // Secure cookie configuration for production
 const COOKIE_CONFIG = {
   httpOnly: false, // Note: Cannot be true in client-side React
-  secure: process.env.NODE_ENV === 'production', // Only in HTTPS in production
+  secure: import.meta.env.PROD, // Only in HTTPS in production
   sameSite: 'strict', // Prevent CSRF attacks
   path: '/',
-  domain: process.env.REACT_APP_COOKIE_DOMAIN || undefined
+  domain: import.meta.env.VITE_COOKIE_DOMAIN || undefined
 };
 
 // Cookie names

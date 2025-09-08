@@ -9,7 +9,7 @@ export function SecurityMiddleware({ children }) {
 
   useEffect(() => {
     // Disable right-click context menu in production
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.PROD) {
       const handleContextMenu = (e) => {
         e.preventDefault();
         return false;
@@ -40,7 +40,7 @@ export function SecurityMiddleware({ children }) {
 
   // Clear console in production
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production' && process.env.REACT_APP_AUTH_DEBUG !== 'true') {
+    if (import.meta.env.PROD && import.meta.env.VITE_AUTH_DEBUG !== 'true') {
       console.clear();
       
       // Override console methods in production
@@ -141,7 +141,7 @@ export function SecurityMiddleware({ children }) {
     <>
       {children}
       {/* Security indicator for development */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div className="fixed bottom-2 right-2 z-50 text-xs bg-green-600 text-white px-2 py-1 rounded">
           🔒 Secure {user ? `(${user.username})` : '(Anonymous)'}
         </div>
