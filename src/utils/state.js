@@ -1,354 +1,318 @@
-import { getInitialMission } from "../data/missions.js";
+import { defaultCryptoState, CRMB } from "./crypto.js";
 
-// === Feature Flags ===
+// === Feature flags ===
+// Un flag à false doit désactiver la feature *entièrement* — apparition comprise.
 export const FEATURES = {
-  ENABLE_MICRO_MISSIONS: true,
   ENABLE_SOUNDS: true,
-  ENABLE_RAF_PARTICLES: true,
+  ENABLE_PARTICLES: true,
   ENABLE_COOKIE_EAT: true,
   ENABLE_CRYPTO: true,
   ENABLE_PRESTIGE: true,
   ENABLE_SKINS: true,
-  ENABLE_MISSIONS: true,
+  ENABLE_QUESTS: true,
   ENABLE_ACHIEVEMENTS: true,
-  ENABLE_GOLDEN_COOKIES: false,
-  ENABLE_EVENTS: true, // rain, flash sales, etc.
-  ENABLE_RAIN: false,  // pluie de cookies désactivée
-  // Nouveau: active le système de micro‑missions adaptatives
-  ENABLE_ADAPTIVE_MISSIONS: true,
+  ENABLE_GOLDEN_COOKIES: true,
+  ENABLE_EVENTS: true,
+  ENABLE_RAIN: true,
+  ENABLE_FLYING_COOKIE: true,
 };
 
-// === Default State ===
-export const DEFAULT_STATE = {
-  version: 4,
-  cookies: 0,
-  lifetime: 0,
-  cpcBase: 1,
-  items: {},
-  upgrades: {},
-  
-  // Skins state
-  skin: "default",
-  skinsOwned: { default: true, starter: false, early: false, caramel: false, noir: false, ice: false, fire: false },
+export const STATE_VERSION = 5;
 
-  lastTs: Date.now(),
-  createdAt: Date.now(),
-  stats: { clicks: 0, lastPurchaseTs: Date.now(), goldenClicks: 0 },
-  flags: { offlineCollected: false, flash: null, cryptoFlashUntil: 0, goldenLastTs: 0, goldenStacks: 0, freeFirstAutoGiven: false, freeFirstAutoItemId: null },
-  buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
-  combo: { value: 1, lastClickTs: 0, lastRushTs: 0 },
-  prestige: { chips: 0 },
-  // Accessibilité & UI
-  // Mode contraste élevé désactivé par défaut
-  ui: { sounds: true, introSeen: false, highContrast: false },
-  toasts: [],
-  unlocked: {},
-  fx: { banner: null, shakeUntil: 0 },
-  crypto: { 
-    name: "CrumbCoin", 
-    symbol: "CRMB", 
-    balance: 0, 
-    staked: 0, 
-    mintedUnits: 0, 
-    perCookies: 20000, 
-    perAmount: 0.001 
-  },
-  
-  // Feature flags d'état (peuvent être modifiées à runtime)
-  cookieEatEnabled: true,
-  
-  // Cookie eat progress & counters
-  cookieEatenCount: 0,
-  cookieBites: [],
-  // Missions unifiées adaptatives
-  activeMission: null,
-  activeMicroMission: null,
-  missionsState: {
-    cooldowns: {}, // par template ID
-    microCooldowns: {},
-    history: [],
-    microHistory: [],
-  },
-  
-  // Micro missions state
-  microMissions: {
-    lastCompletedAt: 0,
-    cooldownUntil: 0,
-    attempted: [],
-    history: [],
-    lastRewardAt: 0,
-    cooldowns: {},
-  },
-  
-  // Settings avec feature flags runtime
-  settings: {
-    soundEnabled: true,
-    particlesEnabled: true,
-    eventsEnabled: true,
-  },
-};
+// === État neuf ===
+// Fonction (et non constante) pour que chaque appel produise des objets frais:
+// une constante partagée faisait fuiter des mutations entre parties.
+export function createFreshState(now = Date.now()) {
+  return {
+    version: STATE_VERSION,
+    cookies: 0,
+    lifetime: 0,
+    cpcBase: 1,
+    items: {},
+    upgrades: {},
 
-// === Storage Keys ===
-export const SAVE_KEY = "cookieCrazeSaveV4";
+    skin: "default",
+    skinsOwned: { default: true, starter: false, early: false, caramel: false, noir: false, ice: false, fire: false },
+
+    lastTs: now,
+    createdAt: now,
+
+    stats: {
+      clicks: 0,
+      lastPurchaseTs: now,
+      goldenClicks: 0,
+      totalSpent: 0,
+      bestCps: 0,
+      playtimeMs: 0,
+      prestigeCount: 0,
+      handmade: 0,
+    },
+
+    flags: {
+      offlineCollected: false,
+      flash: null,
+      discountAll: null,
+      cryptoFlashUntil: 0,
+      goldenLastTs: 0,
+      goldenStacks: 0,
+      freeFirstAutoGiven: false,
+      freeFirstAutoItemId: null,
+    },
+
+    buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
+
+    prestige: { chips: 0, spent: 0, upgrades: {} },
+
+    ui: {
+      sounds: true,
+      introSeen: false,
+      highContrast: false,
+      reducedMotion: false,
+      volume: 0.6,
+    },
+
+    toasts: [],
+    unlocked: {},
+    fx: { banner: null, shakeUntil: 0, tag: null },
+
+    crypto: defaultCryptoState(now),
+
+    quests: {
+      active: [],
+      daily: [],
+      cooldowns: {},
+      completed: {},
+      dailyResetAt: 0,
+      streak: 0,
+      lastDailyClaim: 0,
+    },
+
+    cookieEatEnabled: true,
+    cookieEatenCount: 0,
+    cookieBites: [],
+  };
+}
+
+// === Clés de stockage ===
+export const SAVE_KEY = "cookieCrazeSaveV5";
+export const LEGACY_KEYS = ["cookieCrazeSaveV4", "cookieCrazeSaveV3", "cookieCrazeSaveV2", "cookieCrazeSaveV1"];
 export const PENDING_RESET_KEY = "cookieCrazePendingReset";
 
-// === Safe State Loading ===
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+/** Fusion profonde: la valeur sauvegardée gagne, la valeur par défaut comble les trous. */
+function deepMerge(base, override) {
+  if (!isObj(override)) return base;
+  const out = Array.isArray(base) ? [...base] : { ...base };
+  for (const key of Object.keys(override)) {
+    const b = out[key];
+    const o = override[key];
+    out[key] = isObj(b) && isObj(o) ? deepMerge(b, o) : o;
+  }
+  return out;
+}
+
+const num = (v, fallback = 0) => (typeof v === "number" && isFinite(v) ? v : fallback);
+
+// === Chargement ===
 export function loadState() {
+  let raw = null;
   try {
-    // Essaie de charger depuis différentes versions
-    const raw = localStorage.getItem(SAVE_KEY) 
-      || localStorage.getItem("cookieCrazeSaveV3") 
-      || localStorage.getItem("cookieCrazeSaveV2") 
-      || localStorage.getItem("cookieCrazeSaveV1");
-    
+    raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
-      console.log("[STATE] Aucune sauvegarde trouvée, état par défaut");
-      return migrate(null);
-    }
-
-    const parsed = JSON.parse(raw);
-    console.log("[STATE] Sauvegarde chargée, version:", parsed?.version || "inconnue");
-    return migrate(parsed);
-    
-  } catch (error) {
-    console.error("[STATE] Erreur lors du chargement de la sauvegarde:", error);
-    console.log("[STATE] Retour à l'état par défaut");
-    
-    // Sauvegarde corrompue - on la sauvegarde avant de la remplacer
-    try {
-      const corruptedData = localStorage.getItem(SAVE_KEY);
-      if (corruptedData) {
-        localStorage.setItem(`${SAVE_KEY}_corrupted_${Date.now()}`, corruptedData);
-        console.log("[STATE] Sauvegarde corrompue archivée");
+      for (const key of LEGACY_KEYS) {
+        raw = localStorage.getItem(key);
+        if (raw) break;
       }
-    } catch (archiveError) {
-      console.error("[STATE] Impossible d'archiver la sauvegarde corrompue:", archiveError);
     }
-    
-    return migrate(null);
+  } catch {
+    // localStorage indisponible (navigation privée, quota, iframe sandboxée)
+    return createFreshState();
   }
-}
 
-// === Robust Migration ===
-export function migrate(savedState) {
-  console.log("[MIGRATE] Début de la migration");
-  
-  // Si pas d'état sauvé, retourne l'état par défaut avec mission initiale
-  if (!savedState) {
-    const defaultWithMission = { ...DEFAULT_STATE };
-    try {
-      defaultWithMission.mission = getInitialMission();
-    } catch (error) {
-      console.error("[MIGRATE] Erreur lors de l'initialisation de la mission:", error);
-      defaultWithMission.mission = { id: "first_click", startedAt: Date.now(), completed: false };
-    }
-    console.log("[MIGRATE] État par défaut créé");
-    return defaultWithMission;
-  }
-  
+  if (!raw) return createFreshState();
+
   try {
-    // Merge avec l'état par défaut pour assurer toutes les propriétés
-    let merged = { ...DEFAULT_STATE, ...savedState };
-    
-    // === Migrations essentielles ===
-    
-    // Items et stats de base
-    merged.items = merged.items || {};
-    merged.stats = merged.stats || { clicks: 0, lastPurchaseTs: Date.now(), goldenClicks: 0 };
-    
-    // Flags critiques
-    merged.flags = { 
-      offlineCollected: false, 
-      flash: null, 
-      cryptoFlashUntil: 0, 
-      goldenLastTs: 0, 
-      goldenStacks: 0, 
-      ...(merged.flags || {}) 
-    };
-    
-    // Buffs et combo
-    merged.buffs = merged.buffs || { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
-    merged.combo = merged.combo || { value: 1, lastClickTs: 0, lastRushTs: 0 };
-    
-    // Prestige et UI
-    merged.prestige = merged.prestige || { chips: 0 };
-    merged.ui = { sounds: true, introSeen: false, highContrast: false, ...(merged.ui || {}) };
-    
-    // Upgrades et achievements
-    merged.upgrades = merged.upgrades || {};
-    merged.unlocked = merged.unlocked || {};
-    
-    // FX et crypto
-    merged.fx = merged.fx || { banner: null, shakeUntil: 0 };
-    merged.crypto = merged.crypto || { 
-      name: "CrumbCoin", 
-      symbol: "CRMB", 
-      balance: 0, 
-      staked: 0, 
-      mintedUnits: 0, 
-      perCookies: 20000, 
-      perAmount: 0.001 
-    };
-    
-    // === Migrations spécifiques aux nouvelles features ===
-    
-    // Skins
-    merged.skin = merged.skin || "default";
-    merged.skinsOwned = { 
-      default: true, 
-      starter: false,
-      early: false,
-      caramel: false, 
-      noir: false, 
-      ice: false, 
-      fire: false, 
-      ...(merged.skinsOwned || {}) 
-    };
-    
-    // Cookie eating feature
-    merged.cookieEatEnabled = merged.cookieEatEnabled ?? true;
-    merged.cookieEatenCount = merged.cookieEatenCount ?? 0;
-    merged.cookieBites = Array.isArray(merged.cookieBites) ? merged.cookieBites : [];
-    
-    // Missions unifiées
-    merged.activeMission = merged.activeMission || null;
-    merged.missionsState = {
-      cooldowns: {},
-      microCooldowns: {},
-      history: [],
-      microHistory: [],
-      ...(merged.missionsState || {})
-    };
-    
-    // Micro missions
-    merged.activeMicroMission = merged.activeMicroMission || null;
-    merged.microMissions = {
-      lastCompletedAt: 0,
-      cooldownUntil: 0,
-      attempted: [],
-      history: [],
-      lastRewardAt: 0,
-      ...(merged.microMissions || {})
-    };
-    
-    // Assure les nouveaux champs de micro missions
-    if (!merged.microMissions.history) {
-      merged.microMissions.history = [];
-    }
-    if (!merged.microMissions.lastRewardAt) {
-      merged.microMissions.lastRewardAt = 0;
-    }
-    
-    // Settings avec feature flags
-    merged.settings = {
-      soundEnabled: true,
-      particlesEnabled: true,
-      eventsEnabled: true,
-      ...(merged.settings || {})
-    };
-    
-    // Assure la compatibilité des timestamps
-    merged.lastTs = merged.lastTs || Date.now();
-    merged.createdAt = merged.createdAt || Date.now();
-    
-    // Assure la version
-    merged.version = 4;
-    
-    console.log("[MIGRATE] Migration réussie");
-    return merged;
-    
-  } catch (error) {
-    console.error("[MIGRATE] Erreur critique pendant la migration:", error);
-    console.log("[MIGRATE] Retour à l'état par défaut en cas d'échec");
-    
-    // En cas d'erreur, retourne l'état par défaut
-    const fallbackState = { ...DEFAULT_STATE };
+    return migrate(JSON.parse(raw));
+  } catch {
+    // Sauvegarde illisible: on l'archive avant de repartir à neuf
     try {
-      fallbackState.mission = getInitialMission();
-    } catch (missionError) {
-      console.error("[MIGRATE] Erreur lors de l'initialisation de la mission de fallback:", missionError);
-      fallbackState.mission = { id: "first_click", startedAt: Date.now(), completed: false };
-    }
-    
-    return fallbackState;
+      localStorage.setItem(`${SAVE_KEY}_corrupted_${Date.now()}`, raw);
+    } catch {}
+    return createFreshState();
   }
 }
 
-// === Safe State Saving ===
+// === Migration ===
+export function migrate(savedState, now = Date.now()) {
+  const fresh = createFreshState(now);
+  if (!isObj(savedState)) return fresh;
+
+  try {
+    let merged = deepMerge(fresh, savedState);
+
+    // --- Champs toujours reconstruits ---
+    merged.version = STATE_VERSION;
+    merged.toasts = [];
+    merged.fx = { banner: null, shakeUntil: 0, tag: null };
+    merged.items = isObj(savedState.items) ? { ...savedState.items } : {};
+    merged.upgrades = isObj(savedState.upgrades) ? { ...savedState.upgrades } : {};
+    merged.unlocked = isObj(savedState.unlocked) ? { ...savedState.unlocked } : {};
+    merged.cookieBites = Array.isArray(savedState.cookieBites) ? savedState.cookieBites : [];
+
+    // --- Valeurs numériques défensives ---
+    merged.cookies = Math.max(0, num(merged.cookies));
+    merged.lifetime = Math.max(merged.cookies, num(merged.lifetime));
+    merged.cpcBase = Math.max(1, num(merged.cpcBase, 1));
+    merged.cookieEatenCount = Math.max(0, num(merged.cookieEatenCount));
+    merged.lastTs = num(merged.lastTs, now);
+    merged.createdAt = num(merged.createdAt, now);
+
+    // --- Prestige: l'arbre céleste arrive en v5 ---
+    merged.prestige = {
+      chips: Math.max(0, num(savedState.prestige?.chips)),
+      spent: Math.max(0, num(savedState.prestige?.spent)),
+      upgrades: isObj(savedState.prestige?.upgrades) ? { ...savedState.prestige.upgrades } : {},
+    };
+    // Un `spent` supérieur aux chips gagnés viendrait d'une sauvegarde trafiquée
+    if (merged.prestige.spent > merged.prestige.chips) merged.prestige.spent = merged.prestige.chips;
+
+    // --- Crypto: v4 n'avait que balance/staked/mintedUnits ---
+    const oldCrypto = isObj(savedState.crypto) ? savedState.crypto : {};
+    merged.crypto = {
+      ...defaultCryptoState(now),
+      ...oldCrypto,
+      name: CRMB.name,
+      symbol: CRMB.symbol,
+      balance: Math.max(0, num(oldCrypto.balance)),
+      mintedUnits: Math.max(0, num(oldCrypto.mintedUnits)),
+      price: num(oldCrypto.price, CRMB.basePrice),
+      priceHistory: Array.isArray(oldCrypto.priceHistory) && oldCrypto.priceHistory.length
+        ? oldCrypto.priceHistory.filter((p) => isFinite(p)).slice(-CRMB.historyLength)
+        : [num(oldCrypto.price, CRMB.basePrice)],
+      miners: isObj(oldCrypto.miners) ? { ...oldCrypto.miners } : {},
+      positions: Array.isArray(oldCrypto.positions) ? oldCrypto.positions.filter(isObj) : [],
+      lastMarketTs: num(oldCrypto.lastMarketTs, now),
+      lastYieldTs: num(oldCrypto.lastYieldTs, now),
+    };
+    // Le staking « à plat » de la v4 devient une position flexible
+    const legacyStaked = num(oldCrypto.staked);
+    if (legacyStaked > 0 && !merged.crypto.positions.length) {
+      merged.crypto.positions = [
+        { id: "legacy", amount: legacyStaked, tierId: "flex", startedAt: now, unlockAt: 0 },
+      ];
+    }
+    delete merged.crypto.staked;
+
+    // --- Quêtes: remplacent missions/micro-missions de la v4 ---
+    const oldQuests = isObj(savedState.quests) ? savedState.quests : {};
+    merged.quests = {
+      active: Array.isArray(oldQuests.active) ? oldQuests.active.filter(isObj) : [],
+      daily: Array.isArray(oldQuests.daily) ? oldQuests.daily.filter(isObj) : [],
+      cooldowns: isObj(oldQuests.cooldowns) ? { ...oldQuests.cooldowns } : {},
+      completed: isObj(oldQuests.completed) ? { ...oldQuests.completed } : {},
+      dailyResetAt: num(oldQuests.dailyResetAt),
+      streak: Math.max(0, num(oldQuests.streak)),
+      lastDailyClaim: num(oldQuests.lastDailyClaim),
+    };
+    // Champs morts des anciennes versions
+    delete merged.mission;
+    delete merged.activeMission;
+    delete merged.activeMicroMission;
+    delete merged.missionsState;
+    delete merged.microMissions;
+    delete merged.combo;
+    delete merged.settings;
+
+    // --- Flags volatils: on ne rejoue pas un état d'événement périmé ---
+    merged.flags = {
+      ...fresh.flags,
+      ...(isObj(savedState.flags) ? savedState.flags : {}),
+      flash: null,
+      discountAll: null,
+      cryptoFlashUntil: 0,
+      offlineCollected: false,
+    };
+    merged.buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
+
+    return merged;
+  } catch {
+    return fresh;
+  }
+}
+
+// === Sauvegarde ===
 export function saveState(state) {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
     return true;
-  } catch (error) {
-    console.error("[STATE] Erreur lors de la sauvegarde:", error);
+  } catch {
+    // Quota dépassé ou stockage interdit: le jeu continue en mémoire
     return false;
   }
 }
 
-// === Feature Flag Helpers ===
-export function isFeatureEnabled(featureName) {
-  return FEATURES[featureName] ?? false;
-}
+// === Feature flags ===
+export const isFeatureEnabled = (name) => FEATURES[name] ?? false;
 
-export function withFeatureFlag(featureName, component, fallback = null) {
-  return isFeatureEnabled(featureName) ? component : fallback;
-}
-
-// === Reset Helpers ===
-export function createResetState(preservePrestige = true, preserveSounds = true, prestigeChips = 0) {
-  const resetState = { ...DEFAULT_STATE };
-  
-  if (preservePrestige) {
-    resetState.prestige = { chips: prestigeChips };
+// === Reset ===
+/**
+ * Nouvelle partie. `preservePrestige` garde les chips et l'arbre céleste.
+ * Chaque appel repart d'un état frais: aucune mutation partagée possible.
+ */
+export function createResetState({
+  preservePrestige = true,
+  prestige = null,
+  sounds = true,
+  // Un joueur qui relance une partie a déjà vu l'écran d'accueil: le lui
+  // réimposer n'apporte rien. Seule une toute première partie l'affiche.
+  introSeen = true,
+  now = Date.now(),
+} = {}) {
+  const s = createFreshState(now);
+  if (preservePrestige && prestige) {
+    s.prestige = {
+      chips: Math.max(0, num(prestige.chips)),
+      spent: Math.max(0, num(prestige.spent)),
+      upgrades: isObj(prestige.upgrades) ? { ...prestige.upgrades } : {},
+    };
   }
-  
-  if (preserveSounds) {
-    resetState.ui.sounds = true;
-    resetState.settings.soundEnabled = true;
-  }
-  
-  return resetState;
+  s.ui.sounds = !!sounds;
+  s.ui.introSeen = !!introSeen;
+  return s;
 }
 
-// === Validation Helpers ===
+// === Validation ===
 export function validateState(state) {
-  if (!state || typeof state !== 'object') {
-    return false;
+  if (!isObj(state)) return false;
+  for (const field of ["cookies", "items", "stats", "ui"]) {
+    if (!(field in state)) return false;
   }
-  
-  // Vérifications critiques
-  const requiredFields = ['cookies', 'items', 'stats', 'ui'];
-  for (const field of requiredFields) {
-    if (!(field in state)) {
-      console.warn(`[VALIDATE] Champ manquant: ${field}`);
-      return false;
-    }
-  }
-  
-  // Vérification des types
-  if (typeof state.cookies !== 'number' || isNaN(state.cookies)) {
-    console.warn('[VALIDATE] Cookies invalides');
-    return false;
-  }
-  
-  if (!state.items || typeof state.items !== 'object') {
-    console.warn('[VALIDATE] Items invalides');
-    return false;
-  }
-  
+  if (typeof state.cookies !== "number" || !isFinite(state.cookies)) return false;
+  if (!isObj(state.items)) return false;
   return true;
 }
 
-// === Dev Tools ===
-export function createIncompleteSave() {
-  return {
-    version: 2,
-    cookies: 1000,
-    items: { cursor: 5 },
-    // Manque plein de champs pour tester la migration
-  };
+// === Import / export ===
+export function exportSave(state) {
+  return JSON.stringify({ game: "cookie-craze", version: STATE_VERSION, exportedAt: Date.now(), state });
 }
 
-export function createCorruptedSave() {
-  return JSON.stringify({ corrupted: true, data: "invalid" }).slice(0, 20) + "...truncated";
+/** Accepte le format v5, un état nu, ou l'ancien base64 de la v3. */
+export function importSave(text) {
+  const attempt = (raw) => {
+    const parsed = JSON.parse(raw);
+    const candidate = parsed && parsed.game === "cookie-craze" ? parsed.state : parsed;
+    if (!validateState(candidate)) throw new Error("état invalide");
+    return migrate(candidate);
+  };
+  try {
+    return attempt(String(text));
+  } catch {
+    try {
+      return attempt(decodeURIComponent(escape(atob(String(text)))));
+    } catch {
+      return null;
+    }
+  }
 }
