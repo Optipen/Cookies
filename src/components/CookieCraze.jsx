@@ -1,26 +1,27 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import Shop from "./Shop.jsx";
 import Upgrades from "./Upgrades.jsx";
-import Skins from "./Skins.jsx";
 import QuestBoard from "./QuestBoard.jsx";
-import CryptoPanel from "./CryptoPanel.jsx";
-import PrestigePanel from "./PrestigePanel.jsx";
-import StatsPanel from "./StatsPanel.jsx";
 import ParticleLayer from "./ParticleLayer.jsx";
+
+// Panneaux rarement ouverts en début de partie: chargés à la demande pour
+// alléger le premier rendu (utile sur mobile et connexion lente).
+const Skins = lazy(() => import("./Skins.jsx"));
+const CryptoPanel = lazy(() => import("./CryptoPanel.jsx"));
+const PrestigePanel = lazy(() => import("./PrestigePanel.jsx"));
+const StatsPanel = lazy(() => import("./StatsPanel.jsx"));
 import CookieBiteMask from "./CookieBiteMask.jsx";
 import Intro from "./Intro.jsx";
 
 import { ITEMS } from "../data/items.js";
 import { SKINS } from "../data/skins.js";
-import { UPGRADES } from "../data/upgrades.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
 import { deriveStats, costOf, isEarlyWindow } from "../utils/selectors.js";
-import { cpsFrom } from "../utils/calc.js";
-import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtPct } from "../utils/format.js";
+import { fmt, fmtInt, fmtCrmb, fmtDuration } from "../utils/format.js";
 import {
   loadState,
   saveState,
@@ -42,7 +43,8 @@ import { useAutosave } from "../hooks/useAutosave.js";
 import { useQuests } from "../hooks/useQuests.js";
 import { useEvents } from "../hooks/useEvents.js";
 import { useAchievements } from "../hooks/useAchievements.js";
-import { useClock, useTimeLeft } from "../hooks/useClock.js";
+import { useTimeLeft } from "../hooks/useClock.js";
+import { useLatestRef } from "../hooks/useLatestRef.js";
 
 const TABS = [
   { id: "shop", label: "Boutique", icon: "🛍️" },
@@ -174,10 +176,10 @@ export default function CookieCraze() {
   const [buyQty, setBuyQty] = useState(1);
 
   const particlesRef = useRef(null);
-  const stateRef = useRef(state);
-  const cookieRef = useRef(null);
   const bootedRef = useRef(false);
-  stateRef.current = state;
+  // Les systèmes pilotés par minuterie lisent l'état ici plutôt que par
+  // fermeture: ça évite de reconstruire leurs intervalles à chaque rendu.
+  const stateRef = useLatestRef(state);
 
   const soundsOn = isFeatureEnabled("ENABLE_SOUNDS") && state.ui.sounds;
   const audio = useAudio(soundsOn, state.ui.volume ?? 0.6);
@@ -185,7 +187,7 @@ export default function CookieCraze() {
 
   const stats = useMemo(() => deriveStats(state), [state]);
   const questCtx = useMemo(() => buildContext(state), [state]);
-  const effects = useMemo(() => prestigeEffects(state), [state.prestige]);
+  const effects = useMemo(() => prestigeEffects(state), [state]);
 
   // --- Effets visuels: API stable partagée avec les hooks d'événements ------
   const fx = useMemo(
@@ -215,6 +217,9 @@ export default function CookieCraze() {
   const events = useEvents({ stateRef, setState, toast, fx, audio });
 
   // --- Démarrage: reset différé + progression hors-ligne --------------------
+  // Cet effet fait exactement ce pour quoi les effets existent: se synchroniser
+  // au montage avec deux sources externes (le stockage de session et l'horloge
+  // murale). Il ne s'exécute qu'une fois, garde `bootedRef` comprise.
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
@@ -225,10 +230,13 @@ export default function CookieCraze() {
       if (raw) {
         sessionStorage.removeItem(PENDING_RESET_KEY);
         const payload = JSON.parse(raw);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- application d'un reset demandé avant rechargement
         setState(createResetState(payload));
         return;
       }
-    } catch {}
+    } catch {
+      // sessionStorage indisponible: aucun reset en attente à appliquer
+    }
 
     const s = stateRef.current;
     const now = Date.now();
@@ -341,7 +349,7 @@ export default function CookieCraze() {
       particlesRef.current?.burstText(1, `+${fmt(gain)}`);
       particlesRef.current?.burstCrumbs(3);
     }
-  }, [audio]);
+  }, [audio, stateRef]);
 
   const buy = useCallback(
     (itemId, count = 1) => {
@@ -390,7 +398,7 @@ export default function CookieCraze() {
 
       if (big && isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstGold(30);
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const buyUpgrade = useCallback(
@@ -413,7 +421,7 @@ export default function CookieCraze() {
       }));
       toast(`Amélioration : ${upgrade.name}`, "success");
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const buySkin = useCallback(
@@ -437,8 +445,11 @@ export default function CookieCraze() {
       }));
       toast(`Skin débloqué et équipé : ${skin.name}`, "success");
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
+
+  // Référence stable: sinon `memo(Skins)` se re-rend à chaque tick du jeu
+  const stopPreview = useCallback(() => setPreviewSkin(null), []);
 
   const equipSkin = useCallback(
     (skinId) => {
@@ -447,7 +458,7 @@ export default function CookieCraze() {
       setState((prev) => ({ ...prev, skin: skinId }));
       toast(`Skin équipé : ${SKINS[skinId]?.name}`, "success", { ms: 1600 });
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   // --- Crypto --------------------------------------------------------------
@@ -474,7 +485,7 @@ export default function CookieCraze() {
       }));
       toast(`Acheté ${fmtCrmb(amount)} CRMB pour ${fmt(cost)} cookies`, "success", { ms: 2200 });
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const cryptoSell = useCallback(
@@ -500,7 +511,7 @@ export default function CookieCraze() {
       }));
       toast(`Vendu ${fmtCrmb(amount)} CRMB pour ${fmt(gain)} cookies`, "success", { ms: 2200 });
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const cryptoStake = useCallback(
@@ -533,7 +544,7 @@ export default function CookieCraze() {
       }));
       toast(`${fmtCrmb(amount)} CRMB bloqués — ${tier.name}`, "success");
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const cryptoUnstake = useCallback(
@@ -557,7 +568,7 @@ export default function CookieCraze() {
       }));
       toast(`${fmtCrmb(position.amount)} CRMB récupérés`, "success");
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   const buyMiner = useCallback(
@@ -580,7 +591,7 @@ export default function CookieCraze() {
       }));
       toast(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success", { ms: 2000 });
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   // --- Prestige ------------------------------------------------------------
@@ -616,7 +627,7 @@ export default function CookieCraze() {
       };
     });
     toast(`Renaissance céleste ✨ +${gain} chips`, "success", { ms: 4000 });
-  }, [audio, toast]);
+  }, [audio, toast, stateRef]);
 
   const buyPrestigeNode = useCallback(
     (nodeId) => {
@@ -642,7 +653,7 @@ export default function CookieCraze() {
       }));
       toast(`${node.emoji} ${node.name} niveau ${level + 1}`, "success", { ms: 2200 });
     },
-    [audio, toast]
+    [audio, toast, stateRef]
   );
 
   // --- Cookie croqué -------------------------------------------------------
@@ -669,7 +680,7 @@ export default function CookieCraze() {
 
     // Un cookie sur deux fait apparaître un doré en récompense
     if (count % 2 === 0) events.forceGolden();
-  }, [audio, events, toast]);
+  }, [audio, events, toast, stateRef]);
 
   // Les morsures sont suivies par CookieBiteMask à partir du compteur de clics:
   // les dupliquer dans l'état global provoquait un second rendu par clic.
@@ -689,7 +700,7 @@ export default function CookieCraze() {
     } catch {
       toast("Export impossible", "warn");
     }
-  }, [toast]);
+  }, [toast, stateRef]);
 
   const importSave = useCallback(
     (file) => {
@@ -727,7 +738,9 @@ export default function CookieCraze() {
       try {
         localStorage.removeItem(SAVE_KEY);
         for (const key of LEGACY_KEYS) localStorage.removeItem(key);
-      } catch {}
+      } catch {
+        // Stockage inaccessible: l'état en mémoire est réinitialisé quand même
+      }
 
       particlesRef.current?.clear();
       setMenuOpen(false);
@@ -736,7 +749,7 @@ export default function CookieCraze() {
       setState(createResetState(payload));
       toast(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
     },
-    [toast]
+    [toast, stateRef]
   );
 
   // ==========================================================================
@@ -907,7 +920,6 @@ export default function CookieCraze() {
                   aria-hidden="true"
                 />
                 <motion.button
-                  ref={cookieRef}
                   type="button"
                   onClick={onCookieClick}
                   aria-label={`Cliquer le cookie pour gagner ${fmt(stats.cpc)} cookies`}
@@ -951,7 +963,7 @@ export default function CookieCraze() {
           {/* --- Panneau latéral --- */}
           <section className="rounded-3xl glass-warm shadow-xl overflow-hidden flex flex-col max-h-[75vh] lg:max-h-[80vh]">
             <nav
-              className="shrink-0 flex gap-1 p-2 overflow-x-auto scrollbar-thin border-b border-amber-200/60 bg-white/50"
+              className="shrink-0 flex flex-wrap gap-1 p-2 border-b border-amber-200/60 bg-white/50"
               role="tablist"
               aria-label="Sections du jeu"
             >
@@ -961,15 +973,18 @@ export default function CookieCraze() {
                   type="button"
                   role="tab"
                   aria-selected={tab === t.id}
+                  // Le libellé texte disparaît sur petit écran: sans ça, un
+                  // lecteur d'écran n'annoncerait que l'emoji.
+                  aria-label={t.label}
                   onClick={() => setTab(t.id)}
-                  className={`relative shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                  className={`relative px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                     tab === t.id
                       ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md"
                       : "bg-amber-100/60 text-amber-800 hover:bg-amber-200/70"
                   }`}
                 >
                   <span aria-hidden="true">{t.icon}</span>
-                  <span className="ml-1 hidden sm:inline">{t.label}</span>
+                  <span className="ml-1 hidden md:inline lg:hidden xl:inline">{t.label}</span>
                   {t.id === "quests" && questAlert > 0 && tab !== "quests" && (
                     <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold grid place-items-center">
                       {questAlert}
@@ -981,43 +996,66 @@ export default function CookieCraze() {
 
             <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-4 scrollbar-thin">
               {(tab === "shop" || tab === "auto") && (
-                <Shop
-                  state={state}
-                  mode={tab}
-                  onBuy={buy}
-                  perItemMult={stats.perItemMult}
-                  qty={buyQty}
-                  totalCps={stats.baseCps}
-                  totalClickMult={stats.clickMult}
-                />
+                <>
+                  <div className="mb-2 flex items-center gap-1" role="group" aria-label="Quantité d'achat">
+                    <span className="text-[11px] text-amber-700 mr-1">Acheter par</span>
+                    {[1, 10, 100].map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => setBuyQty(q)}
+                        aria-pressed={buyQty === q}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                          buyQty === q
+                            ? "bg-amber-500 text-white shadow"
+                            : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
+                        }`}
+                      >
+                        ×{q}
+                      </button>
+                    ))}
+                  </div>
+                  <Shop
+                    state={state}
+                    mode={tab}
+                    onBuy={buy}
+                    perItemMult={stats.perItemMult}
+                    qty={buyQty}
+                    totalCps={stats.baseCps}
+                    totalClickMult={stats.clickMult}
+                  />
+                </>
               )}
               {tab === "upgrades" && <Upgrades state={state} onBuy={buyUpgrade} />}
               {tab === "quests" && <QuestBoard state={state} ctx={questCtx} onReroll={reroll} />}
-              {tab === "crypto" && (
-                <CryptoPanel
-                  state={state}
-                  stats={stats}
-                  onBuy={cryptoBuy}
-                  onSell={cryptoSell}
-                  onStake={cryptoStake}
-                  onUnstake={cryptoUnstake}
-                  onBuyMiner={buyMiner}
-                />
-              )}
-              {tab === "skins" && (
-                <Skins
-                  state={state}
-                  skins={SKINS}
-                  onBuy={buySkin}
-                  onEquip={equipSkin}
-                  onPreview={setPreviewSkin}
-                  onStopPreview={() => setPreviewSkin(null)}
-                />
-              )}
-              {tab === "prestige" && (
-                <PrestigePanel state={state} effects={effects} onPrestige={doPrestige} onBuyNode={buyPrestigeNode} />
-              )}
-              {tab === "stats" && <StatsPanel state={state} stats={stats} />}
+
+              <Suspense fallback={<PanelSkeleton />}>
+                {tab === "crypto" && (
+                  <CryptoPanel
+                    state={state}
+                    stats={stats}
+                    onBuy={cryptoBuy}
+                    onSell={cryptoSell}
+                    onStake={cryptoStake}
+                    onUnstake={cryptoUnstake}
+                    onBuyMiner={buyMiner}
+                  />
+                )}
+                {tab === "skins" && (
+                  <Skins
+                    state={state}
+                    skins={SKINS}
+                    onBuy={buySkin}
+                    onEquip={equipSkin}
+                    onPreview={setPreviewSkin}
+                    onStopPreview={stopPreview}
+                  />
+                )}
+                {tab === "prestige" && (
+                  <PrestigePanel state={state} effects={effects} onPrestige={doPrestige} onBuyNode={buyPrestigeNode} />
+                )}
+                {tab === "stats" && <StatsPanel state={state} stats={stats} />}
+              </Suspense>
             </div>
           </section>
         </div>
@@ -1117,6 +1155,16 @@ export default function CookieCraze() {
 // Utilitaires locaux
 // ============================================================================
 
+const PanelSkeleton = memo(function PanelSkeleton() {
+  return (
+    <div className="space-y-2 animate-pulse" aria-busy="true" aria-label="Chargement">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-20 rounded-2xl bg-amber-100/60" />
+      ))}
+    </div>
+  );
+});
+
 const MenuToggle = memo(function MenuToggle({ label, onClick }) {
   return (
     <button
@@ -1141,16 +1189,7 @@ const DiscountBadge = memo(function DiscountBadge({ discount }) {
   );
 });
 
-/** Vrai tant que la secousse d'écran est en cours, sans re-rendre en boucle. */
+/** Vrai tant que la secousse d'écran est en cours. */
 function useShake(shakeUntil) {
-  const [shaking, setShaking] = useState(false);
-  useEffect(() => {
-    if (!shakeUntil) return;
-    const left = shakeUntil - Date.now();
-    if (left <= 0) return;
-    setShaking(true);
-    const t = setTimeout(() => setShaking(false), left);
-    return () => clearTimeout(t);
-  }, [shakeUntil]);
-  return shaking;
+  return useTimeLeft(shakeUntil, 100) > 0;
 }

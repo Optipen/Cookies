@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatestRef } from "./useLatestRef.js";
 import tuning from "../data/tuning.json";
 
 /**
@@ -9,10 +10,8 @@ import tuning from "../data/tuning.json";
  * autant de `JSON.stringify` sur l'objet complet.
  */
 export function useAutosave(state, saveFn, { enabled = true } = {}) {
-  const stateRef = useRef(state);
-  const saveRef = useRef(saveFn);
-  stateRef.current = state;
-  saveRef.current = saveFn;
+  const stateRef = useLatestRef(state);
+  const saveRef = useLatestRef(saveFn);
 
   useEffect(() => {
     if (!enabled) return;
@@ -47,5 +46,5 @@ export function useAutosave(state, saveFn, { enabled = true } = {}) {
       document.removeEventListener("visibilitychange", onVisibility);
       persist();
     };
-  }, [enabled]);
+  }, [enabled, stateRef, saveRef]);
 }

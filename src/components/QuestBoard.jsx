@@ -39,11 +39,11 @@ const QuestTimer = memo(function QuestTimer({ expiresAt, startedAt }) {
 });
 
 const RewardChips = memo(function RewardChips({ quest, state, ctx }) {
-  let reward = null;
+  let reward;
   try {
     reward = quest.reward?.(state, ctx, {});
   } catch {
-    reward = null;
+    // Une récompense qui ne sait pas se calculer n'est simplement pas affichée
   }
   if (!reward) return null;
 
@@ -154,7 +154,7 @@ function QuestBoard({ state, ctx, onReroll }) {
         <div className="space-y-2">
           {active.length === 0 && (
             <p className="text-sm text-amber-800/70 italic py-3 text-center">
-              Aucune quête disponible pour l'instant — continue à jouer.
+              Aucune quête disponible pour l&apos;instant — continue à jouer.
             </p>
           )}
           {active.map((entry) => (

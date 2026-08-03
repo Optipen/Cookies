@@ -2,7 +2,7 @@ import React, { memo, useMemo } from "react";
 import { ITEMS } from "../data/items.js";
 import { costOf, buyQuantity } from "../utils/selectors.js";
 import { fmt } from "../utils/format.js";
-import { useTimeLeft } from "../hooks/useClock.js";
+import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
 // Compteur de vente flash isolé: seul ce petit composant se rafraîchit
 const FlashTimer = memo(function FlashTimer({ until }) {
@@ -70,7 +70,9 @@ const ItemRow = memo(function ItemRow({ item, owned, price, affordable, perItem,
 });
 
 function Shop({ state, mode, onBuy, perItemMult, qty, totalCps, totalClickMult }) {
-  const now = Date.now();
+  // Les remises temporaires expirent: l'horloge partagée rafraîchit les prix
+  // sans que le rendu ait à lire l'heure lui-même.
+  const now = useClock(500);
   const list = useMemo(() => ITEMS.filter((it) => (mode === "auto" ? it.mode === "cps" : it.mode === "mult")), [mode]);
 
   const rows = useMemo(
@@ -94,10 +96,7 @@ function Shop({ state, mode, onBuy, perItemMult, qty, totalCps, totalClickMult }
               : 0;
         return { item, owned, price, perItem, flash, contribution };
       }),
-    // `now` change à chaque rendu: la liste est recalculée à la cadence du jeu (2 Hz),
-    // ce qui reste négligeable pour 7 lignes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [list, state.items, state.cookies, state.flags, state.upgrades, qty, perItemMult, totalCps, totalClickMult]
+    [now, list, state, qty, perItemMult, totalCps, totalClickMult]
   );
 
   return (

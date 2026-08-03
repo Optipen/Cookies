@@ -85,7 +85,7 @@ function Skins({ state, skins, onBuy, onEquip, onPreview, onStopPreview }) {
           {ownedCount}/{all.length} débloquées
         </span>
       </div>
-      <p className="text-[11px] text-amber-800/70">Survole un skin pour l'essayer sur le grand cookie.</p>
+      <p className="text-[11px] text-amber-800/70">Survole un skin pour l&apos;essayer sur le grand cookie.</p>
 
       <div className="space-y-2">
         {all.map((skin) => (

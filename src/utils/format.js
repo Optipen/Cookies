@@ -19,7 +19,14 @@ export const fmt = (n) => {
   if (!isFinite(n)) return "∞";
   if (!n) return "0";
   const { value, suffix, tier } = scale(n);
-  const digits = tier === 0 ? (Number.isInteger(value) ? 0 : 1) : 2;
+  let digits = 2;
+  if (tier === 0) {
+    // Sous 1, arrondir à une décimale écrasait les petits montants:
+    // un objectif de 0,05 CRMB s'affichait « 0,1 ».
+    if (Number.isInteger(value)) digits = 0;
+    else if (Math.abs(value) < 1) digits = 3;
+    else digits = 1;
+  }
   return value.toLocaleString(LOCALE, { maximumFractionDigits: digits }) + suffix;
 };
 

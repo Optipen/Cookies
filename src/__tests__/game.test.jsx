@@ -69,8 +69,9 @@ describe("démarrage", () => {
 describe("boucle de jeu", () => {
   it("crédite des cookies au clic", async () => {
     await startGame();
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
     await clickCookie();
-    expect(screen.getByText(/1 clics|1 clic/)).toBeTruthy();
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("1");
   });
 
   it("achète un bâtiment et met à jour la production", async () => {

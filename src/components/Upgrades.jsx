@@ -61,7 +61,7 @@ function Upgrades({ state, onBuy }) {
         try {
           unlocked = !!u.unlock(state);
         } catch {
-          unlocked = false;
+          // Condition de déblocage invalide: l'amélioration reste verrouillée
         }
         return { upgrade: u, purchased: !!state.upgrades[u.id], unlocked, affordable: state.cookies >= u.cost };
       }),

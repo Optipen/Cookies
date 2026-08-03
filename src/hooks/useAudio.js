@@ -29,8 +29,10 @@ export function useAudio(enabled, volume = 0.6) {
   const enabledRef = useRef(enabled);
   const volumeRef = useRef(volume);
 
-  enabledRef.current = enabled;
-  volumeRef.current = volume;
+  useEffect(() => {
+    enabledRef.current = enabled;
+    volumeRef.current = volume;
+  }, [enabled, volume]);
 
   const ensureCtx = useCallback(async () => {
     if (!enabledRef.current) return null;
@@ -48,7 +50,9 @@ export function useAudio(enabled, volume = 0.6) {
     if (ctx.state === "suspended") {
       try {
         await ctx.resume();
-      } catch {}
+      } catch {
+        // Reprise refusée (pas encore d'interaction): on tentera au prochain son
+      }
     }
     return ctx;
   }, []);
@@ -98,7 +102,9 @@ export function useAudio(enabled, volume = 0.6) {
         osc.start();
         gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
         osc.stop(ctx.currentTime + duration);
-      } catch {}
+      } catch {
+        // WebAudio indisponible: le jeu reste jouable sans son
+      }
     },
     [ensureCtx]
   );
@@ -124,7 +130,9 @@ export function useAudio(enabled, volume = 0.6) {
         src.connect(gain);
         gain.connect(ctx.destination);
         src.start(0);
-      } catch {}
+      } catch {
+        // Lecture refusée par le navigateur: silencieux plutôt que bloquant
+      }
     },
     [beep, ensureCtx, load]
   );
@@ -151,7 +159,9 @@ export function useAudio(enabled, volume = 0.6) {
     () => () => {
       try {
         ctxRef.current?.close();
-      } catch {}
+      } catch {
+        // Le contexte peut déjà être fermé par le navigateur
+      }
       ctxRef.current = null;
       buffersRef.current.clear();
     },

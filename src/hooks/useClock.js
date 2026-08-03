@@ -38,7 +38,8 @@ export function useClock(periodMs = 1000, enabled = true) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!enabled) return;
-    setNow(Date.now());
+    // Pas de synchronisation immédiate: `useState` a déjà lu l'heure au montage
+    // et le premier tick arrive au plus tard après une période.
     return subscribe(periodMs, setNow);
   }, [periodMs, enabled]);
   return now;

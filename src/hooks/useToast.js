@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 
-const MAX_TOASTS = 4;
+// Trois suffisent: au-delà, la pile recouvre la boutique sur mobile.
+const MAX_TOASTS = 3;
 
 /**
  * File de notifications bornée.
  *
  * Sans plafond, une avalanche de quêtes ou de succès empilait des dizaines de
- * toasts qui recouvraient le jeu. Ici la file garde les 4 plus récents et les
+ * toasts qui recouvraient le jeu. Ici la file garde les plus récents et les
  * minuteries sont annulées au démontage.
  */
 export function useToast(setState) {

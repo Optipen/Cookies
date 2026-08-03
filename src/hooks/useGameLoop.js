@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useLatestRef } from "./useLatestRef.js";
 import { deriveStats } from "../utils/selectors.js";
 import { stepMarket, roundCrmb, CRMB } from "../utils/crypto.js";
 import tuning from "../data/tuning.json";
@@ -18,16 +19,16 @@ export function useGameLoop(state, setState, options = {}) {
   const tickMs = options.tickMs ?? cfg.loop_tick_ms ?? 250;
   const commitMs = options.commitMs ?? cfg.loop_commit_ms ?? 500;
 
-  const stateRef = useRef(state);
-  const setStateRef = useRef(setState);
+  const stateRef = useLatestRef(state);
+  const setStateRef = useLatestRef(setState);
   const accRef = useRef({ cookies: 0, crmb: 0, elapsed: 0 });
-  const lastCommitRef = useRef(Date.now());
-  const lastTickRef = useRef(Date.now());
-
-  stateRef.current = state;
-  setStateRef.current = setState;
+  const lastCommitRef = useRef(0);
+  const lastTickRef = useRef(0);
 
   useEffect(() => {
+    lastCommitRef.current = Date.now();
+    lastTickRef.current = Date.now();
+
     const tick = () => {
       const s = stateRef.current;
       if (!s) return;
@@ -119,5 +120,5 @@ export function useGameLoop(state, setState, options = {}) {
 
     const iv = setInterval(tick, tickMs);
     return () => clearInterval(iv);
-  }, [tickMs, commitMs]);
+  }, [tickMs, commitMs, stateRef, setStateRef]);
 }

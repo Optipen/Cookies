@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatestRef } from "./useLatestRef.js";
 import { ACHIEVEMENTS, achievementReward } from "../data/achievements.js";
 import { deriveStats } from "../utils/selectors.js";
 import { fmt } from "../utils/format.js";
@@ -14,15 +15,10 @@ const CHECK_MS = 1500;
  * borné, et un seul `setState` débloque tous les succès atteints d'un coup.
  */
 export function useAchievements(state, setState, toast, onUnlock) {
-  const stateRef = useRef(state);
-  const setStateRef = useRef(setState);
-  const toastRef = useRef(toast);
-  const unlockRef = useRef(onUnlock);
-
-  stateRef.current = state;
-  setStateRef.current = setState;
-  toastRef.current = toast;
-  unlockRef.current = onUnlock;
+  const stateRef = useLatestRef(state);
+  const setStateRef = useLatestRef(setState);
+  const toastRef = useLatestRef(toast);
+  const unlockRef = useLatestRef(onUnlock);
 
   useEffect(() => {
     if (!isFeatureEnabled("ENABLE_ACHIEVEMENTS")) return;
@@ -69,5 +65,5 @@ export function useAchievements(state, setState, toast, onUnlock) {
     }, CHECK_MS);
 
     return () => clearInterval(iv);
-  }, []);
+  }, [stateRef, setStateRef, toastRef, unlockRef]);
 }

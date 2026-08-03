@@ -29,6 +29,10 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
 
   const timersRef = useRef({ golden: null, rain: null, flying: null, hide: null });
   const clickLockRef = useRef(0);
+  // Chaque événement se replanifie après son apparition: le ref casse le cycle
+  // `spawn -> schedule -> spawn` que des const mutuellement référencées
+  // rendraient dépendant de l'ordre de déclaration.
+  const schedulersRef = useRef({ golden: null, rain: null, flying: null });
 
   const clearTimer = (key) => {
     if (timersRef.current[key]) {
@@ -57,7 +61,7 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     clearTimer("hide");
     timersRef.current.hide = setTimeout(() => {
       setGolden(null);
-      scheduleGolden();
+      schedulersRef.current.golden?.();
     }, lifespan);
   }, [audio, fx, stateRef]);
 
@@ -149,7 +153,7 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     clearTimer("rain");
     timersRef.current.rain = setTimeout(() => {
       setRain([]);
-      scheduleRain();
+      schedulersRef.current.rain?.();
     }, duration * 1000 + 800);
   }, [toast]);
 
@@ -193,7 +197,7 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     clearTimer("flying");
     timersRef.current.flying = setTimeout(() => {
       setFlying(null);
-      scheduleFlying();
+      schedulersRef.current.flying?.();
     }, 4000);
   }, [audio]);
 
@@ -216,6 +220,13 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     }));
     toast("Cookie volant ! CPC +60 % pendant 20 s", "success");
   }, [audio, fx, scheduleFlying, setState, toast]);
+
+  // Publie les planificateurs après le commit: les rappels de minuterie ne
+  // s'exécutent jamais pendant un rendu, ils lisent donc toujours une version
+  // à jour.
+  useEffect(() => {
+    schedulersRef.current = { golden: scheduleGolden, rain: scheduleRain, flying: scheduleFlying };
+  }, [scheduleGolden, scheduleRain, scheduleFlying]);
 
   /** Déclenche un doré immédiatement (récompense de progression). */
   const forceGolden = useCallback(() => {

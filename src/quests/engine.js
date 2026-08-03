@@ -92,10 +92,11 @@ function pickWeighted(candidates, ctx, rng) {
 
 /** Instancie une quête: fige l'objectif et l'état de départ. */
 export function instantiate(quest, state, ctx, now = Date.now()) {
-  let meta = {};
+  let meta;
   try {
     meta = quest.target ? quest.target(state, ctx) || {} : {};
   } catch {
+    // Objectif impossible à instancier: la quête n'est pas proposée
     return null;
   }
   // Progression initiale calculée tout de suite: sinon la carte affiche
@@ -106,7 +107,9 @@ export function instantiate(quest, state, ctx, now = Date.now()) {
     const res = quest.progress(state, meta, ctx) || {};
     progress = Number(res.progress) || 0;
     target = Number(res.target) || 0;
-  } catch {}
+  } catch {
+    // Une quête qui échoue à s'auto-évaluer démarre simplement à zéro
+  }
 
   return {
     questId: quest.id,
@@ -145,11 +148,11 @@ export function evaluate(active, state, ctx, now = Date.now()) {
   const quest = QUEST_BY_ID[active.questId];
   if (!quest) return { progress: 0, target: 1, done: false, failed: true, expired: true };
 
-  let res;
+  let res = {};
   try {
     res = quest.progress(state, active.meta || {}, ctx) || {};
   } catch {
-    res = {};
+    // Progression illisible: la quête reste à zéro plutôt que de casser le tick
   }
 
   const timedOut = !!active.expiresAt && now >= active.expiresAt;

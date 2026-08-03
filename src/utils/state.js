@@ -116,7 +116,7 @@ const num = (v, fallback = 0) => (typeof v === "number" && isFinite(v) ? v : fal
 
 // === Chargement ===
 export function loadState() {
-  let raw = null;
+  let raw;
   try {
     raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
@@ -138,7 +138,9 @@ export function loadState() {
     // Sauvegarde illisible: on l'archive avant de repartir à neuf
     try {
       localStorage.setItem(`${SAVE_KEY}_corrupted_${Date.now()}`, raw);
-    } catch {}
+    } catch {
+      // Stockage plein ou interdit: on repart à neuf sans archive
+    }
     return createFreshState();
   }
 }

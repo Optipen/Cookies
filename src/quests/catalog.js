@@ -29,8 +29,14 @@ const itemEmoji = (id) => ITEMS.find((i) => i.id === id)?.emoji || "📦";
 const byLevel = (ctx, early, mid, late) =>
   ctx.level === "early" ? early : ctx.level === "mid" ? mid : late;
 
-// Récompenses standardisées, calibrées sur la production courante du joueur
-const cookieReward = (ctx, seconds) => Math.max(50, Math.floor(Math.max(ctx.cps * seconds, ctx.bank * 0.05)));
+// Récompenses calibrées sur la production courante. `seconds` représente la
+// durée de production offerte: il pilote aussi la part de banque, sinon toutes
+// les quêtes finissaient par verser exactement le même montant en fin de partie.
+const cookieReward = (ctx, seconds) => {
+  const fromProduction = ctx.cps * seconds;
+  const fromBank = ctx.bank * Math.min(0.5, seconds / 1200);
+  return Math.max(50, Math.floor(Math.max(fromProduction, fromBank)));
+};
 const buff = (kind, value, seconds, label) => ({ kind, value, seconds, label });
 
 // --- Compteurs utilitaires -------------------------------------------------

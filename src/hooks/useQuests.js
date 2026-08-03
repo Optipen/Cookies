@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import { useLatestRef } from "./useLatestRef.js";
 import { buildContext, tickQuests, rerollQuest } from "../quests/engine.js";
 import { fmt, fmtCrmb } from "../utils/format.js";
 import { isFeatureEnabled } from "../utils/state.js";
@@ -14,15 +15,10 @@ const TICK_MS = 700;
  * l'ancien MissionEngine, qui se relançait à chaque `setState` qu'il produisait.
  */
 export function useQuests(state, setState, toast, onCelebrate) {
-  const stateRef = useRef(state);
-  const setStateRef = useRef(setState);
-  const toastRef = useRef(toast);
-  const celebrateRef = useRef(onCelebrate);
-
-  stateRef.current = state;
-  setStateRef.current = setState;
-  toastRef.current = toast;
-  celebrateRef.current = onCelebrate;
+  const stateRef = useLatestRef(state);
+  const setStateRef = useLatestRef(setState);
+  const toastRef = useLatestRef(toast);
+  const celebrateRef = useLatestRef(onCelebrate);
 
   useEffect(() => {
     if (!isFeatureEnabled("ENABLE_QUESTS")) return;
@@ -65,14 +61,14 @@ export function useQuests(state, setState, toast, onCelebrate) {
     }, TICK_MS);
 
     return () => clearInterval(iv);
-  }, []);
+  }, [stateRef, setStateRef, toastRef, celebrateRef]);
 
   const reroll = useCallback(
     (questId) => {
       setStateRef.current((prev) => rerollQuest(prev, questId, buildContext(prev), Date.now()));
       toastRef.current("Quête remplacée", "info", { ms: 1500 });
     },
-    []
+    [setStateRef, toastRef]
   );
 
   return { reroll };

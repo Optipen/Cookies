@@ -13,7 +13,7 @@ export const SKINS = {
     name: "Early",
     price: 10_000,
     src: "/cookie-noir.png",
-    className: "brightness-95 contrast-[1.15] sepia-[0.1]",
+    className: "contrast-[1.08] sepia-[0.15] saturate-[1.1]",
     description: "Pour les joueurs ambitieux.",
   },
   caramel: {
@@ -29,7 +29,7 @@ export const SKINS = {
     name: "Noir",
     price: 200_000,
     src: "/cookie-noir.png",
-    className: "brightness-90 contrast-[1.25]",
+    className: "contrast-[1.1] saturate-[0.9]",
     description: "Élégance sombre.",
   },
   ice: { id: "ice", name: "Ice", price: 500_000, src: "/cookie-ice.png", description: "Fraîcheur glaciale." },

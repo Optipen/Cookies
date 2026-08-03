@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from "react";
+import React, { memo, useEffect } from "react";
 import { motion } from "framer-motion";
 
 /**
@@ -10,19 +10,19 @@ import { motion } from "framer-motion";
  * joueur n'avait rien commencé. Ici c'est un écran distinct: rien ne démarre
  * tant qu'on n'a pas cliqué « Commencer ».
  */
+// Décor figé au chargement du module: identique à chaque affichage de l'écran
+// et surtout calculé hors du rendu, qui doit rester pur.
+const FLOATING_COOKIES = Array.from({ length: 14 }, (_, i) => ({
+  id: i,
+  top: Math.random() * 100,
+  left: Math.random() * 100,
+  size: 20 + Math.random() * 34,
+  delay: Math.random() * 4,
+  duration: 9 + Math.random() * 8,
+}));
+
 function Intro({ onStart, soundsOn, onToggleSound }) {
-  const cookies = useMemo(
-    () =>
-      Array.from({ length: 14 }, (_, i) => ({
-        id: i,
-        top: Math.random() * 100,
-        left: Math.random() * 100,
-        size: 20 + Math.random() * 34,
-        delay: Math.random() * 4,
-        duration: 9 + Math.random() * 8,
-      })),
-    []
-  );
+  const cookies = FLOATING_COOKIES;
 
   useEffect(() => {
     const onKey = (e) => {

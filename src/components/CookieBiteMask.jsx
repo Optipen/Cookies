@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useId, useRef, useState } from "react";
 
 // Repère du SVG
 const VIEWBOX = 100;
@@ -39,16 +39,17 @@ function buildBitePath({ x, y, r, seed }) {
 /**
  * Le grand cookie qui se fait grignoter.
  *
- * Le chemin SVG de chaque morsure est mis en cache par `seed`: sans ça, les
- * 80 contours (18 segments chacun) étaient reconstruits à chaque nouvelle
- * bouchée, soit ~1 400 points recalculés tous les 2 clics.
+ * Le contour SVG est calculé une seule fois, au moment où la morsure apparaît,
+ * puis stocké avec elle. Avant, les 80 contours (18 segments chacun) étaient
+ * reconstruits à chaque rendu, soit ~1 400 points recalculés en continu.
  */
 function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled = true, className }) {
   const [bites, setBites] = useState([]);
   const prevClicksRef = useRef(clicks || 0);
-  const seedRef = useRef((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-  const rngRef = useRef(mulberry32(seedRef.current));
-  const pathCacheRef = useRef(new Map());
+  // Graine tirée à la première morsure et non au rendu: un rendu est censé
+  // être pur, et React peut en abandonner un.
+  const seedRef = useRef(0);
+  const rngRef = useRef(null);
   const finishedRef = useRef(false);
   // `id` unique: plusieurs cookies à l'écran partageraient sinon le même masque
   const maskId = `cookie-mask-${useId().replace(/:/g, "")}`;
@@ -66,6 +67,11 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
     const newBites = Math.floor(curr / CLICKS_PER_BITE) - Math.floor(prev / CLICKS_PER_BITE);
     if (newBites <= 0) return;
 
+    if (!rngRef.current) {
+      seedRef.current = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+      rngRef.current = mulberry32(seedRef.current);
+    }
+
     setBites((arr) => {
       if (finishedRef.current || arr.length >= bitesTotal) return arr;
       const next = [...arr];
@@ -78,7 +84,8 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
         const r = BITE_R_MIN + (BITE_R_MAX - BITE_R_MIN) * p * 0.9;
         const rho = Math.max(0, COOKIE_R - r * (0.35 + 0.75 * p));
         seedRef.current = (seedRef.current + 1) >>> 0;
-        next.push({ x: CENTER + rho * Math.cos(theta), y: CENTER + rho * Math.sin(theta), r, seed: seedRef.current });
+        const bite = { x: CENTER + rho * Math.cos(theta), y: CENTER + rho * Math.sin(theta), r, seed: seedRef.current };
+        next.push({ seed: bite.seed, d: buildBitePath(bite) });
       }
 
       if (next.length >= bitesTotal) {
@@ -87,19 +94,19 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
           const angle = rng() * Math.PI * 2;
           const rad = COOKIE_R * 0.25 * rng();
           seedRef.current = (seedRef.current + 1) >>> 0;
-          next.push({
+          const micro = {
             x: CENTER + Math.cos(angle) * rad,
             y: CENTER + Math.sin(angle) * rad,
             r: 2.5 + rng() * 3,
             seed: seedRef.current,
-          });
+          };
+          next.push({ seed: micro.seed, d: buildBitePath(micro) });
         }
         finishedRef.current = true;
         setTimeout(() => {
           try {
             onFinished?.();
           } finally {
-            pathCacheRef.current.clear();
             finishedRef.current = false;
             setBites([]);
           }
@@ -109,18 +116,6 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
     });
   }, [clicks, enabled, bitesTotal, onFinished]);
 
-  const paths = useMemo(() => {
-    const cache = pathCacheRef.current;
-    return bites.map((b) => {
-      let d = cache.get(b.seed);
-      if (!d) {
-        d = buildBitePath(b);
-        cache.set(b.seed, d);
-      }
-      return { seed: b.seed, d };
-    });
-  }, [bites]);
-
   return (
     <div className={className} aria-hidden="true">
       <svg viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`} width="100%" height="100%" style={{ display: "block" }}>
@@ -128,7 +123,7 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
           <mask id={maskId}>
             <rect x="0" y="0" width={VIEWBOX} height={VIEWBOX} fill="black" />
             <circle cx={CENTER} cy={CENTER} r={COOKIE_R} fill="white" />
-            {paths.map((p) => (
+            {bites.map((p) => (
               <path key={p.seed} d={p.d} fill="black" />
             ))}
           </mask>

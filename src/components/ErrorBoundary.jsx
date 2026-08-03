@@ -19,7 +19,6 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    // eslint-disable-next-line no-console
     console.error("[Cookie Craze] Erreur non rattrapée :", error, info?.componentStack);
   }
 
@@ -33,7 +32,9 @@ export default class ErrorBoundary extends React.Component {
       a.download = "cookiecraze-secours.json";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {}
+    } catch {
+      // Stockage ou téléchargement indisponible: rien de plus à tenter ici
+    }
   };
 
   render() {
@@ -45,7 +46,7 @@ export default class ErrorBoundary extends React.Component {
           <div className="text-5xl mb-3">🍪💥</div>
           <h1 className="text-xl font-black text-amber-950">Le four a surchauffé</h1>
           <p className="mt-2 text-sm text-amber-800/80">
-            Une erreur inattendue s'est produite. Ta sauvegarde est intacte : recharge la page pour reprendre.
+            Une erreur inattendue s&apos;est produite. Ta sauvegarde est intacte : recharge la page pour reprendre.
           </p>
           <pre className="mt-3 text-[10px] text-left text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 overflow-auto max-h-28">
             {String(this.state.error?.message || this.state.error)}
