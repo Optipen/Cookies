@@ -15,6 +15,10 @@ export const ACHIEVEMENTS = [
   { id: "click_10k", tier: 3, cat: "clic", name: "Tendinite", desc: "10 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 10_000 },
   { id: "click_100k", tier: 4, cat: "clic", name: "Main bionique", desc: "100 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 100_000 },
 
+  { id: "combo_max", tier: 2, cat: "clic", name: "Enchaînement", desc: "Atteindre un combo ×3.", cond: (s) => (s.stats?.bestCombo || 0) >= 2.99 },
+  { id: "share_10", tier: 3, cat: "clic", name: "Doigts de fée", desc: "10 % de production reversée par clic.", cond: (s, ctx) => (ctx?.clickShare || 0) >= 0.1 },
+  { id: "share_20", tier: 5, cat: "clic", name: "Toucher divin", desc: "20 % de production reversée par clic.", cond: (s, ctx) => (ctx?.clickShare || 0) >= 0.2 },
+
   // --- Banque ---
   { id: "bank_1k", tier: 1, cat: "banque", name: "Petit pécule", desc: "1 000 cookies en banque.", cond: (s) => (s.cookies || 0) >= 1_000 },
   { id: "bank_1m", tier: 2, cat: "banque", name: "Ça pèse", desc: "1 million en banque.", cond: (s) => (s.cookies || 0) >= 1e6 },
@@ -34,8 +38,10 @@ export const ACHIEVEMENTS = [
   { id: "cursor_50", tier: 1, cat: "empire", name: "Pieuvre", desc: "50 Curseurs.", cond: (s) => (s.items?.cursor || 0) >= 50 },
   { id: "portal_1", tier: 4, cat: "empire", name: "Ailleurs", desc: "Ouvrir un Portail.", cond: (s) => (s.items?.portal || 0) >= 1 },
   { id: "diverse", tier: 3, cat: "empire", name: "Portefeuille équilibré", desc: "Posséder les 15 types de bâtiments.", cond: (s) => ITEMS.every((it) => (s.items?.[it.id] || 0) > 0) },
-  { id: "upgrades_5", tier: 2, cat: "empire", name: "Bricoleur", desc: "5 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 5 },
-  { id: "upgrades_all", tier: 4, cat: "empire", name: "Tout optimisé", desc: "10 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 10 },
+  { id: "upgrades_5", tier: 1, cat: "empire", name: "Bricoleur", desc: "5 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 5 },
+  { id: "upgrades_25", tier: 2, cat: "empire", name: "Ingénieur", desc: "25 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 25 },
+  { id: "upgrades_75", tier: 3, cat: "empire", name: "Optimiseur", desc: "75 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 75 },
+  { id: "upgrades_200", tier: 5, cat: "empire", name: "Perfectionniste", desc: "200 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 200 },
 
   // --- Production ---
   { id: "cps_10", tier: 1, cat: "production", name: "Ça tourne", desc: "10 CPS.", cond: (s, ctx) => (ctx?.cps || 0) >= 10 },

@@ -1,18 +1,23 @@
 {
   "mode": "standard",
   "standard": {
-    "softcaps": { "mult_rational_k": 12 },
     "early": {
       "window_s": 300,
       "cps_discount": 0.35,
       "free_first_auto": true,
       "cpc_base_mult": 1.5,
-      "flash": { "no_purchase_threshold_s": 30, "discount": 0.3 }
+      "flash": {
+        "no_purchase_threshold_s": 30,
+        "discount": 0.3
+      }
     },
     "events": {
       "golden": {
-        "cooldown_s": [150, 280],
-        "lifespan_s": 11,
+        "cooldown_s": [
+          45,
+          90
+        ],
+        "lifespan_s": 10,
         "dr_factor": 0.8,
         "dr_window_s": 180,
         "cps_mult_max": 7,
@@ -21,10 +26,16 @@
         "lucky_cps_mult": 15
       },
       "rain": {
-        "cpc_factor": [2, 3],
-        "duration_s": 9,
+        "cpc_factor": [
+          2,
+          3
+        ],
+        "duration_s": 8,
         "count": 26,
-        "cooldown_s": [200, 340]
+        "cooldown_s": [
+          90,
+          160
+        ]
       }
     },
     "loops": {
@@ -38,8 +49,29 @@
       "max_seconds": 7200
     },
     "milestones": {
-      "thresholds": [10, 25, 50, 100, 200, 400],
-      "multipliers": [1.2, 1.5, 2.2, 4.0, 6.0, 8.0]
+      "thresholds": [
+        10,
+        25,
+        50,
+        100,
+        200,
+        400
+      ],
+      "multipliers": [
+        1.2,
+        1.5,
+        2.2,
+        4.0,
+        6.0,
+        8.0
+      ]
+    },
+    "flying": {
+      "cooldown_s": [
+        40,
+        90
+      ],
+      "lifespan_s": 5
     }
   }
 }

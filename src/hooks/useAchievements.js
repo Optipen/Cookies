@@ -52,15 +52,12 @@ export function useAchievements(state, setState, toast, onUnlock) {
         };
       });
 
-      for (const a of newly.slice(0, 3)) {
-        toastRef.current(`🏆 Succès — ${a.name}`, "success", { ms: 3200 });
-      }
-      if (newly.length > 3) {
-        toastRef.current(`🏆 +${newly.length - 3} autres succès débloqués`, "success", { ms: 3200 });
-      }
-      if (totalReward > 0) {
-        toastRef.current(`Récompense de succès : +${fmt(totalReward)} cookies`, "info", { ms: 2600 });
-      }
+      // Une seule notification, même pour dix succès simultanés: en empiler
+      // autant recouvrait la moitié de l'écran.
+      const titre =
+        newly.length === 1 ? `🏆 Succès — ${newly[0].name}` : `🏆 ${newly.length} succès débloqués`;
+      const gain = totalReward > 0 ? ` · +${fmt(totalReward)} cookies` : "";
+      toastRef.current(titre + gain, "success", { ms: 3600 });
       unlockRef.current?.(newly);
     }, CHECK_MS);
 

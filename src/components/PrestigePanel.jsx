@@ -9,7 +9,10 @@ import {
 import { fmt, fmtPct } from "../utils/format.js";
 
 const NodeCard = memo(function NodeCard({ node, level, cost, affordable, maxed, onBuy }) {
-  const pct = (level / node.maxLevel) * 100;
+  const endless = node.maxLevel === Infinity;
+  // Un nœud sans fin n'a pas de barre de progression: on montre une jauge
+  // logarithmique qui ne sature jamais, pour garder un repère visuel.
+  const pct = endless ? Math.min(100, Math.log10(1 + level) * 45) : (level / node.maxLevel) * 100;
 
   return (
     <div
@@ -29,7 +32,7 @@ const NodeCard = memo(function NodeCard({ node, level, cost, affordable, maxed, 
           <div className="flex items-baseline justify-between gap-2">
             <h4 className="font-bold text-violet-950 truncate">{node.name}</h4>
             <span className="text-xs font-bold text-violet-700 tabular-nums shrink-0">
-              {level}/{node.maxLevel}
+              {endless ? `niv. ${level}` : `${level}/${node.maxLevel}`}
             </span>
           </div>
           <p className="text-[11px] text-violet-800/75 leading-snug">{node.desc}</p>

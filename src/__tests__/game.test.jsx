@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
 import CookieCraze from "../components/CookieCraze.jsx";
 import { SAVE_KEY, createFreshState } from "../utils/state.js";
 
@@ -33,6 +33,14 @@ const startGame = async (mutate = () => {}) => {
   const utils = render(<CookieCraze />);
   await act(async () => {});
   return utils;
+};
+
+/** Ouvre un onglet et attend le chargement du panneau (certains sont lazy). */
+const openTab = async (name) => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole("tab", { name }));
+  });
+  await waitFor(() => expect(screen.queryByLabelText("Chargement")).toBeNull());
 };
 
 const clickCookie = async () => {
@@ -76,9 +84,6 @@ describe("boucle de jeu", () => {
 
   it("achète un bâtiment et met à jour la production", async () => {
     await startGame((s) => (s.cookies = 100_000));
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /Auto/i }));
-    });
     const ovenButton = screen.getByRole("button", { name: /Four, 0 possédés/i });
     await act(async () => {
       fireEvent.click(ovenButton);
@@ -94,21 +99,54 @@ describe("boucle de jeu", () => {
       s.flags.freeFirstAutoGiven = true;
       s.items = { oven: 1 };
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /Auto/i }));
-    });
     const ovenButton = screen.getByRole("button", { name: /Four, 1 possédés/i });
     expect(ovenButton.disabled).toBe(true);
   });
 
   it("offre le premier bâtiment automatique en début de partie", async () => {
     await startGame((s) => (s.cookies = 0));
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /Auto/i }));
-    });
     const ovenButton = screen.getByRole("button", { name: /Four, 0 possédés/i });
     expect(ovenButton.disabled).toBe(false);
     expect(ovenButton.textContent).toContain("OFFERT");
+  });
+});
+
+describe("combo", () => {
+  it("affiche la jauge dès le premier clic", async () => {
+    await startGame();
+    expect(screen.queryByText(/🔥 Combo/)).toBeNull();
+    await clickCookie();
+    expect(screen.getByText(/🔥 Combo/)).toBeTruthy();
+  });
+
+  it("rapporte davantage sur une rafale que sur des clics isolés", async () => {
+    const setup = (s) => {
+      s.items = { oven: 200, bakery: 100, cursor: 60, grandma: 40 };
+      s.lifetime = 5e6;
+      s.cookies = 0;
+    };
+    const banque = () => {
+      const raw = localStorage.getItem(SAVE_KEY);
+      return raw ? JSON.parse(raw).cookies : 0;
+    };
+
+    // Un seul clic: aucun combo
+    const solo = await startGame(setup);
+    await clickCookie();
+    await act(async () => solo.unmount());
+    const gainSolo = banque();
+
+    // Vingt-cinq clics enchaînés: le combo monte jusqu'à ×3
+    const rafale = await startGame(setup);
+    const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
+    await act(async () => {
+      for (let i = 0; i < 25; i++) fireEvent.click(cookie);
+    });
+    await act(async () => rafale.unmount());
+    const gainRafale = banque();
+
+    // Sans combo la rafale vaudrait 25×; avec, elle vaut nettement plus
+    expect(gainRafale).toBeGreaterThan(gainSolo * 30);
   });
 });
 
@@ -120,10 +158,8 @@ describe("navigation", () => {
       s.prestige = { chips: 12, spent: 0, upgrades: {} };
     });
 
-    for (const name of [/Améliorations/i, /Quêtes/i, /CRMB/i, /Skins/i, /Prestige/i, /Stats/i, /Boutique/i]) {
-      await act(async () => {
-        fireEvent.click(screen.getByRole("tab", { name }));
-      });
+    for (const name of [/Améliorations/i, /Quêtes/i, /CRMB/i, /Prestige/i, /Profil/i, /Boutique/i]) {
+      await openTab(name);
     }
     // Le dernier onglet ouvert doit être rendu
     expect(screen.getByRole("tab", { name: /Boutique/i }).getAttribute("aria-selected")).toBe("true");
@@ -140,9 +176,7 @@ describe("prestige", () => {
       s.items = { oven: 20 };
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /Prestige/i }));
-    });
+    await openTab(/Prestige/i);
 
     const prestigeButton = screen.getByRole("button", { name: /Renaître/i });
     expect(prestigeButton.disabled).toBe(false);
@@ -163,14 +197,13 @@ describe("prestige", () => {
       s.lifetime = 5e6;
       s.prestige = { chips: 20, spent: 0, upgrades: {} };
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /Prestige/i }));
-    });
+    await openTab(/Prestige/i);
     const buttons = screen.getAllByRole("button", { name: /Améliorer/i });
     await act(async () => {
       fireEvent.click(buttons[0]);
     });
-    expect(screen.getAllByText(/1\/20/).length).toBeGreaterThan(0);
+    // Les nœuds sans plafond s'affichent « niv. N »
+    expect(screen.getAllByText(/niv\. 1/).length).toBeGreaterThan(0);
   });
 });
 
@@ -203,9 +236,7 @@ describe("crypto", () => {
       s.cookies = 1e9;
       s.lifetime = 1e9;
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /CRMB/i }));
-    });
+    await openTab(/CRMB/i);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Acheter/i }));
     });
@@ -220,9 +251,7 @@ describe("crypto", () => {
         { id: "p1", amount: 1, tierId: "long", startedAt: Date.now(), unlockAt: Date.now() + 86_400_000 },
       ];
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /CRMB/i }));
-    });
+    await openTab(/CRMB/i);
     const locked = screen.getByRole("button", { name: /Verrouillé/i });
     expect(locked.disabled).toBe(true);
   });

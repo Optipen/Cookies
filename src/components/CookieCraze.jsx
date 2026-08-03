@@ -20,7 +20,7 @@ import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
-import { deriveStats, costOf, isEarlyWindow } from "../utils/selectors.js";
+import { deriveStats, costOf, isEarlyWindow, COMBO } from "../utils/selectors.js";
 import { fmt, fmtInt, fmtCrmb, fmtDuration } from "../utils/format.js";
 import {
   loadState,
@@ -43,23 +43,63 @@ import { useAutosave } from "../hooks/useAutosave.js";
 import { useQuests } from "../hooks/useQuests.js";
 import { useEvents } from "../hooks/useEvents.js";
 import { useAchievements } from "../hooks/useAchievements.js";
-import { useTimeLeft } from "../hooks/useClock.js";
+import { useCombo } from "../hooks/useCombo.js";
+import { useClock, useTimeLeft } from "../hooks/useClock.js";
 import { useLatestRef } from "../hooks/useLatestRef.js";
 
+// Six onglets: production et clic partagent la boutique, et le profil regroupe
+// statistiques, succès et apparences. Huit entrées débordaient de la barre.
 const TABS = [
   { id: "shop", label: "Boutique", icon: "🛍️" },
-  { id: "auto", label: "Auto", icon: "⚙️" },
   { id: "upgrades", label: "Améliorations", icon: "⬆️" },
   { id: "quests", label: "Quêtes", icon: "📜" },
   { id: "crypto", label: "CRMB", icon: "🪙", feature: "ENABLE_CRYPTO" },
-  { id: "skins", label: "Skins", icon: "🎨", feature: "ENABLE_SKINS" },
   { id: "prestige", label: "Prestige", icon: "✨", feature: "ENABLE_PRESTIGE" },
-  { id: "stats", label: "Stats", icon: "📊" },
+  { id: "profile", label: "Profil", icon: "👤" },
 ];
 
 // ============================================================================
 // Petits composants isolés — ils consomment l'horloge sans re-rendre le jeu
 // ============================================================================
+
+/**
+ * Jauge de combo.
+ *
+ * Toujours visible dès le premier clic et toujours en train de redescendre:
+ * c'est le rappel permanent que s'arrêter de cliquer coûte quelque chose.
+ */
+const ComboMeter = memo(function ComboMeter({ display }) {
+  const { streak, mult } = display;
+  if (streak <= 0) return null;
+  const pct = Math.min(100, (streak / COMBO.clicksToMax) * 100);
+  const plein = mult >= COMBO.max - 0.01;
+
+  return (
+    <div className="mt-2 mx-auto w-full max-w-[15rem]">
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="font-semibold text-amber-800">🔥 Combo</span>
+        <span className={`font-black tabular-nums ${plein ? "text-orange-600" : "text-amber-700"}`}>
+          ×{mult.toFixed(2)}
+        </span>
+      </div>
+      <div
+        className="h-1.5 rounded-full bg-amber-100 overflow-hidden"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        aria-label="Chaîne de clics"
+      >
+        <div
+          className={`h-full transition-[width] duration-100 ease-linear ${
+            plein ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gradient-to-r from-amber-300 to-orange-400"
+          }`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+});
 
 const BuffBadge = memo(function BuffBadge({ buffs }) {
   const left = useTimeLeft(buffs?.until, 250);
@@ -174,6 +214,7 @@ export default function CookieCraze() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [offlineReport, setOfflineReport] = useState(null);
   const [buyQty, setBuyQty] = useState(1);
+  const [shopFilter, setShopFilter] = useState("all");
 
   const particlesRef = useRef(null);
   const bootedRef = useRef(false);
@@ -185,7 +226,11 @@ export default function CookieCraze() {
   const audio = useAudio(soundsOn, state.ui.volume ?? 0.6);
   const { toast } = useToast(setState);
 
-  const stats = useMemo(() => deriveStats(state), [state]);
+  const combo = useCombo();
+  // Horloge partagée plutôt qu'un `Date.now()` au rendu: les buffs et la fenêtre
+  // de début de partie expirent d'eux-mêmes, à la cadence de la boucle de jeu.
+  const now = useClock(500);
+  const stats = useMemo(() => deriveStats(state, now, combo.display.streak), [state, now, combo.display.streak]);
   const questCtx = useMemo(() => buildContext(state), [state]);
   const effects = useMemo(() => prestigeEffects(state), [state]);
 
@@ -336,20 +381,32 @@ export default function CookieCraze() {
 
   const onCookieClick = useCallback(() => {
     audio.play("crunch", 0.3);
-    const gain = deriveStats(stateRef.current).cpc;
+    // Le combo est enregistré d'abord: le clic courant profite déjà du palier
+    // qu'il vient d'atteindre.
+    combo.register();
+    const streak = combo.streakRef.current;
+    const derived = deriveStats(stateRef.current, Date.now(), streak);
+    const gain = derived.cpc;
 
     setState((s) => ({
       ...s,
       cookies: s.cookies + gain,
       lifetime: s.lifetime + gain,
-      stats: { ...s.stats, clicks: (s.stats.clicks || 0) + 1, handmade: (s.stats.handmade || 0) + gain },
+      stats: {
+        ...s.stats,
+        clicks: (s.stats.clicks || 0) + 1,
+        handmade: (s.stats.handmade || 0) + gain,
+        bestCombo: Math.max(s.stats.bestCombo || 1, derived.combo),
+      },
     }));
 
     if (isFeatureEnabled("ENABLE_PARTICLES")) {
       particlesRef.current?.burstText(1, `+${fmt(gain)}`);
-      particlesRef.current?.burstCrumbs(3);
+      particlesRef.current?.burstCrumbs(derived.combo > 2 ? 5 : 3);
+      // Gerbe dorée aux paliers de combo, pour rendre la montée lisible
+      if (streak > 0 && streak % 10 === 0) particlesRef.current?.burstGold(10);
     }
-  }, [audio, stateRef]);
+  }, [audio, combo, stateRef]);
 
   const buy = useCallback(
     (itemId, count = 1) => {
@@ -615,10 +672,12 @@ export default function CookieCraze() {
         sounds: prev.ui.sounds,
       });
       const eff = prestigeEffects(fresh);
+      // « Départ lancé » rend une fraction de la production de la partie qui s'achève
+      const head = Math.floor((prev.lifetime || 0) * eff.startFraction);
       return {
         ...fresh,
-        cookies: eff.startCookies,
-        lifetime: eff.startCookies,
+        cookies: head,
+        lifetime: head,
         ui: { ...prev.ui, introSeen: true },
         stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
         // Le portefeuille CRMB et le matériel survivent au prestige
@@ -743,13 +802,14 @@ export default function CookieCraze() {
       }
 
       particlesRef.current?.clear();
+      combo.reset();
       setMenuOpen(false);
       setOfflineReport(null);
       setTab("shop");
       setState(createResetState(payload));
       toast(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
     },
-    [toast, stateRef]
+    [toast, stateRef, combo]
   );
 
   // ==========================================================================
@@ -906,6 +966,7 @@ export default function CookieCraze() {
                 {fmtInt(state.lifetime)} cuits au total
                 {stats.cps > 0 && <span className="text-emerald-700 font-semibold"> · {fmt(stats.cps)} / s</span>}
               </div>
+              <ComboMeter display={combo.display} />
               <BuffBadge buffs={state.buffs} />
               {state.flags?.discountAll && <DiscountBadge discount={state.flags.discountAll} />}
             </div>
@@ -995,38 +1056,59 @@ export default function CookieCraze() {
             </nav>
 
             <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-4 scrollbar-thin">
-              {(tab === "shop" || tab === "auto") && (
+              {tab === "shop" && (
                 <>
-                  <div className="mb-2 flex items-center gap-1" role="group" aria-label="Quantité d'achat">
-                    <span className="text-[11px] text-amber-700 mr-1">Acheter par</span>
-                    {[1, 10, 100].map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        onClick={() => setBuyQty(q)}
-                        aria-pressed={buyQty === q}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
-                          buyQty === q
-                            ? "bg-amber-500 text-white shadow"
-                            : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
-                        }`}
-                      >
-                        ×{q}
-                      </button>
-                    ))}
+                  <div className="mb-2 flex flex-wrap items-center gap-1">
+                    <div className="flex gap-1" role="group" aria-label="Filtrer les bâtiments">
+                      {[
+                        ["all", "Tout"],
+                        ["mult", "👆 Clic"],
+                        ["cps", "⚙️ Auto"],
+                      ].map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setShopFilter(id)}
+                          aria-pressed={shopFilter === id}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                            shopFilter === id
+                              ? "bg-amber-500 text-white shadow"
+                              : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="ml-auto flex gap-1" role="group" aria-label="Quantité d'achat">
+                      {[1, 10, 100].map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setBuyQty(q)}
+                          aria-pressed={buyQty === q}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                            buyQty === q
+                              ? "bg-orange-500 text-white shadow"
+                              : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
+                          }`}
+                        >
+                          ×{q}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <Shop
                     state={state}
-                    mode={tab}
+                    filter={shopFilter}
                     onBuy={buy}
                     perItemMult={stats.perItemMult}
                     qty={buyQty}
-                    totalCps={stats.baseCps}
-                    totalClickMult={stats.clickMult}
+                    stats={stats}
                   />
                 </>
               )}
-              {tab === "upgrades" && <Upgrades state={state} onBuy={buyUpgrade} />}
+              {tab === "upgrades" && <Upgrades state={state} stats={stats} onBuy={buyUpgrade} />}
               {tab === "quests" && <QuestBoard state={state} ctx={questCtx} onReroll={reroll} />}
 
               <Suspense fallback={<PanelSkeleton />}>
@@ -1041,20 +1123,26 @@ export default function CookieCraze() {
                     onBuyMiner={buyMiner}
                   />
                 )}
-                {tab === "skins" && (
-                  <Skins
-                    state={state}
-                    skins={SKINS}
-                    onBuy={buySkin}
-                    onEquip={equipSkin}
-                    onPreview={setPreviewSkin}
-                    onStopPreview={stopPreview}
-                  />
-                )}
                 {tab === "prestige" && (
                   <PrestigePanel state={state} effects={effects} onPrestige={doPrestige} onBuyNode={buyPrestigeNode} />
                 )}
-                {tab === "stats" && <StatsPanel state={state} stats={stats} />}
+                {tab === "profile" && (
+                  <>
+                    <StatsPanel state={state} stats={stats} />
+                    {isFeatureEnabled("ENABLE_SKINS") && (
+                      <div className="mt-4 pt-4 border-t border-amber-200/60">
+                        <Skins
+                          state={state}
+                          skins={SKINS}
+                          onBuy={buySkin}
+                          onEquip={equipSkin}
+                          onPreview={setPreviewSkin}
+                          onStopPreview={stopPreview}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </Suspense>
             </div>
           </section>
@@ -1119,15 +1207,17 @@ export default function CookieCraze() {
         </button>
       ))}
 
-      <div className="fixed right-3 bottom-3 z-50 space-y-2 max-w-[calc(100vw-1.5rem)] sm:max-w-sm">
+      {/* Bas-gauche sur grand écran: le panneau de droite reste lisible pendant
+          qu'une notification s'affiche. Centré en bas sur mobile. */}
+      <div className="fixed inset-x-3 bottom-3 z-50 flex flex-col items-center gap-2 lg:inset-x-auto lg:left-4 lg:items-start lg:max-w-sm">
         <AnimatePresence initial={false}>
           {state.toasts.map((t) => (
             <motion.div
               key={t.id}
               layout
-              initial={{ opacity: 0, x: 40, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 40, scale: 0.9 }}
+              initial={{ opacity: 0, y: 16, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.92 }}
               transition={{ type: "spring", stiffness: 380, damping: 28 }}
               role="status"
               className={`px-4 py-2.5 rounded-2xl text-sm font-medium shadow-xl border backdrop-blur-sm ${

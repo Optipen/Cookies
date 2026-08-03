@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { deriveStats, costOf, bulkCost, milestoneFactor, maxAffordable, buyQuantity } from "../utils/selectors.js";
-import { cpsFrom, clickMultiplierFrom } from "../utils/calc.js";
+import {
+  deriveStats,
+  costOf,
+  bulkCost,
+  milestoneFactor,
+  maxAffordable,
+  buyQuantity,
+  clickShare,
+  comboMultiplier,
+  activeIncome,
+  COMBO,
+} from "../utils/selectors.js";
+import { cpsFrom, clickWeightFrom } from "../utils/calc.js";
 import { createFreshState } from "../utils/state.js";
 import { prestigeEffects, chipsFor, upgradeCost, availableChips, PRESTIGE_BY_ID } from "../data/prestige.js";
 import { ITEMS } from "../data/items.js";
@@ -28,13 +39,75 @@ describe("cpsFrom", () => {
   });
 });
 
-describe("clickMultiplierFrom", () => {
-  it("croît avec des rendements décroissants", () => {
-    const low = clickMultiplierFrom({ cursor: 1 }, {});
-    const high = clickMultiplierFrom({ cursor: 100, grandma: 50, farm: 20, factory: 10 }, {});
-    expect(low).toBeGreaterThan(1);
-    expect(high).toBeGreaterThan(low);
-    expect(high).toBeLessThan(50);
+describe("puissance de clic", () => {
+  it("n'est jamais plafonnée", () => {
+    // Régression: l'ancienne formule `1 + s·K/(s+K)` avait une asymptote à 13.
+    // Le multiplicateur atteignait ×11,8 avec un exemplaire de chaque bâtiment
+    // puis ne bougeait plus, ce qui tuait le clic en dix minutes de jeu.
+    const one = clickWeightFrom({ cursor: 1 }, {});
+    const many = clickWeightFrom({ cursor: 1000 }, {});
+    const huge = clickWeightFrom({ cursor: 1_000_000 }, {});
+    expect(many).toBeGreaterThan(one * 900);
+    expect(huge).toBeGreaterThan(many * 900);
+  });
+
+  it("fait croître la part de production reversée par clic, sans limite", () => {
+    const modeste = clickShare(settled((x) => (x.items = { cursor: 10 })));
+    const gros = clickShare(settled((x) => (x.items = { cursor: 10_000, tm: 500 })));
+    const enorme = clickShare(settled((x) => (x.items = { cursor: 1e7, tm: 1e6 })));
+    expect(modeste).toBeGreaterThan(0);
+    expect(gros).toBeGreaterThan(modeste);
+    expect(enorme).toBeGreaterThan(gros);
+  });
+
+  it("croît de façon logarithmique, pour ne pas écraser l'idle", () => {
+    const a = clickShare(settled((x) => (x.items = { cursor: 100 })));
+    const b = clickShare(settled((x) => (x.items = { cursor: 10_000 })));
+    // Multiplier le parc par 100 ne doit pas multiplier la part par 100
+    expect(b).toBeLessThan(a * 3);
+  });
+});
+
+describe("combo", () => {
+  it("va de ×1 à ×3 selon la chaîne de clics", () => {
+    expect(comboMultiplier(0)).toBe(1);
+    expect(comboMultiplier(COMBO.clicksToMax)).toBeCloseTo(COMBO.max);
+    expect(comboMultiplier(COMBO.clicksToMax * 10)).toBeCloseTo(COMBO.max);
+    expect(comboMultiplier(COMBO.clicksToMax / 2)).toBeCloseTo(1 + (COMBO.max - 1) / 2);
+  });
+
+  it("ignore les valeurs aberrantes", () => {
+    expect(comboMultiplier(-50)).toBe(1);
+    expect(comboMultiplier(undefined)).toBe(1);
+  });
+});
+
+describe("équilibrage actif / passif", () => {
+  // L'objectif de conception: un joueur qui clique gagne 2,5 à 3 fois plus
+  // qu'un joueur qui laisse tourner — jamais moins, jamais dix fois plus.
+  const empire = (echelle) =>
+    settled((x) => {
+      x.items = {
+        oven: 40 * echelle, bakery: 30 * echelle, farm_cps: 20 * echelle, factory_cps: 12 * echelle,
+        cursor: 50 * echelle, grandma: 35 * echelle, farm: 20 * echelle, factory: 12 * echelle,
+      };
+      x.lifetime = 1e6 * echelle;
+    });
+
+  for (const echelle of [1, 5, 25, 100]) {
+    it(`reste dans la fourchette à l'échelle ×${echelle}`, () => {
+      const s = empire(echelle);
+      const passif = deriveStats(s, LATER).cps;
+      const actif = activeIncome(s, 7, LATER);
+      const ratio = actif / passif;
+      expect(ratio).toBeGreaterThan(1.8);
+      expect(ratio).toBeLessThan(5);
+    });
+  }
+
+  it("garde le clic devant l'idle même sur un empire démesuré", () => {
+    const s = empire(5000);
+    expect(activeIncome(s, 7, LATER)).toBeGreaterThan(deriveStats(s, LATER).cps * 2);
   });
 });
 
@@ -52,8 +125,9 @@ describe("deriveStats", () => {
       x.items = { oven: 10 };
     });
     const stats = deriveStats(s, LATER);
+    const neutre = deriveStats(settled((x) => (x.items = { oven: 10 })), LATER);
     expect(stats.buffActive).toBe(false);
-    expect(stats.cpc).toBe(1);
+    expect(stats.cpc).toBeCloseTo(neutre.cpc);
   });
 
   it("applique un buff actif", () => {
@@ -62,9 +136,10 @@ describe("deriveStats", () => {
       x.items = { oven: 10 };
     });
     const stats = deriveStats(s, LATER);
+    const neutre = deriveStats(settled((x) => (x.items = { oven: 10 })), LATER);
     expect(stats.buffActive).toBe(true);
     expect(stats.cps).toBeCloseTo(stats.baseCps * 3);
-    expect(stats.cpc).toBeCloseTo(2);
+    expect(stats.cpc).toBeCloseTo(neutre.cpc * 2);
   });
 
   it("intègre les bonus permanents de l'arbre céleste", () => {
@@ -75,7 +150,7 @@ describe("deriveStats", () => {
     });
     // 10 × 5 % de production et 10 × 8 % de clic
     expect(deriveStats(boosted, LATER).baseCps).toBeGreaterThan(deriveStats(plain, LATER).baseCps);
-    expect(deriveStats(boosted, LATER).cpc).toBeCloseTo(1.8);
+    expect(deriveStats(boosted, LATER).cpc).toBeGreaterThan(deriveStats(plain, LATER).cpc * 1.5);
   });
 
   it("prend en compte le boost de staking", () => {
@@ -144,6 +219,30 @@ describe("coûts", () => {
   });
 });
 
+describe("achat groupé", () => {
+  it("coûte exactement le prix des achats un par un", () => {
+    // Régression: `bulkCost` appliquait le renchérissement du compte de départ à
+    // toute la série. Acheter 200 fours d'un coup coûtait 15,8 fois moins cher
+    // que 200 achats successifs, rendant le bouton ×100 strictement optimal.
+    const item = ITEMS.find((i) => i.id === "oven");
+    for (const [from, n] of [[0, 30], [0, 120], [40, 80]]) {
+      let unParUn = 0;
+      for (let k = 0; k < n; k++) unParUn += bulkCost(item, from + k, 1);
+      expect(bulkCost(item, from, n)).toBeCloseTo(unParUn, 5);
+    }
+  });
+
+  it("ne rend jamais un prix unitaire décroissant", () => {
+    const item = ITEMS.find((i) => i.id === "cursor");
+    let precedent = 0;
+    for (let owned = 0; owned < 250; owned += 7) {
+      const prix = bulkCost(item, owned, 1);
+      expect(prix).toBeGreaterThanOrEqual(precedent);
+      precedent = prix;
+    }
+  });
+});
+
 describe("maxAffordable", () => {
   it("trouve la quantité maximale achetable", () => {
     const s = settled((x) => (x.cookies = 0));
@@ -200,6 +299,6 @@ describe("prestige", () => {
     expect(e.cpsMult).toBe(1);
     expect(e.cpcMult).toBe(1);
     expect(e.costMult).toBe(1);
-    expect(e.startCookies).toBe(0);
+    expect(e.startFraction).toBe(0);
   });
 });

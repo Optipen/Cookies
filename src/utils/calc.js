@@ -1,59 +1,63 @@
 import { ITEMS } from "../data/items.js";
-import { UPGRADES } from "../data/upgrades.js";
-import tuning from "../data/tuning.json";
+import { getUpgrade } from "../data/upgrades.js";
 
-export const computePerItemMult = (items, upgrades) => {
+/**
+ * Multiplicateur propre à chaque bâtiment: améliorations achetées + synergies.
+ */
+export const computePerItemMult = (items = {}, upgrades = {}) => {
   const mult = {};
-  ITEMS.forEach((it) => (mult[it.id] = 1));
+  for (const it of ITEMS) mult[it.id] = 1;
 
-  for (const id in (upgrades || {})) {
+  for (const id in upgrades) {
     if (!upgrades[id]) continue;
-    const up = UPGRADES.find((u) => u.id === id);
-    if (!up) continue;
-    if (up.type === "mult") {
-      if (up.target === "all") ITEMS.forEach((it) => (mult[it.id] *= up.value));
-      else if (up.target in mult) mult[up.target] *= up.value;
+    const up = getUpgrade(id);
+    if (!up || up.type !== "mult") continue;
+    if (up.target === "all") {
+      for (const it of ITEMS) mult[it.id] *= up.value;
+    } else if (up.target in mult) {
+      mult[up.target] *= up.value;
     }
   }
 
-  const g = (items.grandma || 0), f = (items.farm || 0), fac = (items.factory || 0);
-  if (mult.cursor != null)  mult.cursor  *= 1 + 0.01  * g;
-  if (mult.grandma != null) mult.grandma *= 1 + 0.005 * f;
-  if (mult.farm != null)    mult.farm    *= 1 + 0.002 * fac;
+  // Synergies croisées: un bâtiment renforce son voisin de gamme
+  const grandma = items.grandma || 0;
+  const farm = items.farm || 0;
+  const factory = items.factory || 0;
+  if (mult.cursor != null) mult.cursor *= 1 + 0.01 * grandma;
+  if (mult.grandma != null) mult.grandma *= 1 + 0.005 * farm;
+  if (mult.farm != null) mult.farm *= 1 + 0.002 * factory;
 
   return mult;
 };
 
-export const cpsFrom = (items, upgrades, chips, stakeMulti = 1) => {
+/** Production automatique, en cookies par seconde. */
+export const cpsFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) => {
   const mult = computePerItemMult(items, upgrades);
   let cps = 0;
   for (const it of ITEMS) {
-    if (it.mode === 'cps') {
-      cps += (items[it.id] || 0) * it.cps * (mult[it.id] || 1);
-    }
+    if (it.mode === "cps") cps += (items[it.id] || 0) * it.cps * (mult[it.id] || 1);
   }
   return cps * (1 + (chips || 0) * 0.02) * stakeMulti;
 };
 
-
-// Nouveau: somme des contributions multiplicateur de clic avec softcap rationnel
-export const clickMultiplierFrom = (items, upgrades) => {
+/**
+ * Poids brut des bâtiments de clic.
+ *
+ * Ce nombre ne sert pas directement de multiplicateur: il alimente la « part de
+ * production par clic » (voir `selectors.js`), qui sature vers un plafond que
+ * les améliorations relèvent sans fin.
+ *
+ * L'ancienne formule appliquait un softcap rationnel `1 + s·K/(s+K)` dont
+ * l'asymptote valait K+1 = 13. Le multiplicateur atteignait ×11,8 avec un seul
+ * exemplaire de chaque bâtiment puis ne bougeait plus jamais: passé les sept
+ * premiers achats, investir dans le clic ne servait plus à rien, et la
+ * production automatique — elle, illimitée — écrasait le clic en dix minutes.
+ */
+export const clickWeightFrom = (items = {}, upgrades = {}) => {
   const mult = computePerItemMult(items, upgrades);
-  let additive = 0;
-  const mode = (tuning && tuning.mode) || "standard";
-  const cfg = (tuning && tuning[mode]) || {};
-  const SOFTCAP_K = (cfg.softcaps && cfg.softcaps.mult_rational_k) || 16;
+  let weight = 0;
   for (const it of ITEMS) {
-    if (it.mode === 'mult') {
-      const per = (items[it.id] || 0) * (it.mult || 0) * (mult[it.id] || 1);
-      additive += per;
-    }
+    if (it.mode === "mult") weight += (items[it.id] || 0) * (it.mult || 0) * (mult[it.id] || 1);
   }
-  const raw = 1 + additive;
-  const s = Math.max(0, raw - 1);
-  // Diminishing returns doux: quasi-linéaire lorsque s << K, décroissance quand s >> K
-  const softened = 1 + s * (SOFTCAP_K / (s + SOFTCAP_K));
-  return softened;
+  return weight;
 };
-
-

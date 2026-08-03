@@ -46,6 +46,7 @@ export function createFreshState(now = Date.now()) {
       playtimeMs: 0,
       prestigeCount: 0,
       handmade: 0,
+      bestCombo: 1,
     },
 
     flags: {

@@ -5,7 +5,8 @@
 
 import { QUESTS, QUEST_BY_ID, questTitle, questDesc } from "./catalog.js";
 import { ITEMS } from "../data/items.js";
-import { cpsFrom, clickMultiplierFrom } from "../utils/calc.js";
+import { cpsFrom } from "../utils/calc.js";
+import { deriveStats } from "../utils/selectors.js";
 import { stakedTotal, stakingBoost } from "../utils/crypto.js";
 import { prestigeEffects } from "../data/prestige.js";
 
@@ -22,7 +23,7 @@ export function buildContext(state) {
   const positions = state.crypto?.positions || [];
   const stakeMulti = stakingBoost(positions);
   const cps = cpsFrom(state.items || {}, state.upgrades || {}, chips, stakeMulti);
-  const cpcMult = clickMultiplierFrom(state.items || {}, state.upgrades || {});
+  const cpc = deriveStats(state).cpcBase;
 
   let level = "early";
   if (lifetime >= 1_000_000 && cps >= 500) level = "late";
@@ -45,7 +46,7 @@ export function buildContext(state) {
     bank,
     lifetime,
     cps,
-    cpcMult,
+    cpc,
     nextAffordable,
     crmbPrice: state.crypto?.price || 20_000,
     crmbBalance: state.crypto?.balance || 0,

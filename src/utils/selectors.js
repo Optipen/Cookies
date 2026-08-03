@@ -1,11 +1,11 @@
 // === Valeurs dérivées ===
 // Un seul endroit calcule CPS, CPC et coûts. Avant, la même formule était
 // dupliquée dans le composant, les hooks et le moteur de missions, avec des
-// résultats qui divergeaient (le bandeau d'achat n'affichait pas le vrai gain).
+// résultats qui divergeaient.
 
 import { ITEMS } from "../data/items.js";
-import { UPGRADES } from "../data/upgrades.js";
-import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "./calc.js";
+import { getUpgrade, shareUpgradeBonus, SHARE_BASE, SHARE_PER_DECADE } from "../data/upgrades.js";
+import { cpsFrom, computePerItemMult, clickWeightFrom } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
 import { stakingBoost, miningRate, stakingYieldPerSecond } from "./crypto.js";
 import tuning from "../data/tuning.json";
@@ -27,17 +27,52 @@ export function cpcUpgradeMult(upgrades = {}) {
   let m = 1;
   for (const id in upgrades) {
     if (!upgrades[id]) continue;
-    const up = UPGRADES.find((u) => u.id === id);
+    const up = getUpgrade(id);
     if (up && up.target === "cpc" && up.type === "mult") m *= up.value;
   }
   return m;
 }
 
+// === Part de production par clic ===
+//
+// C'est la pièce maîtresse de l'équilibrage. Chaque clic reverse une fraction
+// de la production automatique, ce qui rend le clic proportionnel à l'empire du
+// joueur: il ne peut plus jamais décrocher, quel que soit le niveau atteint.
+//
+// Deux axes complémentaires, tous deux sans fin:
+//  · les bâtiments de clic font monter la part vers son plafond;
+//  · les améliorations « Doigté » relèvent ce plafond.
+// Aucun des deux ne devient inutile.
+
+export function clickShare(state) {
+  const weight = clickWeightFrom(state.items || {}, state.upgrades || {});
+  // Croissance logarithmique: chaque décuplement du parc de clic ajoute un
+  // palier fixe. Sans plafond, mais assez lent pour que le clic reste
+  // meilleur que l'idle sans jamais le rendre inutile.
+  const fromBuildings = weight > 0 ? SHARE_PER_DECADE * Math.log10(1 + weight) : 0;
+  return SHARE_BASE + fromBuildings + shareUpgradeBonus(state.upgrades);
+}
+
+// === Combo ===
+// Cliquer sans interruption fait monter un multiplicateur qui retombe vite.
+// C'est le mécanisme qui rend le jeu actif plus rentable que le jeu passif.
+
+export const COMBO = {
+  max: 3, // multiplicateur maximal
+  clicksToMax: 30, // clics consécutifs pour l'atteindre
+  windowMs: 1400, // délai au-delà duquel la chaîne casse
+  decayPerSecond: 12, // clics perdus par seconde d'inactivité
+};
+
+/** Multiplicateur de combo pour un compteur de clics enchaînés. */
+export const comboMultiplier = (streak = 0) =>
+  1 + (COMBO.max - 1) * Math.min(1, Math.max(0, streak) / COMBO.clicksToMax);
+
 /**
  * Toutes les stats dérivées d'un état, en un seul passage.
  * `now` est injectable pour que les tests ne dépendent pas de l'horloge.
  */
-export function deriveStats(state, now = Date.now()) {
+export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const prestige = prestigeEffects(state);
   const positions = state.crypto?.positions || [];
   const stakeMult = stakingBoost(positions);
@@ -49,16 +84,35 @@ export function deriveStats(state, now = Date.now()) {
   const baseCps = cpsFrom(state.items || {}, state.upgrades || {}, state.prestige?.chips || 0, stakeMult) * prestige.cpsMult;
   const cps = baseCps * buffCps;
 
-  const clickMult = clickMultiplierFrom(state.items || {}, state.upgrades || {});
+  // --- Puissance de clic ---
+  // Deux composantes complémentaires:
+  //  · une part « à plat », qui porte tout le début de partie;
+  //  · une part indexée sur la production automatique, qui garantit que le clic
+  //    ne décroche jamais, même avec des milliards de cookies par seconde.
   const earlyMult = isEarlyWindow(state, now) ? earlyCfg().cpc_base_mult || 1 : 1;
-  const cpc =
-    (state.cpcBase || 1) * earlyMult * clickMult * cpcUpgradeMult(state.upgrades) * prestige.cpcMult * buffCpc;
+  const clickWeight = clickWeightFrom(state.items || {}, state.upgrades || {});
+  // Terme « à plat »: porté par les bâtiments de clic, sans plafond. Il domine
+  // le début de partie, puis s'efface de lui-même car la production automatique
+  // croît bien plus vite que le parc de clic.
+  const flatCpc = (state.cpcBase || 1) * (1 + clickWeight) * earlyMult * cpcUpgradeMult(state.upgrades) * prestige.cpcMult;
+
+  const share = clickShare(state);
+  const sharedCpc = baseCps * share;
+
+  const combo = comboMultiplier(comboStreak);
+  const cpc = (flatCpc + sharedCpc) * buffCpc * combo;
 
   return {
     cps,
     baseCps,
     cpc,
-    clickMult,
+    // CPC sans combo: sert aux comparaisons avant/après achat
+    cpcBase: (flatCpc + sharedCpc) * buffCpc,
+    flatCpc,
+    sharedCpc,
+    clickShare: share,
+    clickWeight,
+    combo,
     stakeMult,
     prestige,
     buffActive,
@@ -70,9 +124,19 @@ export function deriveStats(state, now = Date.now()) {
   };
 }
 
+/**
+ * Revenu par seconde d'un joueur actif, pour comparer au mode passif.
+ * `clicksPerSecond` par défaut correspond à un rythme soutenu confortable.
+ */
+export function activeIncome(state, clicksPerSecond = 7, now = Date.now()) {
+  // À ce rythme la chaîne de combo reste pleine
+  const stats = deriveStats(state, now, COMBO.clicksToMax);
+  return stats.cps + stats.cpc * clicksPerSecond;
+}
+
 // === Coûts ===
 
-/** Renchérissement par paliers de possession — récompense visible des gros achats. */
+/** Renchérissement par paliers de possession. */
 export function milestoneFactor(owned) {
   const cfg = modeCfg().milestones || {};
   const thresholds = cfg.thresholds || [10, 25, 50, 100, 200];
@@ -84,11 +148,25 @@ export function milestoneFactor(owned) {
   return m;
 }
 
-/** Somme géométrique du prix de `count` exemplaires à partir de `owned`. */
+const MAX_BULK = 1000;
+
+/**
+ * Prix de `count` exemplaires à partir de `owned`.
+ *
+ * Le renchérissement est appliqué exemplaire par exemplaire. L'ancienne version
+ * appliquait `milestoneFactor(owned)` — la valeur de départ — à toute la série:
+ * acheter 200 fours d'un coup coûtait 15,8 fois moins cher que 200 achats
+ * successifs, ce qui rendait le bouton ×100 strictement optimal.
+ */
 export function bulkCost(item, owned, count) {
-  const g = item.growth;
-  const series = (Math.pow(g, count) - 1) / (g - 1);
-  return item.base * Math.pow(g, owned) * series * milestoneFactor(owned);
+  const n = Math.min(MAX_BULK, Math.max(0, Math.floor(count)));
+  let total = 0;
+  for (let k = 0; k < n; k++) {
+    const at = owned + k;
+    total += item.base * Math.pow(item.growth, at) * milestoneFactor(at);
+    if (!isFinite(total)) return Infinity;
+  }
+  return total;
 }
 
 /**
@@ -101,8 +179,8 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
 
   const owned = state.items?.[itemId] || 0;
   let price = bulkCost(item, owned, count);
+  if (!isFinite(price)) return Infinity;
 
-  // Réduction permanente de l'arbre céleste
   price *= prestigeEffects(state).costMult;
 
   const ecfg = earlyCfg();
@@ -122,14 +200,11 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
     price *= 1 - (ecfg.cps_discount || 0);
   }
 
-  // Premier curseur offert pendant le tutoriel
   if (!state.ui?.introSeen && itemId === "cursor" && owned === 0 && count === 1) return 0;
 
-  // Remise globale temporaire (récompense de quête)
   const discount = state.flags?.discountAll;
   if (discount && now < discount.until) price *= 1 - (discount.value || 0);
 
-  // Vente flash sur un bâtiment précis
   const flash = state.flags?.flash;
   if (flash && flash.itemId === itemId && now < flash.until) price *= 1 - flash.discount;
 
@@ -139,8 +214,8 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
 /** Quantité d'achat selon les modificateurs clavier. */
 export const buyQuantity = (event) => (event?.shiftKey ? 10 : event?.ctrlKey || event?.metaKey ? 100 : 1);
 
-/** Nombre maximal d'exemplaires achetables avec la banque actuelle (borné). */
-export function maxAffordable(state, itemId, cap = 1000, now = Date.now()) {
+/** Nombre maximal d'exemplaires achetables avec la banque actuelle. */
+export function maxAffordable(state, itemId, cap = MAX_BULK, now = Date.now()) {
   let lo = 0;
   let hi = cap;
   while (lo < hi) {

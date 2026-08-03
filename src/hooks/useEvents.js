@@ -187,24 +187,26 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     const r = area?.getBoundingClientRect();
     const width = r?.width || window.innerWidth;
     const height = Math.min(r?.height || window.innerHeight, window.innerHeight);
+    const lifespan = cfgFor(["flying", "lifespan_s"], 5) * 1000;
     setFlying({
       id: Math.random().toString(36).slice(2),
       left: rand(60, Math.max(120, width - 80)),
       top: rand(140, Math.max(240, height - 120)),
-      until: Date.now() + 4000,
+      until: Date.now() + lifespan,
     });
     audio.play("golden", 0.3);
     clearTimer("flying");
     timersRef.current.flying = setTimeout(() => {
       setFlying(null);
       schedulersRef.current.flying?.();
-    }, 4000);
+    }, lifespan);
   }, [audio]);
 
   const scheduleFlying = useCallback(() => {
     if (!isFeatureEnabled("ENABLE_FLYING_COOKIE") || !isFeatureEnabled("ENABLE_EVENTS")) return;
     clearTimer("flying");
-    timersRef.current.flying = setTimeout(spawnFlying, rand(70, 160) * 1000);
+    const [min, max] = cfgFor(["flying", "cooldown_s"], [40, 90]);
+    timersRef.current.flying = setTimeout(spawnFlying, rand(min, max) * 1000);
   }, [spawnFlying]);
 
   const clickFlying = useCallback(() => {

@@ -65,12 +65,17 @@ body {
    Particules — éléments créés en DOM pur par ParticleLayer
    ========================================================================== */
 
+/* Les chiffres flottants passent au-dessus du cookie, dont la teinte est
+   proche: un liseré sombre garantit la lisibilité quel que soit le skin. */
 .particle-text {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: rgb(180, 83, 9);
-  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #fffbeb;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px rgba(69, 26, 3, 0.85);
+  text-shadow: 0 2px 4px rgba(69, 26, 3, 0.45);
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .particle-crumb,
