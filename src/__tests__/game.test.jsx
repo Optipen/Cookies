@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, cleanup, waitFor } from "@testing-libra
 import CookieCraze from "../components/CookieCraze.jsx";
 import { SAVE_KEY, createFreshState } from "../utils/state.js";
 import { COMBO } from "../utils/combo.js";
+import { PRESTIGE_MIN_LIFETIME, chipsFor } from "../data/prestige.js";
 
 // Le jeu s'appuie sur des API absentes de jsdom
 beforeEach(() => {
@@ -122,7 +123,7 @@ describe("combo", () => {
   it("rapporte davantage sur une rafale que sur des clics isolés", async () => {
     const setup = (s) => {
       s.items = { oven: 200, bakery: 100, cursor: 60, grandma: 40 };
-      s.lifetime = 5e6;
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
       s.cookies = 0;
     };
     const banque = () => {
@@ -166,8 +167,8 @@ describe("combo", () => {
 describe("navigation", () => {
   it("ouvre chaque onglet sans erreur", async () => {
     await startGame((s) => {
-      s.cookies = 5e6;
-      s.lifetime = 5e6;
+      s.cookies = PRESTIGE_MIN_LIFETIME * 2;
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
       s.prestige = { chips: 12, spent: 0, upgrades: {} };
     });
 
@@ -183,9 +184,13 @@ describe("prestige", () => {
   // Régression: `DEFAULT_STATE` n'était pas importé, le bouton Prestige
   // levait un ReferenceError et ne faisait rien.
   it("réinitialise la partie et crédite les chips", async () => {
+    // Le nombre de chips se LIT dans la formule au lieu d'être recopié: sinon
+    // chaque recalibration du seuil casse un test qui n'a rien à voir.
+    const vie = PRESTIGE_MIN_LIFETIME * 40;
+    const chipsAttendus = chipsFor(vie);
     await startGame((s) => {
-      s.cookies = 5e6;
-      s.lifetime = 8e6; // cbrt(8e6/1e3) = 20 chips
+      s.cookies = vie;
+      s.lifetime = vie;
       s.items = { oven: 20 };
     });
 
@@ -201,12 +206,13 @@ describe("prestige", () => {
     expect(window.confirm).toHaveBeenCalled();
     // La partie repart de zéro et les chips sont crédités
     expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
-    expect(screen.getAllByText("20", { selector: ".text-lg" }).length).toBeGreaterThan(0);
+    expect(chipsAttendus).toBeGreaterThan(0);
+    expect(screen.getAllByText(String(chipsAttendus), { selector: ".text-lg" }).length).toBeGreaterThan(0);
   });
 
   it("achète un nœud de l'arbre céleste", async () => {
     await startGame((s) => {
-      s.lifetime = 5e6;
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
       s.prestige = { chips: 20, spent: 0, upgrades: {} };
     });
     await openTab(/Prestige/i);

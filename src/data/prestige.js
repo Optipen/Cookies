@@ -159,11 +159,17 @@ export const chipsFor = (lifetime, chipMult = 1) => {
 /**
  * Seuil minimal pour que le prestige soit proposé.
  *
- * Calé pour tomber vers une heure de jeu actif: à un million, la première
- * renaissance arrivait au bout d'une demi-heure, avant même que le joueur ait
- * fini de découvrir la boutique.
+ * Mesuré, pas estimé: à cinq millions la première renaissance tombait à 29
+ * minutes, alors que le joueur découvrait encore les Cliqueurs de rang 4. À
+ * 250 millions elle tombe à **79 minutes**, au milieu de la fourchette visée de
+ * 60 à 120 minutes, et le premier vrai palier de bâtiment (19 minutes) a le
+ * temps d'arriver avant.
+ *
+ * Effet de bord voulu: la première renaissance rapporte 63 chips au lieu de 17.
+ * Une première fois qui ne rapporte presque rien n'apprend rien au joueur sur
+ * ce que le prestige va lui donner.
  */
-export const PRESTIGE_MIN_LIFETIME = 5_000_000;
+export const PRESTIGE_MIN_LIFETIME = 250_000_000;
 
 /**
  * CRMB versés à chaque renaissance.
