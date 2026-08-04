@@ -222,43 +222,70 @@ export function bulkCost(item, owned, count) {
   return total;
 }
 
-/** Prix final d'un achat, remises comprises. Entier ≥ 1, sauf gratuité explicite. */
+/**
+ * Produit de toutes les remises applicables à un exemplaire de `item`.
+ * Séparé du calcul du prix pour qu'il n'existe qu'une définition des remises.
+ */
+function remises(state, item, now) {
+  let m = prestigeEffects(state).costMult;
+
+  if (item.mode === "mine" && isEarlyWindow(state, now)) m *= 1 - (earlyCfg().miner_discount || 0);
+
+  const discount = state.flags?.discountAll;
+  if (discount && now < discount.until) m *= 1 - (discount.value || 0);
+
+  const flash = state.flags?.flash;
+  if (flash && flash.itemId === item.id && now < flash.until) m *= 1 - flash.discount;
+
+  return m;
+}
+
+/** Le premier exemplaire du lot est-il offert ? */
+function premierOffert(state, item, now) {
+  // Tout premier Curseur, avant même d'avoir vu l'écran d'accueil.
+  if (!state.ui?.introSeen && item.id === "cursor" && !(state.items?.cursor > 0)) return true;
+
+  if (item.mode !== "mine" || !isEarlyWindow(state, now)) return false;
+  if (!earlyCfg().free_first_miner || !state.ui?.introSeen) return false;
+  if (state.flags?.freeFirstAutoGiven) return false;
+  const candidat = state.flags?.freeFirstAutoItemId || ITEMS.find((x) => x.mode === "mine")?.id;
+  if (item.id !== candidat) return false;
+  const mineursPossedes = ITEMS.filter((x) => x.mode === "mine").reduce((a, x) => a + (state.items?.[x.id] || 0), 0);
+  return mineursPossedes === 0;
+}
+
+/**
+ * Prix final d'un achat, remises comprises. Entier ≥ 1, sauf gratuité explicite.
+ *
+ * Chaque exemplaire est remisé et arrondi SÉPARÉMENT, puis les prix sont
+ * additionnés. Appliquer la remise à la somme puis arrondir une seule fois
+ * rendait le lot moins cher que les achats un par un — mesuré: 99 822 au lieu
+ * de 99 825 sur dix Boulangeries avec deux remises cumulées. Trois cookies,
+ * mais c'est une remise cachée que rien n'annonce, et elle grandit avec le lot.
+ *
+ * Le premier exemplaire offert vaut pour la première unité du lot, quelle que
+ * soit sa taille: sinon « ×10 » sur le Mineur offert le facturait plein tarif.
+ */
 export function costOf(state, itemId, count = 1, now = Date.now()) {
   const item = ITEM_BY_ID[itemId];
   if (!item) return Infinity;
 
+  const n = Math.min(MAX_BULK, Math.max(0, Math.floor(count)));
+  if (n === 0) return 0;
+
   const owned = state.items?.[itemId] || 0;
-  let price = bulkCost(item, owned, count);
-  if (!isFinite(price)) return Infinity;
+  const mult = remises(state, item, now);
+  const offert = premierOffert(state, item, now);
 
-  price *= prestigeEffects(state).costMult;
-
-  const ecfg = earlyCfg();
-  const early = isEarlyWindow(state, now);
-
-  if (early && item.mode === "mine") {
-    const ownedMiners = ITEMS.filter((x) => x.mode === "mine").reduce((a, x) => a + (state.items?.[x.id] || 0), 0);
-    const candidateId = state.flags?.freeFirstAutoItemId || ITEMS.find((x) => x.mode === "mine")?.id;
-    const freeFirst =
-      ecfg.free_first_miner &&
-      ownedMiners === 0 &&
-      state.ui?.introSeen &&
-      !state.flags?.freeFirstAutoGiven &&
-      itemId === candidateId &&
-      count === 1;
-    if (freeFirst) return 0;
-    price *= 1 - (ecfg.miner_discount || 0);
+  let total = 0;
+  for (let k = 0; k < n; k++) {
+    if (k === 0 && offert) continue;
+    const brut = unitPrice(item, owned + k);
+    if (!isFinite(brut)) return Infinity;
+    total += Math.max(1, Math.ceil(brut * mult));
+    if (!isFinite(total)) return Infinity;
   }
-
-  if (!state.ui?.introSeen && itemId === "cursor" && owned === 0 && count === 1) return 0;
-
-  const discount = state.flags?.discountAll;
-  if (discount && now < discount.until) price *= 1 - (discount.value || 0);
-
-  const flash = state.flags?.flash;
-  if (flash && flash.itemId === itemId && now < flash.until) price *= 1 - flash.discount;
-
-  return Math.max(1, Math.ceil(price));
+  return total;
 }
 
 /** Quantité d'achat selon les modificateurs clavier. */

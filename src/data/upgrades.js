@@ -1,4 +1,5 @@
 import { ITEMS, BALANCE } from "./items.js";
+import { fmtExact } from "../utils/format.js";
 
 // === Améliorations ===
 //
@@ -104,7 +105,7 @@ function makeGlobalUpgrade(n) {
     cost: Math.ceil(required * 4),
     unlock: (s) => (s.lifetime || 0) >= required,
     progress: (s) => Math.min(1, (s.lifetime || 0) / required),
-    hint: `${required.toLocaleString("fr-FR")} cookies cuits`,
+    hint: `${fmtExact(required)} cookies cuits`,
   };
 }
 

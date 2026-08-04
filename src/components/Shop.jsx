@@ -1,13 +1,8 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { CLICKERS, MINER_ITEMS, LABELS } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
-import { fmt, fmtDuration, LOCALE } from "../utils/format.js";
+import { fmt, fmtExact, fmtDuration } from "../utils/format.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
-
-// La valeur propre s'écrit en toutes lettres — « +100 000 /s », pas « +100K ».
-// C'est le nombre rond de la fiche: le compacter lui ferait perdre sa raison
-// d'être. Il ne dépasse jamais 100 000, il tient donc toujours sur la ligne.
-const valeurPropre = (n) => n.toLocaleString(LOCALE, { maximumFractionDigits: 2 });
 
 const FlashTimer = memo(function FlashTimer({ until }) {
   const left = useTimeLeft(until, 250);
@@ -132,7 +127,7 @@ const ItemCard = memo(function ItemCard({
             <div className="flex justify-between gap-2">
               <dt className="text-amber-900/60">Valeur de base</dt>
               <dd className="font-semibold text-amber-900">
-                +{valeurPropre(item.value)} {unit}
+                +{fmtExact(item.value)} {unit}
               </dd>
             </div>
             {gainClick > 0 && (

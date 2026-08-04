@@ -134,9 +134,9 @@ le compteur :
 
 ```
    PAR CLIC        CADENCE         CLICS
-     401,7         ≈4,25 /s       1,72K /s
+     401,75        ≈4,25 /s        1 720 /s
    ─────────────────────────────────────────
-     ⛏️ 1,33K/s  +  👆 1,72K/s  =  3,05K/s
+     ⛏️ 1 330/s  +  👆 1 720/s  =  3 050/s
 ```
 
 La **cadence est mesurée**, pas supposée: moyenne glissante sur trois secondes,
@@ -145,6 +145,48 @@ arrondie au quart et préfixée de « ≈ » — c'est une moyenne, la donner au
 millième serait faussement précis. Quand on arrête de cliquer, la colonne du
 milieu s'éteint et le total retombe au minage seul : c'est exactement ce qu'on
 veut montrer.
+
+### Un nombre affiché est le nombre calculé
+
+Tout le formatage passe par [`src/utils/format.js`](src/utils/format.js), et une
+règle prime sur les autres : **le texte à l'écran se relit à l'identique**.
+
+| Ce qui s'écrivait | Ce qui s'écrit | Pourquoi |
+| --- | --- | --- |
+| `401,8` | `401,75` | La valeur vaut 401,75. Une décimale supprimée, et 401,75 et 401,80 devenaient le même texte |
+| `1,3` | `1,25` | Idem sur la grille : `fmt` gardait une seule décimale au-dessus de 1 |
+| `1,72K` | `1 720` | Une abréviation qui fabrique une décimale là où le nombre n'en avait pas |
+| `100,00K` | `99 999` | Le solde s'abrégeait dès le millier |
+| `1 000M` | `1B` | L'arrondi à trois chiffres franchissait le millier sans remonter d'un cran |
+
+On n'abrège qu'à partir de **cent mille** (`COMPACT_FROM`) : en dessous, le
+nombre entier tient à l'écran et se lit d'un coup. Au-dessus, personne ne lit
+les chiffres du milieu et la forme compacte devient la plus honnête des deux —
+trois chiffres significatifs, `1,23M` · `12,3M` · `123M`. Au-delà du dernier
+suffixe, on passe en notation scientifique plutôt que d'inventer un nom d'unité.
+
+Cinq formateurs, chacun pour un usage :
+
+| | Pour quoi | Exemple |
+| --- | --- | --- |
+| `fmt` | tout nombre de gameplay | `401,75` · `1 720` · `1,23M` |
+| `fmtExact` | valeur de fiche, jamais abrégée | `80 000` |
+| `fmtInt` | le solde, en entier | `1 234` · `1,23M` |
+| `fmtMult` | multiplicateur de grille | `×1,50` · `×2` |
+| `fmtApprox` | valeur **mesurée** | `≈4,25` |
+
+Le préfixe `≈` n'est pas décoratif : il distingue une valeur calculée d'une
+valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,25 /s » tout
+court serait faussement précis.
+
+### L'achat groupé paie la somme des achats un par un
+
+`×10` n'est ni une remise cachée ni une pénalité cachée. Chaque exemplaire est
+remisé et arrondi **séparément**, puis les prix sont additionnés. Appliquer la
+remise à la somme puis arrondir une seule fois rendait le lot moins cher :
+mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la réduction du
+prestige (×0,95) et une remise générale (×0,75) se cumulaient. Trois cookies,
+mais c'est un écart que rien n'annonce et qui grandit avec le lot.
 
 ### Le rythme
 
