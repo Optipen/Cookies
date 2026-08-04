@@ -426,6 +426,34 @@ Le premier écran montre, sans défiler : le solde, les cinq statistiques
 dès le premier appui, le prochain objectif, les filtres, le sélecteur de
 quantité et le début de la boutique.
 
+### Sauvegardes : rien ne se perd
+
+Le schéma passe en **version 6** — l'Ascension et le Registre sont deux blocs
+qui n'existaient dans aucune sauvegarde antérieure. La version est écrite dans
+la partie, et `migratedFrom` retient celle d'où l'on vient : sans elle, devant
+une partie cassée, il est impossible de dire quelle transformation l'a produite.
+
+L'ancienne clé de stockage **n'est jamais effacée**. Un joueur qui reviendrait
+sur une version antérieure du jeu doit retrouver sa partie ; écraser sa clé la
+lui prendrait définitivement. Une sauvegarde illisible est **archivée**, pas
+supprimée.
+
+Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
+
+| Cas | Comportement |
+| --- | --- |
+| Combo hérité de l'échelle ×3 | Ramené à ×1,75 — un record inatteignable décrocherait un succès que personne ne peut obtenir |
+| Bâtiments renommés, améliorations supprimées | Identifiants inconnus écartés, bâtiments conservés |
+| Quantité négative | Écartée seule, le reste du parc intact |
+| `NaN` / `Infinity` sur cookies, chips, CRMB, Registre, étoiles | Ramenés à une valeur finie positive |
+| Nombres énormes (1e308) | Restent finis |
+| Types entièrement faux (`null`, `42`, `[]`) | Partie neuve, sans exception levée |
+| Objets manquants | Comblés par les valeurs par défaut |
+| Fermeture brutale, sauvegarde partielle | Chargée, complétée |
+| Horloge reculée / avancée de dix ans | Aucune valeur négative ni infinie |
+| Buff, remise ou notification en cours | Jamais rejoués : le temps a passé |
+| Migration jouée deux fois | **Résultat identique** — sinon chaque ouverture ferait dériver la partie |
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs

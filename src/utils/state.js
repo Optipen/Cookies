@@ -21,7 +21,15 @@ export const FEATURES = {
   ENABLE_FLYING_COOKIE: true,
 };
 
-export const STATE_VERSION = 5;
+/**
+ * Version du schéma de sauvegarde.
+ *
+ * Elle passe à 6 avec l'Ascension et le Registre: deux blocs qui n'existaient
+ * dans aucune sauvegarde précédente. La version est ÉCRITE dans la sauvegarde
+ * et `migratedFrom` garde celle d'où l'on vient — sans quoi il est impossible
+ * de dire, devant une partie cassée, quelle transformation l'a produite.
+ */
+export const STATE_VERSION = 6;
 
 // === État neuf ===
 // Fonction (et non constante) pour que chaque appel produise des objets frais:
@@ -79,6 +87,7 @@ export function createFreshState(now = Date.now()) {
       volume: 0.6,
     },
 
+    migratedFrom: STATE_VERSION,
     notice: null,
     unlocked: {},
     fx: { banner: null, shakeUntil: 0, tag: null },
@@ -102,8 +111,17 @@ export function createFreshState(now = Date.now()) {
 }
 
 // === Clés de stockage ===
-export const SAVE_KEY = "cookieCrazeSaveV5";
-export const LEGACY_KEYS = ["cookieCrazeSaveV4", "cookieCrazeSaveV3", "cookieCrazeSaveV2", "cookieCrazeSaveV1"];
+export const SAVE_KEY = "cookieCrazeSaveV6";
+// Lues dans l'ordre, de la plus récente à la plus ancienne. Elles ne sont
+// jamais effacées: une sauvegarde qu'on a su lire une fois doit rester lisible
+// si le joueur revient sur une version antérieure.
+export const LEGACY_KEYS = [
+  "cookieCrazeSaveV5",
+  "cookieCrazeSaveV4",
+  "cookieCrazeSaveV3",
+  "cookieCrazeSaveV2",
+  "cookieCrazeSaveV1",
+];
 export const PENDING_RESET_KEY = "cookieCrazePendingReset";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -162,6 +180,9 @@ export function migrate(savedState, now = Date.now()) {
     let merged = deepMerge(fresh, savedState);
 
     // --- Champs toujours reconstruits ---
+    // D'où vient cette partie: indispensable pour diagnostiquer une sauvegarde
+    // cassée sans avoir à deviner quelle transformation l'a produite.
+    merged.migratedFrom = Number.isFinite(savedState.version) ? savedState.version : 0;
     merged.version = STATE_VERSION;
     merged.notice = null;
     merged.fx = { banner: null, shakeUntil: 0, tag: null };
