@@ -51,13 +51,16 @@ import { useLatestRef } from "../hooks/useLatestRef.js";
 
 // Six onglets: production et clic partagent la boutique, et le profil regroupe
 // statistiques, succès et apparences. Huit entrées débordaient de la barre.
+// `court` est ce qui s'affiche sous l'icône en barre basse: à six onglets sur
+// 390 px, « Améliorations » collait à ses voisins. `label` reste le nom complet,
+// annoncé aux lecteurs d'écran et affiché sur grand écran.
 const TABS = [
-  { id: "shop", label: "Boutique", icon: "🛍️" },
-  { id: "upgrades", label: "Améliorations", icon: "⬆️" },
-  { id: "quests", label: "Quêtes", icon: "📜" },
-  { id: "crypto", label: "CRMB", icon: "🪙", feature: "ENABLE_CRYPTO" },
-  { id: "prestige", label: "Prestige", icon: "✨", feature: "ENABLE_PRESTIGE" },
-  { id: "profile", label: "Profil", icon: "👤" },
+  { id: "shop", label: "Boutique", court: "Boutique", icon: "🛍️" },
+  { id: "upgrades", label: "Améliorations", court: "Amélior.", icon: "⬆️" },
+  { id: "quests", label: "Quêtes", court: "Quêtes", icon: "📜" },
+  { id: "crypto", label: "CRMB", court: "CRMB", icon: "🪙", feature: "ENABLE_CRYPTO" },
+  { id: "prestige", label: "Prestige", court: "Prestige", icon: "✨", feature: "ENABLE_PRESTIGE" },
+  { id: "profile", label: "Profil", court: "Profil", icon: "👤" },
 ];
 
 // ============================================================================
@@ -1175,7 +1178,7 @@ export default function CookieCraze() {
                   <span className="text-xl leading-none lg:text-sm" aria-hidden="true">
                     {t.icon}
                   </span>
-                  <span className="text-[10px] font-semibold leading-none xl:inline lg:hidden">{t.label}</span>
+                  <span className="text-[9px] font-semibold leading-none xl:inline lg:hidden">{t.court}</span>
                   {tab === t.id && (
                     <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-orange-500 lg:hidden" aria-hidden="true" />
                   )}

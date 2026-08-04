@@ -82,10 +82,16 @@ export const fmtClock = (ms) => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// Montant CRMB — précision fine, la monnaie vaut cher
-export const fmtCrmb = (n, digits = 3) => {
+/**
+ * Montant CRMB. Deux décimales au plus, aucune quand le montant est entier.
+ *
+ * Les trois décimales fixes dataient du faucet, qui versait 0,001 à la fois.
+ * Le CRMB se gagne désormais par unités entières: « 17,000 » se lisait comme
+ * dix-sept mille alors qu'il s'agit de dix-sept pièces.
+ */
+export const fmtCrmb = (n, digits = 2) => {
   if (!isFinite(n)) return "∞";
-  return n.toLocaleString(LOCALE, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return n.toLocaleString(LOCALE, { maximumFractionDigits: digits });
 };
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

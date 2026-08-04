@@ -64,7 +64,8 @@ describe("fmtClock", () => {
 
 describe("fmtCrmb", () => {
   it("garde une précision fixe", () => {
-    expect(fmtCrmb(1)).toBe("1,000");
+    expect(fmtCrmb(1)).toBe("1"); // le CRMB se compte en pièces entières
+    expect(fmtCrmb(2.5)).toBe("2,5");
     expect(fmtCrmb(0.12345, 2)).toBe("0,12");
   });
 });

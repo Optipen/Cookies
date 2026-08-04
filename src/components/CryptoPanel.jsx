@@ -62,7 +62,7 @@ const StakePosition = memo(function StakePosition({ position, onUnstake }) {
       <div className="min-w-0">
         <div className="text-sm font-bold text-cyan-950 tabular-nums">{fmtCrmb(position.amount)} CRMB</div>
         <div className="text-[11px] text-cyan-700">
-          {tier.name} · {fmtPct(tier.apr)} APR
+          {tier.name} · {fmtPct(tier.perDay)} par jour
           {!unlocked && <span className="text-orange-600"> · 🔒 {fmtDuration(remaining)}</span>}
         </div>
       </div>
@@ -84,8 +84,8 @@ const StakePosition = memo(function StakePosition({ position, onUnstake }) {
 
 function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMiner }) {
   const crypto = state.crypto || {};
-  const [tradeAmount, setTradeAmount] = useState(0.1);
-  const [stakeAmount, setStakeAmount] = useState(0.1);
+  const [tradeAmount, setTradeAmount] = useState(1);
+  const [stakeAmount, setStakeAmount] = useState(1);
   const [tierId, setTierId] = useState("flex");
 
   const price = crypto.price || CRMB.basePrice;
@@ -100,7 +100,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
   const canSell = (crypto.balance || 0) >= tradeAmount && tradeAmount > 0;
   const canStake = (crypto.balance || 0) >= stakeAmount && stakeAmount > 0;
 
-  const amounts = [0.01, 0.1, 1, 10];
+  const amounts = [1, 5, 10, 25];
 
   return (
     <div className="space-y-4">
@@ -210,7 +210,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             >
               <div className="text-xs font-bold">{t.name}</div>
               <div className={`text-[10px] ${tierId === t.id ? "text-violet-100" : "text-violet-600"}`}>
-                {fmtPct(t.apr)} APR · boost ×{t.boostMult}
+                {fmtPct(t.perDay)} par jour · poids ×{t.boostMult}
               </div>
             </button>
           ))}
@@ -299,7 +299,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
                     <span className={`text-xs font-bold tabular-nums ${affordable ? "text-slate-700" : "text-stone-400"}`}>
                       {fmt(cost)} 🍪
                     </span>
-                    <span className="text-[11px] text-cyan-700 tabular-nums">+{fmtCrmb(m.rate * 3600, 3)}/h</span>
+                    <span className="text-[11px] text-cyan-700 tabular-nums">+{fmtCrmb(m.perHour, 2)}/h</span>
                   </span>
                 </span>
               </button>
