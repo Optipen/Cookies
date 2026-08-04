@@ -34,8 +34,11 @@ for (const cps of [3, 5, 7, 15]) {
 
 console.log("\n=== rythme des premières minutes (5 clics/s) ===");
 const r = play({ clicksPerSecond: 5, durationMs: 600e3, strategy: "optimiser" });
-console.log("premier achat à", (r.decisions[0] / 1000).toFixed(1), "s");
-console.log("achats en 60 s :", r.decisions.filter((t) => t <= 60e3).length);
+// Les décisions sont des objets {t, prix, marquant}: le premier achat PAYÉ
+// exclut le bâtiment offert au démarrage.
+const premierPaye = r.decisions.find((d) => d.prix > 0);
+console.log("premier achat payé à", premierPaye ? (premierPaye.t / 1000).toFixed(1) : "jamais", "s");
+console.log("achats en 60 s :", r.decisions.filter((d) => d.t <= 60e3).length);
 console.log("écart médian 0–5 min :", ecartMedian(r.decisions, 0, 300e3).toFixed(1), "s");
 console.log("écart médian 5–10 min :", ecartMedian(r.decisions, 300e3, 600e3).toFixed(1), "s");
 
