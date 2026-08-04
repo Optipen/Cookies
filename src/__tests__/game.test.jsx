@@ -135,12 +135,22 @@ describe("combo", () => {
     await act(async () => solo.unmount());
     const gainSolo = banque();
 
-    // Vingt-cinq clics enchaînés: le combo monte jusqu'à ×3
+    // Vingt-cinq clics enchaînés: le combo monte jusqu'à ×3.
+    // L'horloge avance entre chaque clic — un humain met cinq secondes à en
+    // faire vingt-cinq, et le jeu ne crédite qu'un clic toutes les 40 ms pour
+    // écarter les autoclickers.
     const rafale = await startGame(setup);
     const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
+    let horloge = Date.now();
+    const vraiNow = Date.now;
+    vi.spyOn(Date, "now").mockImplementation(() => horloge);
     await act(async () => {
-      for (let i = 0; i < 25; i++) fireEvent.click(cookie);
+      for (let i = 0; i < 25; i++) {
+        fireEvent.click(cookie);
+        horloge += 200; // 5 clics/seconde
+      }
     });
+    Date.now = vraiNow;
     await act(async () => rafale.unmount());
     const gainRafale = banque();
 

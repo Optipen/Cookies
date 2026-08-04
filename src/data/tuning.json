@@ -12,12 +12,12 @@
     },
     "early": {
       "window_s": 300,
-      "miner_discount": 0.35,
+      "miner_discount": 0.5,
       "free_first_miner": true,
       "click_base_mult": 1,
       "flash": {
         "no_purchase_threshold_s": 30,
-        "discount": 0.3
+        "discount": 0.25
       }
     },
     "events": {
@@ -27,23 +27,35 @@
           90
         ],
         "lifespan_s": 10,
-        "dr_factor": 0.8,
         "dr_window_s": 180,
-        "cps_mult_max": 7,
-        "cpc_mult_max": 12,
-        "lucky_bank_min": 0.1,
-        "lucky_cps_mult": 15
-      },
-      "rain": {
-        "cpc_factor": [
-          2,
+        "cps_mults": [
+          5,
+          3,
+          2
+        ],
+        "cpc_mults": [
+          10,
+          5,
           3
         ],
+        "lucky_mults": [
+          1,
+          0.5,
+          0.25,
+          0.1
+        ]
+      },
+      "rain": {
         "duration_s": 8,
         "count": 26,
         "cooldown_s": [
           90,
           160
+        ],
+        "cpc_mults": [
+          2,
+          2.5,
+          3
         ]
       }
     },

@@ -18,6 +18,7 @@
 import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
 import { fmt } from "../utils/format.js";
+import { lisible } from "../utils/grid.js";
 
 const MINE_ITEMS = ITEMS.filter((i) => i.mode === "mine");
 const CLICK_ITEMS = ITEMS.filter((i) => i.mode === "click");
@@ -32,10 +33,12 @@ const byLevel = (ctx, early, mid, late) =>
 // Récompenses calibrées sur la production courante. `seconds` représente la
 // durée de production offerte: il pilote aussi la part de banque, sinon toutes
 // les quêtes finissaient par verser exactement le même montant en fin de partie.
+// Arrondie à deux chiffres significatifs: une récompense de quête s'annonce
+// « +450K », pas « +447 213 ».
 const cookieReward = (ctx, seconds) => {
   const fromProduction = ctx.cps * seconds;
   const fromBank = ctx.bank * Math.min(0.5, seconds / 1200);
-  return Math.max(50, Math.floor(Math.max(fromProduction, fromBank)));
+  return lisible(Math.max(50, Math.floor(Math.max(fromProduction, fromBank))));
 };
 const buff = (kind, value, seconds, label) => ({ kind, value, seconds, label });
 

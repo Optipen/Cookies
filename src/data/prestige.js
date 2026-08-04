@@ -156,3 +156,11 @@ export const chipsFor = (lifetime) => Math.floor(Math.cbrt(Math.max(0, lifetime)
  * fini de découvrir la boutique.
  */
 export const PRESTIGE_MIN_LIFETIME = 5_000_000;
+
+/**
+ * CRMB versés à chaque renaissance.
+ *
+ * Le prestige est l'effort le plus long du jeu, et il figurait dans la liste
+ * annoncée des sources de CRMB — sans qu'aucune ligne de code ne le crédite.
+ */
+export const CRMB_PAR_PRESTIGE = 5;

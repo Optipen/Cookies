@@ -10,7 +10,7 @@ import { miningFrom, clickPowerFrom, computePerItemMult, globalBonus } from "./c
 import { prestigeEffects } from "../data/prestige.js";
 import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
 import { chipTier } from "./calc.js";
-import { multOf } from "./grid.js";
+import { multOf, lisible } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -168,10 +168,16 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
 export const REF_CLICKS_PER_SECOND = BALANCE.reference_clicks_per_second ?? 5;
 export const REF_COMBO = BALANCE.reference_combo ?? 2.2;
 
-/** Revenu par seconde d'un joueur actif, pour comparer au mode passif. */
-export function activeIncome(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now = Date.now()) {
-  const stats = deriveStats(state, now, COMBO.clicksToMax);
-  return stats.mining + stats.perClick * clicksPerSecond;
+/**
+ * Revenu par seconde d'un joueur actif, pour comparer au mode passif.
+ *
+ * Même définition que `activeRatio`: combo MOYEN, pas combo maximum. Les deux
+ * fonctions décrivaient auparavant deux joueurs différents — l'une supposait un
+ * combo plein en permanence, l'autre la moyenne réellement tenue.
+ */
+export function activeIncome(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now = Date.now(), combo = REF_COMBO) {
+  const stats = deriveStats(state, now);
+  return stats.mining + stats.perClickNoCombo * combo * clicksPerSecond;
 }
 
 /**
@@ -189,18 +195,36 @@ export function activeRatio(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now 
 const MAX_BULK = 1000;
 
 /**
- * Prix de `count` exemplaires à partir de `owned` — somme géométrique exacte.
+ * Prix du n-ième exemplaire, arrondi à deux chiffres significatifs.
  *
- * Il n'y a plus de renchérissement par paliers: il compliquait la formule,
+ * `base × 1,22^n` donne 149, 182, 222, 271, 330… Ces nombres sont exacts mais
+ * illisibles; à deux chiffres significatifs ils deviennent 150, 180, 220, 270,
+ * 330 tout en restant strictement croissants — le prix ne doit jamais stagner
+ * d'un exemplaire au suivant, sinon on en achète deux au même tarif.
+ */
+export const unitPrice = (item, index) => lisible(item.base * Math.pow(item.growth, index));
+
+/**
+ * Prix de `count` exemplaires à partir de `owned`.
+ *
+ * La somme est calculée exemplaire par exemplaire, sur les prix ARRONDIS: un
+ * achat groupé coûte donc exactement ce que coûteraient les achats un par un.
+ * La formule fermée d'une suite géométrique ne le garantissait plus une fois
+ * les prix arrondis.
+ *
+ * Il n'y a pas de renchérissement par paliers: il compliquait la formule,
  * créait des murs de progression, et son application au lot entier rendait
  * l'achat groupé 15,8 fois moins cher que les achats unitaires.
  */
 export function bulkCost(item, owned, count) {
   const n = Math.min(MAX_BULK, Math.max(0, Math.floor(count)));
   if (n === 0) return 0;
-  const g = item.growth;
-  const total = item.base * Math.pow(g, owned) * ((Math.pow(g, n) - 1) / (g - 1));
-  return isFinite(total) ? total : Infinity;
+  let total = 0;
+  for (let k = 0; k < n; k++) {
+    total += unitPrice(item, owned + k);
+    if (!isFinite(total)) return Infinity;
+  }
+  return total;
 }
 
 /** Prix final d'un achat, remises comprises. Entier ≥ 1, sauf gratuité explicite. */

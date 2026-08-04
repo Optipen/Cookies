@@ -28,7 +28,7 @@ const LEVELS = {
 export function useNotify(setState) {
   const timerRef = useRef(null);
   const lastRef = useRef(0);
-  const shownRef = useRef(0);
+  const lastPriorityRef = useRef(0);
 
   const emit = useCallback(
     (level, msg, tone = "info", options = {}) => {
@@ -36,20 +36,25 @@ export function useNotify(setState) {
       const now = Date.now();
 
       // Le silence prime, sauf pour ce qui compte vraiment.
+      //
+      // La comparaison porte sur `lastRef` SEUL. La version précédente y
+      // ajoutait « …sauf si rien n'est affiché en ce moment », et comme
+      // l'affichage ne dure que 2,6 à 4,2 s, la fenêtre réelle valait la durée
+      // d'affichage et non les dix secondes annoncées: mesuré à 21 bandeaux par
+      // minute au lieu de 7. Une priorité supérieure garde le droit d'interrompre.
       if (cfg.priority < LEVELS.major.priority && now - lastRef.current < QUIET_MS) {
-        if (cfg.priority <= shownRef.current) return;
+        if (cfg.priority <= lastPriorityRef.current) return;
       }
       lastRef.current = now;
-      shownRef.current = cfg.priority;
+      lastPriorityRef.current = cfg.priority;
 
-      const id = `${now.toString(36)}-${(shownRef.current + msg.length).toString(36)}`;
+      const id = `${now.toString(36)}-${(cfg.priority + msg.length).toString(36)}`;
       const duration = options.ms || cfg.ms;
       setState((s) => ({ ...s, notice: { id, msg, tone, level, at: now } }));
 
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        shownRef.current = 0;
         setState((s) => (s.notice?.id === id ? { ...s, notice: null } : s));
       }, duration);
     },

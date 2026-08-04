@@ -1,5 +1,6 @@
 import { defaultCryptoState, CRMB } from "./crypto.js";
 import { getUpgrade } from "../data/upgrades.js";
+import { ITEM_BY_ID } from "../data/items.js";
 
 // === Feature flags ===
 // Un flag à false doit désactiver la feature *entièrement* — apparition comprise.
@@ -159,7 +160,16 @@ export function migrate(savedState, now = Date.now()) {
     merged.version = STATE_VERSION;
     merged.notice = null;
     merged.fx = { banner: null, shakeUntil: 0, tag: null };
-    merged.items = isObj(savedState.items) ? { ...savedState.items } : {};
+    // Les quantités sont assainies une par une: une sauvegarde bricolée avec
+    // `{ oven: -20 }` donnait un minage de -40 /s, et la part reversée tirait
+    // la puissance de clic en négatif avec elle.
+    merged.items = {};
+    if (isObj(savedState.items)) {
+      for (const id of Object.keys(savedState.items)) {
+        const n = Math.floor(num(savedState.items[id]));
+        if (n > 0 && ITEM_BY_ID[id]) merged.items[id] = n;
+      }
+    }
     // Les améliorations sont générées: on écarte les identifiants qui ne
     // correspondent plus à rien (anciens `cursor_10`, `share:2`, `cpc:1`…),
     // sinon ils gonfleraient les compteurs sans produire d'effet.

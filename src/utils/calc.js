@@ -1,6 +1,6 @@
 import { ITEMS } from "../data/items.js";
 import { getUpgrade } from "../data/upgrades.js";
-import { tierState, stepsReached, multOf } from "./grid.js";
+import { tierState, stepsReached, multOf, snapDown } from "./grid.js";
 
 /**
  * Multiplicateur propre à chaque bâtiment: améliorations de palier (×2).
@@ -30,12 +30,26 @@ export const computePerItemMult = (items = {}, upgrades = {}) => {
  * multipliée par les paliers achetés sur ce bâtiment. Aucune courbe
  * d'amortissement n'intervient ici — l'équilibre passe par les prix.
  */
-const sumFamily = (items, upgrades, mode) => {
+/**
+ * Valeur réelle d'UN exemplaire, paliers et bonus global compris, ramenée sur
+ * la grille.
+ *
+ * La quantification se fait par exemplaire et non sur le total: c'est le gain
+ * unitaire que la boutique annonce, c'est donc lui qui doit être exact. Le
+ * plancher garantit qu'un achat ne rapporte jamais moins que sa valeur de base
+ * — et donc jamais rien de nul.
+ */
+export const unitValue = (item, perItem = 1, global = 1) =>
+  snapDown(item.value * perItem * global, item.value);
+
+const sumFamily = (items, upgrades, mode, global = 1) => {
   const mult = computePerItemMult(items, upgrades);
   let total = 0;
   for (const it of ITEMS) {
     if (it.mode !== mode) continue;
-    total += (items[it.id] || 0) * it.value * (mult[it.id] || 1);
+    const n = items[it.id] || 0;
+    if (n <= 0) continue;
+    total += n * unitValue(it, mult[it.id] || 1, global);
   }
   return total;
 };
@@ -70,13 +84,17 @@ export const globalSteps = (chips = 0, stakeSteps = 0, treeSteps = 0) =>
 export const globalBonus = (chips = 0, stakeSteps = 0, treeSteps = 0) =>
   multOf(globalSteps(chips, stakeSteps, treeSteps));
 
+// Le bonus global entre DANS la valeur unitaire au lieu de multiplier la somme:
+// c'est ce qui permet de la quantifier avant de la multiplier par la quantité,
+// et donc d'annoncer un gain unitaire exact.
+
 /** Cookies produits chaque seconde par les Mineurs. */
 export const miningFrom = (items = {}, upgrades = {}, chips = 0, stakeSteps = 0, treeSteps = 0) =>
-  sumFamily(items, upgrades, "mine") * globalBonus(chips, stakeSteps, treeSteps);
+  sumFamily(items, upgrades, "mine", globalBonus(chips, stakeSteps, treeSteps));
 
 /** Cookies ajoutés à chaque clic par les Cliqueurs. */
 export const clickPowerFrom = (items = {}, upgrades = {}, chips = 0, stakeSteps = 0, treeSteps = 0) =>
-  sumFamily(items, upgrades, "click") * globalBonus(chips, stakeSteps, treeSteps);
+  sumFamily(items, upgrades, "click", globalBonus(chips, stakeSteps, treeSteps));
 
 // Noms historiques, conservés pour les modules qui les importent encore.
 export const cpsFrom = miningFrom;

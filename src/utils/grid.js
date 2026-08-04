@@ -80,5 +80,40 @@ export function tierState(value, first = 0, entier = true) {
  */
 export const snap = (n) => Math.round(n / STEP) * STEP;
 
+/**
+ * Ramène une valeur SUR la grille, par en dessous, sans jamais descendre sous
+ * un plancher.
+ *
+ * C'est ce qui règle le cas du Curseur. Sa valeur de base vaut 0,25, et
+ * 0,25 × (1 + 0,25k) = k/16 ne retombe sur la grille que si le multiplicateur
+ * est entier: 73 % des multiplicateurs donnaient donc +0,3125, +0,5625,
+ * +0,8125… que l'écran arrondissait en « +0,31 », « +0,56 », « +0,81 ».
+ * L'affiché ne correspondait plus au calculé.
+ *
+ * En quantifiant la valeur unitaire, le nombre montré EST le nombre utilisé.
+ * Les quinze autres bâtiments ont une valeur de base entière: entier × (k/4)
+ * tombe toujours sur la grille, la fonction les laisse donc intacts.
+ */
+export const snapDown = (n, plancher = 0) => {
+  if (!isFinite(n)) return plancher;
+  const cran = Math.floor(n / STEP + 1e-9) * STEP;
+  return Math.max(plancher, Number(cran.toFixed(10)));
+};
+
+/**
+ * Nombre « lisible »: deux chiffres significatifs.
+ *
+ * 149 → 150 · 1 816 → 1 800 · 284 704 → 280 000. Les prix suivent une courbe
+ * exponentielle, on ne peut donc pas les poser sur l'échelle 1-2,5-5 sans les
+ * rendre identiques d'un exemplaire à l'autre; deux chiffres significatifs
+ * gardent la croissance stricte tout en donnant des nombres qu'on lit.
+ */
+export function lisible(n) {
+  if (!isFinite(n) || n <= 0) return 0;
+  if (n < 10) return Math.round(n);
+  const ordre = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+  return Math.round(n / ordre) * ordre;
+}
+
 /** Vrai si `n` tombe exactement sur la grille. Utilisé par les tests. */
 export const onGrid = (n) => Math.abs(n - snap(n)) < 1e-9;

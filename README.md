@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (146 tests)                    |
+| `npm test`          | Suite de tests (160 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -57,10 +57,18 @@ Tout vit dans [`src/utils/grid.js`](src/utils/grid.js).
 ```
 crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
 global     = 1 + 0,25 × crans                        ← un multiple de 0,25, toujours
-minage     = Σ(mineurs   × valeur × palier) × global
-puiss. clic= 1 + Σ(cliqueurs × valeur × palier) × global
+valeur(b)  = grille↓(valeur_base(b) × palier(b) × global)   ≥ valeur_base(b)
+minage     = Σ(mineurs   × valeur(b))
+puiss. clic= 1 + Σ(cliqueurs × valeur(b))
 par clic   = (puissance clic + minage × 5 %) × combo
 ```
+
+La **quantification par exemplaire** (`grille↓`) est ce qui garantit que le
+nombre affiché est le nombre calculé. Sans elle, le Curseur — seul bâtiment dont
+la valeur de base n'est pas entière — sortait de la grille pour 73 % des
+multiplicateurs: `0,25 × 2,5 = 0,625`, que l'écran arrondissait en « +0,63 ».
+Les quinze autres ont une valeur entière et ne sont pas concernés, entier × (k/4)
+tombant toujours sur la grille.
 
 Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
 multiplicateurs. C'est le point clé : ×2,25 × ×1,25 vaut ×2,8125, et un Curseur
@@ -117,6 +125,26 @@ Une seule règle, et un seul nombre à retenir :
 Doubler son parc le rend deux fois meilleur. L'échelle précédente (seuils
 10/25/50/100/200/400, multiplicateurs ×2 puis ×3 puis ×5) cumulait **×360** à
 quatre cents exemplaires et faisait s'emballer la partie en quelques minutes.
+
+### Les cinq chiffres
+
+Le jeu n'affichait qu'un seul axe en /s — le minage. Impossible, donc, de
+répondre à la seule question qui compte. Cinq statistiques sont désormais sous
+le compteur :
+
+```
+   PAR CLIC        CADENCE         CLICS
+     401,7         ≈4,25 /s       1,72K /s
+   ─────────────────────────────────────────
+     ⛏️ 1,33K/s  +  👆 1,72K/s  =  3,05K/s
+```
+
+La **cadence est mesurée**, pas supposée: moyenne glissante sur trois secondes,
+publiée à 5 Hz, éteinte après une seconde et demie sans clic. Elle s'affiche
+arrondie au quart et préfixée de « ≈ » — c'est une moyenne, la donner au
+millième serait faussement précis. Quand on arrête de cliquer, la colonne du
+milieu s'éteint et le total retombe au minage seul : c'est exactement ce qu'on
+veut montrer.
 
 ### Le rythme
 
@@ -228,6 +256,7 @@ une monnaie qu'on gagne sans effort ne récompense plus rien.
 | Succès Or | +1 | 15 succès |
 | Succès Platine | +2 | 9 succès |
 | Succès Légendaire | +5 | 4 succès |
+| Prestige | +5 | à chaque renaissance |
 | Matériel de minage | 0,05 à 25 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
 
 Les 53 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
@@ -259,7 +288,18 @@ pleine en permanence — et, sur téléphone, posée pile sur la boutique.
 Un seul emplacement, **en haut** : la boutique et la navigation vivent sous le
 pouce et rien ne les recouvre. Au plus **un bandeau ordinaire toutes les dix
 secondes** ; ce qui arrive trop tôt est écarté, pas mis en file — une file ne
-fait que retarder l'avalanche.
+fait que retarder l'avalanche. Mesuré : 7 bandeaux par minute au maximum.
+
+### Cliquer vite paie, automatiser non
+
+Le rapport actif/passif suit la cadence sans plafond, comme voulu. Mais un
+appui n'est crédité qu'une fois toutes les 40 ms, soit **25 clics/seconde**.
+
+Un joueur rapide tient 12 à 15 clics/s à deux pouces : il ne touche jamais cette
+borne. Un autoclicker à 50 clics/s, lui, obtenait cinq fois plus de cookies en
+cinq minutes qu'un joueur très actif et un rapport de 24× ; il tombe à 12×, et
+son avance sur un an est divisée par trois. Le clic répond quand même
+visuellement au-delà de la borne : on refuse le gain, pas le geste.
 
 ### Pensé pour le pouce
 

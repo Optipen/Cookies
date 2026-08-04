@@ -18,11 +18,11 @@ import Intro from "./Intro.jsx";
 import { ITEMS } from "../data/items.js";
 import { nextMilestone, tierThreshold } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
-import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
+import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
 import { deriveStats, costOf, isEarlyWindow, timeToAfford, maxAffordable, COMBO, comboStep, comboProgress } from "../utils/selectors.js";
-import { STEP } from "../utils/grid.js";
+import { STEP, snap } from "../utils/grid.js";
 import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
@@ -46,6 +46,7 @@ import { useQuests } from "../hooks/useQuests.js";
 import { useEvents } from "../hooks/useEvents.js";
 import { useAchievements } from "../hooks/useAchievements.js";
 import { useCombo } from "../hooks/useCombo.js";
+import { useClickRate } from "../hooks/useClickRate.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 import { useLatestRef } from "../hooks/useLatestRef.js";
 
@@ -107,6 +108,63 @@ const ComboMeter = memo(function ComboMeter({ display }) {
       <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={COMBO.steps} aria-valuenow={cran}>
         Combo, cran {cran} sur {COMBO.steps}
       </span>
+    </div>
+  );
+});
+
+/**
+ * Les cinq chiffres qui décrivent la partie, côte à côte.
+ *
+ * Le jeu n'en affichait qu'un seul en /s — le minage. Impossible, donc, de
+ * répondre à la seule question qui compte: « est-ce que cliquer vaut le coup ? »
+ * Les trois colonnes se lisent comme une phrase:
+ *
+ *      puissance × cadence  =  production des clics
+ *                    + minage
+ *                    ─────────
+ *                    = total
+ *
+ * La cadence est une moyenne glissante, donc préfixée de « ≈ » et arrondie au
+ * quart: prétendre à « 4,3333 clics/s » serait faussement précis. Elle s'éteint
+ * quand on arrête de cliquer, et la colonne du milieu avec elle — c'est
+ * exactement ce qu'on veut montrer: sans les doigts, il ne reste que le minage.
+ */
+const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
+  const actif = cadence > 0;
+  const prodClics = stats.perClickNoCombo * stats.combo * cadence;
+  const total = stats.mining + prodClics;
+
+  return (
+    <div className="mt-2 mx-auto w-full max-w-sm rounded-2xl bg-white/60 border border-amber-200/80 px-2 py-1.5">
+      <div className="grid grid-cols-3 gap-1 text-center">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Par clic</div>
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight">
+            {fmt(stats.perClick)}
+          </div>
+        </div>
+        <div className={actif ? "" : "opacity-40"}>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Cadence</div>
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight">
+            {actif ? `≈${fmtMult(snap(cadence))}` : "—"}
+            <span className="text-[10px] font-semibold opacity-70"> /s</span>
+          </div>
+        </div>
+        <div className={actif ? "" : "opacity-40"}>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
+          <div className="text-sm font-black text-amber-700 tabular-nums leading-tight">
+            {actif ? fmt(prodClics) : "0"}
+            <span className="text-[10px] font-semibold opacity-70"> /s</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-1 pt-1 border-t border-amber-200/70 flex items-baseline justify-center gap-2 text-[11px] tabular-nums">
+        <span className="text-emerald-700 font-semibold">⛏️ {fmt(stats.mining)}/s</span>
+        <span className="text-amber-400" aria-hidden="true">+</span>
+        <span className="text-amber-700 font-semibold">👆 {fmt(prodClics)}/s</span>
+        <span className="text-amber-400" aria-hidden="true">=</span>
+        <span className="font-black text-amber-950">{fmt(total)}/s</span>
+      </div>
     </div>
   );
 });
@@ -319,6 +377,8 @@ export default function CookieCraze() {
 
   const particlesRef = useRef(null);
   const bootedRef = useRef(false);
+  // Dernier clic effectivement crédité: sert de garde-fou anti-automatisation.
+  const lastCreditedClickRef = useRef(0);
   // Les systèmes pilotés par minuterie lisent l'état ici plutôt que par
   // fermeture: ça évite de reconstruire leurs intervalles à chaque rendu.
   const stateRef = useLatestRef(state);
@@ -328,6 +388,7 @@ export default function CookieCraze() {
   const notify = useNotify(setState);
 
   const combo = useCombo();
+  const clickRate = useClickRate();
   // Horloge partagée plutôt qu'un `Date.now()` au rendu: les buffs et la fenêtre
   // de début de partie expirent d'eux-mêmes, à la cadence de la boucle de jeu.
   const now = useClock(500);
@@ -411,9 +472,13 @@ export default function CookieCraze() {
 
     const derived = deriveStats(s, now);
     const cookies = derived.baseCps * capped * ratio * effects.offlineMult;
-    const crmb = derived.miningRate * capped * 0.5;
+    // `crmbRate`, pas `miningRate`: la faute rendait ce produit NaN, et comme
+    // `NaN <= 0` est faux, la garde ci-dessous ne protégeait pas — le solde CRMB
+    // devenait NaN à chaque retour, s'affichait « ∞ », puis retombait à zéro au
+    // rechargement suivant. Perte silencieuse de toute la monnaie.
+    const crmb = (derived.crmbRate || 0) * capped * 0.5;
 
-    if (cookies < 1 && crmb <= 0) return;
+    if (!(cookies >= 1) && !(crmb > 0)) return;
 
     setState((prev) => ({
       ...prev,
@@ -493,13 +558,31 @@ export default function CookieCraze() {
   // ==========================================================================
 
   const onCookieClick = useCallback(() => {
+    const maintenant = Date.now();
+    // Un clic crédité au plus toutes les 40 ms, soit 25 par seconde.
+    //
+    // Ce n'est pas un plafond de progression: un joueur rapide monte à 12 ou
+    // 15 clics/s à deux pouces et n'atteindra jamais ce seuil. C'est une borne
+    // contre l'automatisation — mesuré, un autoclicker à 50 clics/s obtenait un
+    // rapport actif/passif de 23× là où un joueur très actif plafonne à 3,5×,
+    // et 200 fois plus de cookies en cinq minutes. Le clic répond quand même
+    // visuellement: on refuse le gain, pas le geste.
+    const credite = maintenant - lastCreditedClickRef.current >= 40;
+    if (credite) lastCreditedClickRef.current = maintenant;
+
     audio.play("crunch", 0.3);
+    clickRate.register(maintenant);
     // Le combo est enregistré d'abord: le clic courant profite déjà du palier
     // qu'il vient d'atteindre.
     combo.register();
     const streak = combo.streakRef.current;
-    const derived = deriveStats(stateRef.current, Date.now(), streak);
-    const gain = derived.cpc;
+    const derived = deriveStats(stateRef.current, maintenant, streak);
+    const gain = credite ? derived.cpc : 0;
+
+    if (!credite) {
+      if (isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstCrumbs(2);
+      return;
+    }
 
     setState((s) => ({
       ...s,
@@ -519,7 +602,7 @@ export default function CookieCraze() {
       // Gerbe dorée aux paliers de combo, pour rendre la montée lisible
       if (streak > 0 && streak % 10 === 0) particlesRef.current?.burstGold(10);
     }
-  }, [audio, combo, stateRef]);
+  }, [audio, combo, clickRate, stateRef]);
 
   const buy = useCallback(
     (itemId, quantite = 1) => {
@@ -773,7 +856,7 @@ export default function CookieCraze() {
     const potential = chipsFor(s.lifetime);
     const gain = potential - (s.prestige?.chips || 0);
     if (gain <= 0 || s.lifetime < PRESTIGE_MIN_LIFETIME) return;
-    if (!window.confirm(`Renaître et gagner ${gain} chips célestes ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`)) {
+    if (!window.confirm(`Renaître et gagner ${gain} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`)) {
       return;
     }
 
@@ -795,12 +878,20 @@ export default function CookieCraze() {
         lifetime: head,
         ui: { ...prev.ui, introSeen: true },
         stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
-        // Le portefeuille CRMB et le matériel survivent au prestige
-        crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
+        // Le portefeuille CRMB et le matériel survivent au prestige, et la
+        // renaissance elle-même en rapporte: c'était annoncé dans le README
+        // mais aucune ligne de code ne le faisait.
+        crypto: {
+          ...prev.crypto,
+          balance: roundCrmb((prev.crypto?.balance || 0) + CRMB_PAR_PRESTIGE),
+          totalEarned: roundCrmb((prev.crypto?.totalEarned || 0) + CRMB_PAR_PRESTIGE),
+          lastMarketTs: Date.now(),
+          lastYieldTs: Date.now(),
+        },
         unlocked: prev.unlocked,
       };
     });
-    notify.major(`Renaissance céleste — +${gain} chips`, "gold");
+    notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
   }, [audio, notify, stateRef]);
 
   const buyPrestigeNode = useCallback(
@@ -918,13 +1009,14 @@ export default function CookieCraze() {
 
       particlesRef.current?.clear();
       combo.reset();
+      clickRate.reset();
       setMenuOpen(false);
       setOfflineReport(null);
       setTab("shop");
       setState(createResetState(payload));
       notify.banner(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
     },
-    [notify, stateRef, combo]
+    [notify, stateRef, combo, clickRate]
   );
 
   // ==========================================================================
@@ -975,8 +1067,8 @@ export default function CookieCraze() {
           <div className="flex items-center gap-1.5 flex-wrap" data-menu-root>
             <HeaderStat
               label="Par clic"
-              value={fmt(stats.perClickNoCombo)}
-              title="Puissance de clic, combo non compris"
+              value={fmt(stats.perClick)}
+              title={`Gain réel d'un appui, combo ×${fmtMult(stats.combo)} compris`}
             />
             <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
@@ -998,7 +1090,7 @@ export default function CookieCraze() {
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 aria-label="Réglages"
-                className="rounded-xl px-3 py-1.5 bg-white/85 border border-amber-200 shadow-sm hover:bg-white hover:shadow transition-all"
+                className="rounded-xl min-h-11 min-w-11 px-3 bg-white/85 border border-amber-200 shadow-sm hover:bg-white hover:shadow transition-all"
               >
                 ⚙️
               </button>
@@ -1083,10 +1175,8 @@ export default function CookieCraze() {
               >
                 {fmtInt(state.cookies)}
               </div>
-              <div className="text-xs md:text-sm text-amber-800/80">
-                {fmtInt(state.lifetime)} cuits au total
-                {stats.mining > 0 && <span className="text-emerald-700 font-semibold"> · {fmt(stats.mining)} / s minés</span>}
-              </div>
+              <div className="text-xs md:text-sm text-amber-800/80">{fmtInt(state.lifetime)} cuits au total</div>
+              <ProductionBar stats={stats} cadence={clickRate.rate} />
               <ComboMeter display={combo.display} />
               <BuffBadge buffs={state.buffs} />
               {state.flags?.discountAll && <DiscountBadge discount={state.flags.discountAll} />}
@@ -1168,7 +1258,7 @@ export default function CookieCraze() {
                   aria-selected={tab === t.id}
                   aria-label={t.label}
                   onClick={() => setTab(t.id)}
-                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[3rem] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
                     lg:flex-none lg:flex-row lg:gap-1 lg:px-2.5 lg:py-1.5 lg:rounded-xl lg:text-xs lg:font-semibold ${
                       tab === t.id
                         ? "text-orange-600 lg:text-white lg:bg-gradient-to-r lg:from-amber-500 lg:to-orange-500 lg:shadow-md"
@@ -1178,7 +1268,7 @@ export default function CookieCraze() {
                   <span className="text-xl leading-none lg:text-sm" aria-hidden="true">
                     {t.icon}
                   </span>
-                  <span className="text-[9px] font-semibold leading-none xl:inline lg:hidden">{t.court}</span>
+                  <span className="text-[11px] font-semibold leading-none xl:inline lg:hidden">{t.court}</span>
                   {tab === t.id && (
                     <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-orange-500 lg:hidden" aria-hidden="true" />
                   )}
@@ -1208,7 +1298,7 @@ export default function CookieCraze() {
                           type="button"
                           onClick={() => setShopFilter(id)}
                           aria-pressed={shopFilter === id}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                          className={`px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
                             shopFilter === id
                               ? "bg-amber-500 text-white shadow"
                               : "bg-white/80 text-amber-800 border border-amber-200"
@@ -1225,7 +1315,7 @@ export default function CookieCraze() {
                           type="button"
                           onClick={() => setBuyQty(q)}
                           aria-pressed={buyQty === q}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                          className={`px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
                             buyQty === q
                               ? "bg-orange-500 text-white shadow"
                               : "bg-white/80 text-amber-800 border border-amber-200"

@@ -42,7 +42,10 @@ export function useGameLoop(state, setState, options = {}) {
       const stats = deriveStats(s, now);
       const acc = accRef.current;
       acc.cookies += stats.cps * dt;
-      acc.crmb += (stats.miningRate + stats.stakingYield) * dt;
+      // `crmbRate`, pas `miningRate`: ce dernier n'existe pas dans deriveStats.
+      // La faute rendait la somme NaN, `mined > 0` faux, et le matériel de
+      // minage comme le staking ne créditaient donc JAMAIS le moindre CRMB.
+      acc.crmb += (stats.crmbRate + stats.stakingYield) * dt;
       acc.elapsed += dt * 1000;
 
       const buffJustExpired = (s.buffs?.until || 0) > 0 && now >= s.buffs.until;

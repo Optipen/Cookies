@@ -100,7 +100,7 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
       const recent = now - (prev.flags?.goldenLastTs || 0) < window_;
       const stacks = recent ? (prev.flags?.goldenStacks || 0) + 1 : 0;
       const pick = (echelle) => echelle[Math.min(echelle.length - 1, stacks)];
-      const dr = pick([1, 0.5, 0.25, 0.1]);
+      const dr = pick(gcfg.lucky_mults || [1, 0.5, 0.25, 0.1]);
 
       const next = {
         ...prev,
@@ -173,8 +173,10 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
       setRain((list) => list.filter((c) => c.id !== id));
       setState((prev) => {
         const stats = deriveStats(prev);
-        const factor = cfgFor(["events", "rain", "cpc_factor"], [2, 3]);
-        const mult = Array.isArray(factor) ? rand(factor[0], factor[1]) : factor;
+        // Un cran net tiré au sort plutôt qu'un réel continu: une miette
+        // rapportait « ×2,4713 fois le clic », un nombre que personne ne peut lire.
+        const echelle = cfgFor(["events", "rain", "cpc_mults"], [2, 2.5, 3]);
+        const mult = echelle[Math.floor(Math.random() * echelle.length)];
         const gain = Math.max(stats.cpc * mult, stats.cps * 2);
         return { ...prev, cookies: prev.cookies + gain, lifetime: prev.lifetime + gain };
       });

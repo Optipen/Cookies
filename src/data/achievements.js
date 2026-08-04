@@ -1,5 +1,6 @@
 import { ITEMS } from "./items.js";
 import { MINERS } from "../utils/crypto.js";
+import { lisible } from "../utils/grid.js";
 
 const totalBuildings = (s) => ITEMS.reduce((sum, it) => sum + (s.items?.[it.id] || 0), 0);
 const totalMiners = (s) => MINERS.reduce((sum, m) => sum + (s.crypto?.miners?.[m.id] || 0), 0);
@@ -93,8 +94,13 @@ export const TIER_STYLE = {
   5: { label: "Légendaire", ring: "ring-fuchsia-400/60", bg: "from-fuchsia-100 to-violet-50", text: "text-fuchsia-900" },
 };
 
-/** Récompense en cookies d'un succès, proportionnelle à son palier. */
-export const achievementReward = (tier, cps) => Math.max(100 * tier, Math.floor(cps * 30 * tier));
+/**
+ * Récompense en cookies d'un succès, proportionnelle à son palier.
+ *
+ * Arrondie à deux chiffres significatifs: « +30 000 000 » se lit, pas
+ * « +29 847 213 ».
+ */
+export const achievementReward = (tier, cps) => lisible(Math.max(100 * tier, Math.floor(cps * 30 * tier)));
 
 /**
  * Récompense en CRMB d'un succès. Seuls les paliers qui comptent en donnent,

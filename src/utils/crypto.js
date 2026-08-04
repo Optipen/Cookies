@@ -173,5 +173,7 @@ export function stakingYieldPerSecond(positions = []) {
 
 export const isUnlocked = (position, now = Date.now()) => now >= (position.unlockAt || 0);
 
-// Arrondi monétaire — évite les dérives flottantes cumulées
-export const roundCrmb = (n) => Math.round((n + Number.EPSILON) * 1e6) / 1e6;
+// Arrondi monétaire — évite les dérives flottantes cumulées.
+// Un montant non fini est ramené à 0 plutôt que propagé: un seul NaN dans une
+// balance la contamine définitivement, et le joueur perd tout sans rien voir.
+export const roundCrmb = (n) => (isFinite(n) ? Math.round((n + Number.EPSILON) * 1e6) / 1e6 : 0);
