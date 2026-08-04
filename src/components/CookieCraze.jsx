@@ -28,7 +28,6 @@ import {
   trackLevel,
   TRACK_BY_ID,
 } from "../data/ascension.js";
-import tuning from "../data/tuning.json";
 
 import {
   deriveStats,
@@ -43,6 +42,7 @@ import {
 } from "../utils/selectors.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
+import { offlineGains } from "../utils/offline.js";
 import { STEP, snap } from "../utils/grid.js";
 import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
@@ -569,35 +569,23 @@ export default function CookieCraze() {
 
     const s = stateRef.current;
     const now = Date.now();
-    const away = Math.max(0, now - (s.lastTs || now));
-    if (away < 60_000 || s.flags?.offlineCollected) return;
+    // Le calcul vit dans `utils/offline.js`, en fonction pure: c'est ce qui
+    // permet de le tester avec une horloge fixée, y compris quand elle a
+    // reculé ou sauté de dix ans.
+    const away = now - (s.lastTs || now);
+    if (s.flags?.offlineCollected) return;
 
-    const cfg = tuning?.[tuning?.mode || "standard"]?.offline || {};
-    const maxSeconds = cfg.max_seconds ?? 7200;
-    const capped = Math.min(away / 1000, maxSeconds);
-    // Rendement dégressif: généreux la première dizaine de minutes, faible ensuite
-    const r0 = cfg.ratio_0_10min ?? 0.08;
-    const r1 = cfg.ratio_2h ?? 0.02;
-    const ratio = capped <= 600 ? r0 : r0 - (r0 - r1) * ((capped - 600) / Math.max(1, maxSeconds - 600));
-
-    const derived = deriveStats(s, now);
-    const cookies = derived.baseCps * capped * ratio * effects.offlineMult;
-    // `crmbRate`, pas `miningRate`: la faute rendait ce produit NaN, et comme
-    // `NaN <= 0` est faux, la garde ci-dessous ne protégeait pas — le solde CRMB
-    // devenait NaN à chaque retour, s'affichait « ∞ », puis retombait à zéro au
-    // rechargement suivant. Perte silencieuse de toute la monnaie.
-    const crmb = (derived.crmbRate || 0) * capped * 0.5;
-
-    if (!(cookies >= 1) && !(crmb > 0)) return;
+    const gains = offlineGains(s, away, now);
+    if (!gains.vaut) return;
 
     setState((prev) => ({
       ...prev,
-      cookies: prev.cookies + cookies,
-      lifetime: prev.lifetime + cookies,
-      crypto: { ...prev.crypto, balance: addCrmb(prev.crypto.balance, crmb) },
+      cookies: prev.cookies + gains.cookies,
+      lifetime: prev.lifetime + gains.cookies,
+      crypto: { ...prev.crypto, balance: addCrmb(prev.crypto.balance, gains.crmb) },
       flags: { ...prev.flags, offlineCollected: true },
     }));
-    setOfflineReport({ durationMs: away, cookies, crmb });
+    setOfflineReport(gains);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
