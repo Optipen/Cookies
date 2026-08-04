@@ -651,6 +651,37 @@ npx vite-node scripts/console.mjs   # erreurs console et mémoire
 `CHROMIUM_PATH` force un navigateur précis quand l'environnement en fournit un
 (image CI, conteneur) ; sinon Playwright utilise le sien.
 
+### Les simulations
+
+Le rapport complet — **dix-sept profils × onze horizons × dix-sept métriques** —
+est dans [`docs/simulations.txt`](docs/simulations.txt), reproductible par
+`npm run simulations`.
+
+Deux familles, qui ne mesurent pas la même chose :
+
+- **Mécanique continue** : une cadence tenue en permanence. Sert à isoler
+  l'effet d'un paramètre. Le rapport actif/passif y est directement comparable
+  aux cibles (2,5–2,8× à cinq clics/s).
+- **Vraies sessions** : `activeFraction` est la part du temps réellement passée
+  à cliquer. Un joueur qui joue trente minutes par jour a une cadence **moyennée
+  sur vingt-quatre heures** de 0,10 clic/s : son rapport affiché tourne autour
+  de 1,03×, et c'est normal — il mesure la journée entière, pas la session.
+
+Deux artefacts à connaître avant de lire les tableaux :
+
+1. **Un relevé instantané peut tomber juste après une renaissance**, et décrire
+   un parc vide. C'est le cas de plusieurs cases (« surtout inactif » à 1 j,
+   « occasionnel » à 365 j). Les colonnes *ratio*, *bâtiments*, *prestiges*,
+   *ascensions*, *étoiles* et *décision* n'en souffrent pas.
+2. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
+   dorés, ni les gains hors-ligne.** La colonne CRMB ne compte donc que le
+   prestige : la vraie économie CRMB est plus généreuse que ce que le tableau
+   montre.
+
+Résultat le plus net : les profils **« autoclicker 50/s » et « 15 clics/s »
+produisent des tableaux rigoureusement identiques**, chiffre pour chiffre, sur
+les onze horizons.
+
 ## Ce qui reste imparfait
 
 Écrit ici plutôt que dans un coin, parce qu'un projet qui prétend n'avoir aucun
