@@ -1,5 +1,6 @@
 import { ITEMS } from "./items.js";
 import { MINERS } from "../utils/crypto.js";
+import { COMBO } from "../utils/combo.js";
 import { lisible } from "../utils/grid.js";
 
 const totalBuildings = (s) => ITEMS.reduce((sum, it) => sum + (s.items?.[it.id] || 0), 0);
@@ -16,7 +17,7 @@ export const ACHIEVEMENTS = [
   { id: "click_10k", tier: 3, cat: "clic", name: "Tendinite", desc: "10 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 10_000 },
   { id: "click_100k", tier: 4, cat: "clic", name: "Main bionique", desc: "100 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 100_000 },
 
-  { id: "combo_max", tier: 2, cat: "clic", name: "Enchaînement", desc: "Atteindre un combo ×3.", cond: (s) => (s.stats?.bestCombo || 0) >= 2.99 },
+  { id: "combo_max", tier: 2, cat: "clic", name: "Enchaînement", desc: `Atteindre un combo ×${COMBO.max.toLocaleString("fr-FR")}.`, cond: (s) => (s.stats?.bestCombo || 0) >= COMBO.max - 1e-9 },
   { id: "power_1k", tier: 3, cat: "clic", name: "Doigts de fée", desc: "Atteindre 1 000 de puissance de clic.", cond: (s, ctx) => (ctx?.perClickNoCombo || 0) >= 1_000 },
   { id: "power_1m", tier: 5, cat: "clic", name: "Toucher divin", desc: "Atteindre 1 million de puissance de clic.", cond: (s, ctx) => (ctx?.perClickNoCombo || 0) >= 1e6 },
 

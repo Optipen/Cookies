@@ -1,4 +1,5 @@
 import { defaultCryptoState, CRMB } from "./crypto.js";
+import { clampBestCombo } from "./combo.js";
 import { getUpgrade } from "../data/upgrades.js";
 import { ITEM_BY_ID } from "../data/items.js";
 
@@ -189,6 +190,10 @@ export function migrate(savedState, now = Date.now()) {
     merged.cookieEatenCount = Math.max(0, num(merged.cookieEatenCount));
     merged.lastTs = num(merged.lastTs, now);
     merged.createdAt = num(merged.createdAt, now);
+
+    // Le combo allait jusqu'à ×3; il s'arrête à ×1,75. Un record hérité de
+    // l'ancienne échelle afficherait une valeur devenue inatteignable.
+    merged.stats.bestCombo = clampBestCombo(savedState.stats?.bestCombo);
 
     // --- Prestige: l'arbre céleste arrive en v5 ---
     merged.prestige = {

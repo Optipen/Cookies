@@ -19,10 +19,15 @@ export const BALANCE = tuning?.[tuning?.mode || "standard"]?.balance || {};
 /**
  * Écart de prix entre un Cliqueur et le Mineur de même rang.
  *
- * Il sert à égaliser l'attractivité des deux familles, pas à régler le rapport
- * actif/passif: avec des prix exponentiels, un facteur constant ne décale les
- * quantités achetées que d'une poignée d'exemplaires. Le rapport se règle par
- * l'échelle des VALEURS (un Mineur vaut dix fois son Cliqueur de même rang).
+ * Il ne règle PAS le rapport actif/passif de fin de partie: avec des prix
+ * géométriques, un facteur constant ne décale les quantités achetées que d'un
+ * nombre fixe d'exemplaires, et ce décalage devient négligeable quand le parc
+ * grandit. Le rapport de fin de partie se règle par l'échelle des VALEURS.
+ *
+ * Ce qu'il règle vraiment, c'est le DÉBUT: à parc égal de quelques dizaines
+ * d'exemplaires, un décalage de deux ou trois achats change tout. À 0,7, les
+ * deux familles s'achètent au même rythme dès le premier quart d'heure au lieu
+ * que les Cliqueurs accusent deux exemplaires de retard par rang.
  *
  * Réglé dans `tuning.json` pour que la calibration se fasse sans toucher au code.
  */
@@ -87,15 +92,25 @@ export const CLICKERS = [
 ];
 
 // --- Mineurs: production automatique ---------------------------------------
+//
+// Un Mineur vaut exactement HUIT fois le Cliqueur de son rang. Une seule phrase
+// décrit tout le rapport entre les deux familles, et c'est elle qui fixe le
+// rapport entre jeu actif et jeu passif — pas les prix, qui ne décalent que les
+// premières heures.
+//
+// Le facteur valait dix, sauf au rang 0 où il valait déjà huit. Cette exception
+// suffisait à fausser le tout début de partie, et un facteur dix plaçait le
+// joueur actif à 2,1× le joueur inactif au lieu des 2,5 à 2,8 visés.
+export const MINE_PER_CLICK_VALUE = 8;
 export const MINER_ITEMS = [
   mineItem(0, "oven", "Four", "🔥", 2, "Cuit des cookies en continu."),
-  mineItem(1, "bakery", "Boulangerie", "🥖", 10, "Une équipe qui ne dort jamais."),
-  mineItem(2, "farm_cps", "Ferme", "🌾", 50, "Champs de blé sucré à perte de vue."),
-  mineItem(3, "factory_cps", "Usine", "🏭", 250, "Ligne de production industrielle."),
-  mineItem(4, "bank_cps", "Banque", "🏦", 1_000, "Des intérêts en cookies composés."),
-  mineItem(5, "temple", "Temple", "⛩️", 5_000, "Rituels d'efficacité sacrée."),
-  mineItem(6, "lab", "Laboratoire", "🧪", 25_000, "La science du cookie appliquée."),
-  mineItem(7, "portal", "Portail", "🌀", 100_000, "Importe des cookies d'une autre réalité."),
+  mineItem(1, "bakery", "Boulangerie", "🥖", 8, "Une équipe qui ne dort jamais."),
+  mineItem(2, "farm_cps", "Ferme", "🌾", 40, "Champs de blé sucré à perte de vue."),
+  mineItem(3, "factory_cps", "Usine", "🏭", 200, "Ligne de production industrielle."),
+  mineItem(4, "bank_cps", "Banque", "🏦", 800, "Des intérêts en cookies composés."),
+  mineItem(5, "temple", "Temple", "⛩️", 4_000, "Rituels d'efficacité sacrée."),
+  mineItem(6, "lab", "Laboratoire", "🧪", 20_000, "La science du cookie appliquée."),
+  mineItem(7, "portal", "Portail", "🌀", 80_000, "Importe des cookies d'une autre réalité."),
 ];
 
 export const ITEMS = [...CLICKERS, ...MINER_ITEMS];

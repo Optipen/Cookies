@@ -10,7 +10,8 @@ import { miningFrom, clickPowerFrom, computePerItemMult, globalBonus } from "./c
 import { prestigeEffects } from "../data/prestige.js";
 import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
 import { chipTier } from "./calc.js";
-import { multOf, lisible } from "./grid.js";
+import { comboMultiplier } from "./combo.js";
+import { lisible } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -20,9 +21,19 @@ export const modeCfg = () => {
 
 const earlyCfg = () => modeCfg().early || {};
 
+/**
+ * Fenêtre de début de partie: premier Mineur offert, Mineurs à prix réduit.
+ *
+ * Le test portait sur `!!state.createdAt`, donc une partie créée à l'instant 0
+ * — le cas de toute simulation, et de toute sauvegarde dont l'horodatage a été
+ * remis à zéro — n'entrait JAMAIS dans la fenêtre. Ce qu'il faut vérifier,
+ * c'est que la date existe et qu'elle est finie, pas qu'elle est non nulle.
+ */
 export const isEarlyWindow = (state, now = Date.now()) => {
   const windowS = earlyCfg().window_s || 0;
-  return !!state.createdAt && (now - state.createdAt) / 1000 < windowS;
+  const debut = state?.createdAt;
+  if (windowS <= 0 || !Number.isFinite(debut)) return false;
+  return now - debut < windowS * 1000;
 };
 
 /** Multiplicateurs propres ciblant explicitement la puissance de clic. */
@@ -37,32 +48,9 @@ export function clickUpgradeMult(upgrades = {}) {
 }
 
 // === Combo ===
-// Cliquer sans interruption fait monter un multiplicateur qui retombe vite.
-// C'est ce qui récompense la présence du joueur.
-
-// Le combo monte par crans de +0,25, pas en glissant. Un multiplicateur qui
-// affichait ×2,07 puis ×2,13 ne se lisait pas; huit crans nets se lisent d'un
-// coup d'œil et se ressentent — chaque palier est un petit événement.
-export const COMBO = {
-  max: 3,
-  steps: 8, // ×1 → ×3 par pas de 0,25
-  clicksPerStep: 4,
-  clicksToMax: 32,
-  windowMs: 1400,
-  decayPerSecond: 12,
-};
-
-export const comboStep = (streak = 0) =>
-  Math.min(COMBO.steps, Math.floor(Math.max(0, streak) / COMBO.clicksPerStep));
-
-export const comboMultiplier = (streak = 0) => multOf(comboStep(streak));
-
-/** Avancement vers le cran suivant, pour la jauge. */
-export const comboProgress = (streak = 0) => {
-  const s = comboStep(streak);
-  if (s >= COMBO.steps) return 1;
-  return (Math.max(0, streak) - s * COMBO.clicksPerStep) / COMBO.clicksPerStep;
-};
+// La formule vit dans `utils/combo.js`, seule source. Ré-exportée ici parce
+// que l'interface et les tests la lisaient déjà à cette adresse.
+export { COMBO, comboStep, comboMultiplier, comboProgress } from "./combo.js";
 
 // === Reversement du minage vers le clic ===
 //
@@ -111,10 +99,9 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, prestige.mineSteps);
   const mining = baseMining * buffMine;
 
-  const earlyMult = isEarlyWindow(state, now) ? earlyCfg().click_base_mult || 1 : 1;
   const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, prestige.clickSteps);
   const ownPower = (state.cpcBase || 1) + buildingsPower;
-  const flatClick = ownPower * earlyMult * clickUpgradeMult(upgrades);
+  const flatClick = ownPower * clickUpgradeMult(upgrades);
 
   const share = shareOf();
   const sharedClick = baseMining * share;
@@ -163,10 +150,15 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
 
 // Référence de calibration: le joueur actif « normal ». Cinq clics par seconde
 // est ce qu'on tient réellement au pouce sur mobile — sept était une cadence de
-// souris soutenue, irréaliste comme moyenne. Le combo de référence est celui
-// qu'on tient en moyenne, pas son maximum.
+// souris soutenue, irréaliste comme moyenne.
+//
+// Le combo de référence est celui qu'on tient EN MOYENNE, pas son maximum. Une
+// rafale d'une minute passe 2,4 s à ×1, 2,4 s à ×1,25, 2,4 s à ×1,50 puis le
+// reste à ×1,75, soit une moyenne de ×1,69; une session hachée de rafales de
+// vingt secondes tombe à ×1,57. ×1,50 est la valeur de la grille qui décrit
+// honnêtement ce mélange, sans flatter le joueur actif.
 export const REF_CLICKS_PER_SECOND = BALANCE.reference_clicks_per_second ?? 5;
-export const REF_COMBO = BALANCE.reference_combo ?? 2.2;
+export const REF_COMBO = BALANCE.reference_combo ?? 1.5;
 
 /**
  * Revenu par seconde d'un joueur actif, pour comparer au mode passif.
@@ -182,12 +174,15 @@ export function activeIncome(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now
 
 /**
  * Rapport entre jeu actif et jeu passif. Sert au diagnostic d'équilibrage.
- * `combo` par défaut: le combo moyen réellement tenu, pas son maximum.
+ *
+ * Dérivé de `activeIncome`, jamais recalculé: les deux fonctions décrivaient
+ * autrefois deux joueurs différents — l'une supposait un combo plein en
+ * permanence, l'autre la moyenne réellement tenue.
  */
 export function activeRatio(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now = Date.now(), combo = REF_COMBO) {
-  const stats = deriveStats(state, now);
-  if (stats.mining <= 0) return Infinity;
-  return (stats.mining + stats.perClickNoCombo * combo * clicksPerSecond) / stats.mining;
+  const mining = deriveStats(state, now).mining;
+  if (mining <= 0) return Infinity;
+  return activeIncome(state, clicksPerSecond, now, combo) / mining;
 }
 
 // === Prix ===

@@ -60,7 +60,7 @@ global     = 1 + 0,25 × crans                        ← un multiple de 0,25, t
 valeur(b)  = grille↓(valeur_base(b) × palier(b) × global)   ≥ valeur_base(b)
 minage     = Σ(mineurs   × valeur(b))
 puiss. clic= 1 + Σ(cliqueurs × valeur(b))
-par clic   = (puissance clic + minage × 5 %) × combo
+par clic   = (puissance clic + minage × 6 %) × combo
 ```
 
 La **quantification par exemplaire** (`grille↓`) est ce qui garantit que le
@@ -165,35 +165,55 @@ Cinq minutes de jeu donnent **24 000 cookies cuits** pour un joueur normal, là
 où la version précédente en donnait 100 000 — et le premier prestige demandait
 une demi-heure au lieu d'une heure et demie.
 
-### Calibration : 5 clics/seconde, combo moyen ×2,25
+### Calibration : 5 clics/seconde, combo moyen ×1,50
 
 La référence d'un joueur « normalement actif » est **5 clics/seconde**, pas 7 :
 sept est une cadence de souris soutenue, intenable au pouce sur mobile. Le combo
-de référence est ×2,25 — celui qu'on tient en moyenne, pas son maximum de ×3.
+de référence est **×1,50** — celui qu'on tient en moyenne sur une session hachée,
+pas son maximum de ×1,75.
 
 ```
 rapport actif / passif = (minage + par clic hors combo × combo × clics/s) / minage
 ```
 
-Mesuré sur **90 jours**, pour les six profils :
+Le rapport n'est pas mesuré sur un parc de bâtiments écrit à la main : une telle
+main décrit un joueur qui n'existe pas. Il est mesuré en **faisant jouer une
+partie** avec les vraies formules du jeu ([`src/sim/engine.js`](src/sim/engine.js)),
+puis en relevant la **médiane** du rapport sur chaque période — un relevé unique
+tombe au hasard juste après l'achat d'un Portail et saute de 3,2 à 4,6 sans que
+l'équilibre ait bougé.
 
-| Profil | 5 min | 15 min | 1 h | 1 j | 3 j | 7 j | 30 j | 90 j |
+| Cadence | 10 min | 1 h | 6 h | 1 j | 30 j | 90 j | 365 j | Cible |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Occasionnel | 2,08× | 1,86× | 1,81× | 1,78× | 1,62× | 1,76× | 1,77× | 1,73× |
-| **Normal** | **2,97×** | **2,73×** | **2,74×** | **2,69×** | **2,66×** | **2,48×** | **2,67×** | **2,62×** |
-| Très actif | 4,02× | 3,74× | 3,72× | 3,58× | 3,32× | 3,55× | 3,60× | 3,49× |
-| Minage surtout | 1,13× | 1,07× | 1,06× | 1,06× | 1,06× | 1,06× | 1,06× | 1,06× |
-| Au hasard | 2,85× | 2,66× | 2,55× | 2,00× | 3,02× | 2,97× | 2,52× | 2,43× |
-| Optimiseur | 4,23× | 3,84× | 3,93× | 3,88× | 3,91× | 3,81× | 3,87× | 3,74× |
+| 3 clics/s | 1,53× | 1,56× | 1,79× | 2,01× | 1,94× | 1,94× | 1,93× | 1,5–2,2× |
+| **5 clics/s** | **2,56×** | **2,42×** | **2,56×** | **2,62×** | **2,61×** | **2,60×** | **2,59×** | **2,5–2,8×** |
+| 7 clics/s | 3,81× | 3,80× | 3,41× | 3,31× | 3,28× | 3,27× | 3,25× | 3–4× |
+| 15 clics/s (borne) | 10,4× | 12,3× | 6,31× | 5,93× | 5,92× | 5,90× | 5,88× | — |
 
-Le rapport se stabilise en un quart d'heure et **ne dérive plus** : il est le
-même au premier jour et au quatre-vingt-dixième, après dix-neuf renaissances.
+Une seule case sort de sa fourchette : 2,42× à une heure pour le joueur normal,
+au lieu de 2,50× au minimum. C'est un écart de 3 %, dû au caractère discret des
+achats — on achète un Portail entier ou rien.
 
-Il suit l'effort réel, **sans plafond** : doubler la cadence double l'écart au
-passif, à l'infini. Un joueur très actif ou optimisateur dépasse donc 3× sans
-que rien ne l'en empêche. Un joueur qui ne clique presque jamais reste à 1,06× —
-son jeu tourne quand même, il gagne juste moins qu'en jouant. Le rapport est
-visible dans **Profil → Statistiques**, pas au centre de l'écran.
+Le rapport suit l'effort réel, **sans plafond** : doubler la cadence double
+l'écart au passif, à l'infini. La dernière ligne n'est pas une cible mais une
+**mesure de ce qu'un autoclicker peut obtenir** : la cadence créditée est bornée
+à 15 clics/s, donc son avantage l'est aussi. Il reste devant le joueur très
+rapide, sans être hors d'atteinte. Le rapport est visible dans
+**Profil → Statistiques**, pas au centre de l'écran.
+
+### Ce qui fixe ce rapport
+
+Un Mineur vaut exactement **huit fois** le Cliqueur de son rang. Une phrase
+décrit tout le lien entre les deux familles :
+
+| Rang | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Cliqueur | 0,25 | 1 | 5 | 25 | 100 | 500 | 2 500 | 10 000 |
+| Mineur | 2 | 8 | 40 | 200 | 800 | 4 000 | 20 000 | 80 000 |
+
+Le facteur valait dix, sauf au rang 0 où il valait déjà huit. Cette exception
+faussait le tout début de partie, et un facteur dix plaçait le joueur actif à
+2,1× le joueur inactif au lieu des 2,5 à 2,8 visés.
 
 ### Les boutons de réglage
 
@@ -205,8 +225,9 @@ mesurés plutôt que devinés :
 | `price_scale` | 4 | Le temps de retour d'un achat, donc l'espacement entre deux achats. À 1 le premier achat tombait en 3 s et il s'en enchaînait 137 en dix minutes |
 | `price_growth` | 1,22 | La vitesse générale. 1,15 → premier prestige à 30 min · 1,22 → 81 min · 1,30 → 41 min mais premier palier à 100 min |
 | `tier_first` | 10 | Le premier palier de bâtiment. À 25, il n'arrivait qu'après une heure |
-| `click_share` | 0,05 | Le rapport actif/passif. 3 % → 2,41× · 5 % → **2,7×** · 7 % → 2,85× |
-| `click_price_factor` | 1 | Un Cliqueur coûte le même prix que le Mineur de même rang : le premier achat de la partie est un vrai choix, à prix égal |
+| `click_share` | 0,06 | Ajustement fin du rapport actif/passif. 5 % → 2,50× · **6 % → 2,60×** · 7 % → 2,66× à 5 clics/s |
+| `click_price_factor` | 0,75 | Un Cliqueur coûte trois quarts du Mineur de son rang. Ne change pas le rapport de fin de partie, seulement les premières heures : à prix égal, les Cliqueurs accusaient deux exemplaires de retard par rang |
+| `reference_combo` | 1,5 | Le combo moyen tenu sur une session hachée, pas le maximum |
 
 Le prix unitaire est un levier faible sur un empire mûr — diviser le prix des
 Cliqueurs par 2,5 ne fait acheter que deux exemplaires de plus par rang. C'est
@@ -215,9 +236,20 @@ sont les prix qui fixent le rythme.
 
 ### Combo
 
-Huit crans nets, de ×1 à ×3, un tous les quatre clics enchaînés. La jauge montre
-les huit segments et le cran suivant (« ×1,75 → ×2 ») : le multiplicateur ne
-glisse jamais, il saute. S'arrêter le fait retomber en quelques secondes.
+Quatre valeurs, et rien d'autre : **×1 · ×1,25 · ×1,50 · ×1,75**. La formule est
+littéralement `1 + 0,25 × niveau`, le niveau allant de 0 à 3. Aucune valeur
+intermédiaire ne peut apparaître — ni ×1,33, ni ×1,67, ni ×1,74.
+
+Douze clics enchaînés par niveau, trente-six pour le maximum : **7,2 secondes à
+cinq clics par seconde**. La jauge montre trois segments, le niveau atteint
+(« niv. 2/3 ») et le suivant (« ×1,50 → ×1,75 »). S'arrêter déclenche un sursis
+de 1,4 s, puis la chaîne retombe d'un niveau toutes les 1,3 s — elle descend
+cran par cran au lieu de s'effondrer d'un coup.
+
+Le combo montait à ×3 en huit crans. Un joueur en rafale valait alors trois fois
+un joueur posé avant même d'avoir acheté quoi que ce soit, et le multiplicateur
+écrasait tout le reste de l'économie. Une sauvegarde qui contient un record
+hérité de l'ancienne échelle est ramenée au nouveau maximum.
 
 ## Le jeu
 

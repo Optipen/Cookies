@@ -3,6 +3,7 @@ import React from "react";
 import { render, screen, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
 import CookieCraze from "../components/CookieCraze.jsx";
 import { SAVE_KEY, createFreshState } from "../utils/state.js";
+import { COMBO } from "../utils/combo.js";
 
 // Le jeu s'appuie sur des API absentes de jsdom
 beforeEach(() => {
@@ -135,10 +136,9 @@ describe("combo", () => {
     await act(async () => solo.unmount());
     const gainSolo = banque();
 
-    // Vingt-cinq clics enchaînés: le combo monte jusqu'à ×3.
-    // L'horloge avance entre chaque clic — un humain met cinq secondes à en
-    // faire vingt-cinq, et le jeu ne crédite qu'un clic toutes les 40 ms pour
-    // écarter les autoclickers.
+    // Vingt-cinq clics enchaînés. L'horloge avance entre chaque clic — un
+    // humain met cinq secondes à en faire vingt-cinq, et le jeu borne la
+    // cadence créditée pour écarter les autoclickers.
     const rafale = await startGame(setup);
     const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
     let horloge = Date.now();
@@ -154,8 +154,12 @@ describe("combo", () => {
     await act(async () => rafale.unmount());
     const gainRafale = banque();
 
-    // Sans combo la rafale vaudrait 25×; avec, elle vaut nettement plus
-    expect(gainRafale).toBeGreaterThan(gainSolo * 30);
+    // Sans combo la rafale vaudrait exactement 25 clics isolés. Avec, elle vaut
+    // plus — et jamais plus que 25 clics au multiplicateur maximum. Les deux
+    // bornes comptent: la première prouve que le combo sert à quelque chose, la
+    // seconde qu'il ne peut pas dépasser ×1,75.
+    expect(gainRafale).toBeGreaterThan(gainSolo * 25);
+    expect(gainRafale).toBeLessThanOrEqual(gainSolo * 25 * COMBO.max);
   });
 });
 

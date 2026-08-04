@@ -35,6 +35,13 @@ export default [
     rules: { "no-console": "off" },
   },
   {
+    // Outils de mesure lancés à la main (`npx vite-node scripts/…`). Ils
+    // tournent sous Node et n'existent que pour écrire dans la console.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { "no-console": "off" },
+  },
+  {
     files: ["public/sw.js"],
     languageOptions: { globals: { ...globals.serviceworker } },
   },

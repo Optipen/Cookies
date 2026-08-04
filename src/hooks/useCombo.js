@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COMBO, comboMultiplier } from "../utils/selectors.js";
+import { COMBO, comboMultiplier } from "../utils/combo.js";
 
 const UI_REFRESH_MS = 100;
 
 /**
  * Chaîne de clics.
  *
- * Cliquer sans interruption fait monter un multiplicateur jusqu'à ×3; s'arrêter
- * le fait retomber en quelques secondes. C'est le mécanisme qui récompense le
- * jeu actif — sans lui, la meilleure stratégie serait de laisser tourner l'onglet.
+ * Cliquer sans interruption fait monter un multiplicateur jusqu'à ×1,75;
+ * s'arrêter le fait retomber en quelques secondes. C'est le mécanisme qui
+ * récompense le jeu actif — sans lui, la meilleure stratégie serait de laisser
+ * tourner l'onglet.
  *
  * La valeur vit dans un ref et n'est publiée à l'interface qu'à 10 Hz: à 15
  * clics par seconde, la mettre dans l'état déclencherait autant de rendus du
@@ -31,7 +32,7 @@ export function useCombo() {
       // le tout premier clic d'une session.
       streakRef.current = 1;
     } else {
-      streakRef.current = Math.min(COMBO.clicksToMax * 2, streakRef.current + 1);
+      streakRef.current = Math.min(COMBO.streakCap, streakRef.current + 1);
     }
     // La jauge doit apparaître au premier clic, pas jusqu'à 100 ms plus tard.
     // Les clics suivants passent par la publication périodique.

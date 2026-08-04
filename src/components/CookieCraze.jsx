@@ -77,22 +77,33 @@ const TABS = [
 const ComboMeter = memo(function ComboMeter({ display }) {
   const { streak, mult } = display;
   if (streak <= 0) return null;
-  const cran = comboStep(streak);
-  const plein = cran >= COMBO.steps;
-  // La barre montre l'avancée vers le CRAN suivant, pas vers le maximum: le
-  // multiplicateur ne bouge qu'en franchissant un cran, autant montrer lequel.
+  const niveau = comboStep(streak);
+  const plein = niveau >= COMBO.steps;
+  // La barre montre l'avancée vers le NIVEAU suivant, pas vers le maximum: le
+  // multiplicateur ne bouge qu'en franchissant un niveau, autant montrer lequel.
   const pct = comboProgress(streak) * 100;
 
   return (
     <div className="mt-2 mx-auto w-full max-w-[15rem]">
       <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="font-semibold text-amber-800">🔥 Combo</span>
+        <span className="font-semibold text-amber-800">
+          🔥 Combo{" "}
+          <span className="font-normal text-amber-700/70 tabular-nums">
+            niv. {niveau}/{COMBO.steps}
+          </span>
+        </span>
+        {/* Multiplicateur atteint, et celui qu'on vise. Au maximum, on le dit
+            plutôt que d'annoncer un palier qui n'existe pas. */}
         <span className={`font-black tabular-nums ${plein ? "text-orange-600" : "text-amber-700"}`}>
           ×{fmtMult(mult)}
-          {!plein && <span className="ml-1 font-medium text-amber-600/70">→ ×{fmtMult(mult + STEP)}</span>}
+          {plein ? (
+            <span className="ml-1 text-[10px] font-bold uppercase tracking-wide">max</span>
+          ) : (
+            <span className="ml-1 font-medium text-amber-600/70">→ ×{fmtMult(mult + STEP)}</span>
+          )}
         </span>
       </div>
-      {/* Un segment par cran: on voit d'un coup d'œil combien il en reste. */}
+      {/* Un segment par niveau: on voit d'un coup d'œil combien il en reste. */}
       <div className="flex gap-0.5" aria-hidden="true">
         {Array.from({ length: COMBO.steps }, (_, i) => (
           <div key={i} className="h-1.5 flex-1 rounded-full bg-amber-100 overflow-hidden">
@@ -100,13 +111,13 @@ const ComboMeter = memo(function ComboMeter({ display }) {
               className={`h-full transition-[width] duration-100 ease-linear ${
                 plein ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gradient-to-r from-amber-300 to-orange-400"
               }`}
-              style={{ width: i < cran ? "100%" : i === cran ? `${pct}%` : "0%" }}
+              style={{ width: i < niveau ? "100%" : i === niveau ? `${pct}%` : "0%" }}
             />
           </div>
         ))}
       </div>
-      <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={COMBO.steps} aria-valuenow={cran}>
-        Combo, cran {cran} sur {COMBO.steps}
+      <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={COMBO.steps} aria-valuenow={niveau}>
+        Combo, niveau {niveau} sur {COMBO.steps}, multiplicateur ×{fmtMult(mult)}
       </span>
     </div>
   );
@@ -598,9 +609,12 @@ export default function CookieCraze() {
 
     if (isFeatureEnabled("ENABLE_PARTICLES")) {
       particlesRef.current?.burstText(1, `+${fmt(gain)}`);
-      particlesRef.current?.burstCrumbs(derived.combo > 2 ? 5 : 3);
-      // Gerbe dorée aux paliers de combo, pour rendre la montée lisible
-      if (streak > 0 && streak % 10 === 0) particlesRef.current?.burstGold(10);
+      particlesRef.current?.burstCrumbs(derived.combo >= COMBO.max ? 5 : 3);
+      // Gerbe dorée à chaque cran franchi, pour rendre la montée lisible. Calée
+      // sur les crans réels: un multiple de dix ne tombait sur aucun d'eux.
+      if (streak > 0 && streak <= COMBO.clicksToMax && streak % COMBO.clicksPerStep === 0) {
+        particlesRef.current?.burstGold(10);
+      }
     }
   }, [audio, combo, clickRate, stateRef]);
 

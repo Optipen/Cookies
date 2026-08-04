@@ -2,19 +2,18 @@
   "mode": "standard",
   "standard": {
     "balance": {
-      "click_price_factor": 1,
-      "click_share": 0.05,
+      "click_price_factor": 0.75,
+      "click_share": 0.06,
       "price_growth": 1.22,
       "reference_clicks_per_second": 5,
-      "reference_combo": 2.25,
+      "reference_combo": 1.5,
       "price_scale": 4,
       "tier_first": 10
     },
     "early": {
       "window_s": 300,
-      "miner_discount": 0.5,
+      "miner_discount": 0.1,
       "free_first_miner": true,
-      "click_base_mult": 1,
       "flash": {
         "no_purchase_threshold_s": 30,
         "discount": 0.25
