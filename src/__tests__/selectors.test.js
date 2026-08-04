@@ -10,7 +10,10 @@ import {
   activeRatio,
   timeToAfford,
   COMBO,
+  REF_CLICKS_PER_SECOND,
+  REF_COMBO,
 } from "../utils/selectors.js";
+import { SHARE_BASE, tierThreshold, tierMultiplier } from "../data/upgrades.js";
 import { miningFrom, clickPowerFrom } from "../utils/calc.js";
 import { createFreshState } from "../utils/state.js";
 import { prestigeEffects, chipsFor, upgradeCost, availableChips, PRESTIGE_BY_ID } from "../data/prestige.js";
@@ -262,25 +265,90 @@ describe("maxAffordable", () => {
 });
 
 describe("rapport actif / passif", () => {
-  it("récompense proportionnellement le rythme de clic", () => {
-    const s = settled((x) => {
+  const moyen = () =>
+    settled((x) => {
       x.items = { oven: 60, bakery: 40, farm_cps: 25, cursor: 60, grandma: 40, farm: 25 };
     });
+
+  it("récompense proportionnellement le rythme de clic", () => {
+    const s = moyen();
     const lent = activeRatio(s, 3, LATER);
-    const normal = activeRatio(s, 7, LATER);
+    const normal = activeRatio(s, 5, LATER);
     const rapide = activeRatio(s, 12, LATER);
     expect(lent).toBeGreaterThan(1);
     expect(normal).toBeGreaterThan(lent);
     expect(rapide).toBeGreaterThan(normal);
   });
 
-  it("reste dans la fourchette visée pour un rythme normal", () => {
-    const s = settled((x) => {
-      x.items = { oven: 60, bakery: 40, farm_cps: 25, cursor: 60, grandma: 40, farm: 25 };
-    });
-    const r = activeRatio(s, 7, LATER);
-    expect(r).toBeGreaterThan(2);
-    expect(r).toBeLessThan(4);
+  it("prend cinq clics par seconde comme référence, pas sept", () => {
+    // Sept clics/seconde est une cadence de souris soutenue: intenable au pouce
+    // sur mobile, donc fausse comme référence d'un joueur « normalement actif ».
+    expect(REF_CLICKS_PER_SECOND).toBe(5);
+    expect(activeRatio(moyen())).toBe(activeRatio(moyen(), 5, undefined, REF_COMBO));
+  });
+
+  it("vise 2,6–2,8× à la cadence de référence", () => {
+    const r = activeRatio(moyen(), REF_CLICKS_PER_SECOND, LATER, REF_COMBO);
+    expect(r).toBeGreaterThan(2.6);
+    expect(r).toBeLessThan(2.8);
+  });
+
+  it("laisse les joueurs rapides dépasser 3× sans aucun plafond", () => {
+    const s = moyen();
+    const rapide = activeRatio(s, 12, LATER);
+    expect(rapide).toBeGreaterThan(3);
+    // Aucune saturation: doubler la cadence double l'écart au passif.
+    const ecart = (c) => activeRatio(s, c, LATER) - 1;
+    expect(ecart(24)).toBeCloseTo(ecart(12) * 2, 6);
+    expect(ecart(240)).toBeCloseTo(ecart(12) * 20, 5);
+  });
+});
+
+describe("Mineurs: deux gains, deux unités", () => {
+  // Le Portail rapporte +100 000/s de minage ET, par la part reversée, de la
+  // puissance de clic. Les deux ne partagent pas la même unité: l'interface les
+  // affiche séparément et ne doit jamais les additionner.
+  const base = settled((x) => (x.items = { portal: 10 }));
+  const avec = settled((x) => (x.items = { portal: 11 }));
+
+  it("ajoute exactement la valeur propre au minage", () => {
+    const gain = deriveStats(avec, LATER).mining - deriveStats(base, LATER).mining;
+    expect(gain).toBeCloseTo(100_000, 6);
+  });
+
+  it("ajoute en plus une part au clic, dans son unité", () => {
+    const gainClic = deriveStats(avec, LATER).perClickNoCombo - deriveStats(base, LATER).perClickNoCombo;
+    expect(gainClic).toBeCloseTo(100_000 * SHARE_BASE, 6);
+    expect(gainClic).toBeGreaterThan(0);
+    // Les deux gains sont distincts: le clic ne vaut pas le minage.
+    expect(gainClic).not.toBeCloseTo(100_000, 0);
+  });
+
+  it("laisse un Cliqueur sans effet sur le minage", () => {
+    const a = settled((x) => (x.items = { cursor: 10 }));
+    const b = settled((x) => (x.items = { cursor: 11 }));
+    expect(deriveStats(b, LATER).mining).toBe(deriveStats(a, LATER).mining);
+    expect(deriveStats(b, LATER).perClickNoCombo - deriveStats(a, LATER).perClickNoCombo).toBeCloseTo(0.25, 6);
+  });
+});
+
+describe("paliers: ×1,7 espace les seuils, il ne multiplie rien", () => {
+  it("écarte les seuils de ×1,7 une fois la série de départ passée", () => {
+    expect([0, 1, 2, 3, 4, 5].map(tierThreshold)).toEqual([10, 25, 50, 100, 200, 400]);
+    for (let n = 6; n < 40; n++) {
+      expect(tierThreshold(n) / tierThreshold(n - 1)).toBeCloseTo(1.7, 1);
+    }
+    // Les seuils montent sans fin: il n'y a pas de dernier palier.
+    expect(tierThreshold(39)).toBeGreaterThan(tierThreshold(38));
+  });
+
+  it("garde des multiplicateurs nets, jamais ×1,7", () => {
+    for (let n = 0; n < 40; n++) {
+      expect([2, 3, 5]).toContain(tierMultiplier(n));
+    }
+    expect([0, 1, 2].map(tierMultiplier)).toEqual([2, 2, 2]);
+    expect([3, 4].map(tierMultiplier)).toEqual([3, 3]);
+    expect([5, 6, 20].map(tierMultiplier)).toEqual([5, 5, 5]);
   });
 });
 

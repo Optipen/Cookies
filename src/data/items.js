@@ -12,6 +12,10 @@
 // sauvegardes existantes gardent leurs bâtiments; seuls les noms affichés et
 // les valeurs ont changé.
 
+import tuning from "./tuning.json";
+
+export const BALANCE = tuning?.[tuning?.mode || "standard"]?.balance || {};
+
 /**
  * Écart de prix entre un Cliqueur et le Mineur de même rang.
  *
@@ -19,8 +23,10 @@
  * actif/passif: avec des prix exponentiels, un facteur constant ne décale les
  * quantités achetées que d'une poignée d'exemplaires. Le rapport se règle par
  * l'échelle des VALEURS (un Mineur vaut dix fois son Cliqueur de même rang).
+ *
+ * Réglé dans `tuning.json` pour que la calibration se fasse sans toucher au code.
  */
-export const CLICK_PRICE_FACTOR = 1.5;
+export const CLICK_PRICE_FACTOR = BALANCE.click_price_factor ?? 1.5;
 
 /** Croissance du prix à chaque exemplaire acheté. */
 export const PRICE_GROWTH = 1.15;

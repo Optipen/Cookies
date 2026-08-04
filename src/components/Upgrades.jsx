@@ -1,6 +1,8 @@
 import React, { memo, useMemo } from "react";
 import { availableUpgrades } from "../data/upgrades.js";
 import { ITEM_BY_ID, LABELS } from "../data/items.js";
+import { deriveStats } from "../utils/selectors.js";
+import { useClock } from "../hooks/useClock.js";
 import { fmt } from "../utils/format.js";
 
 const targetLabel = (upgrade) => {
@@ -9,7 +11,32 @@ const targetLabel = (upgrade) => {
   return item ? `${LABELS[item.mode].one} · ${item.name}` : upgrade.target;
 };
 
-const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, progress, onBuy }) {
+/**
+ * Comme en boutique: le multiplicateur net (×2) est la valeur propre de
+ * l'amélioration, le « gain réel » est ce qu'elle rapporte à cet instant. Les
+ * deux axes gardent leur unité — un bonus global augmente le minage ET le clic,
+ * mais /s et /clic ne se somment pas.
+ */
+const RealGain = memo(function RealGain({ mining, click }) {
+  if (mining <= 0 && click <= 0) return null;
+  return (
+    <div className="mt-1 flex items-baseline gap-2 text-[11px] tabular-nums">
+      <span className="text-amber-900/60">Gain réel</span>
+      {mining > 0 && (
+        <span className="font-bold text-emerald-700">
+          +{fmt(mining)} {LABELS.mine.unit}
+        </span>
+      )}
+      {click > 0 && (
+        <span className="font-bold text-sky-700">
+          +{fmt(click)} {LABELS.click.unit}
+        </span>
+      )}
+    </div>
+  );
+});
+
+const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, progress, gain, onBuy }) {
   const buyable = unlocked && affordable;
 
   return (
@@ -38,6 +65,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
             </span>
           </div>
           <div className="text-[11px] text-amber-800/70 truncate">{targetLabel(upgrade)}</div>
+          <RealGain mining={gain.mining} click={gain.click} />
         </div>
       </div>
 
@@ -64,7 +92,12 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
 });
 
 function Upgrades({ state, stats, onBuy }) {
+  // Même horloge partagée que la boutique: sans elle, `deriveStats` croirait la
+  // partie éternellement dans sa fenêtre de début et gonflerait les gains.
+  const now = useClock(1000);
+
   const rows = useMemo(() => {
+    const base = deriveStats(state, now, 0);
     const list = availableUpgrades(state).map((upgrade) => {
       let unlocked = false;
       let progress = 0;
@@ -74,7 +107,13 @@ function Upgrades({ state, stats, onBuy }) {
       } catch {
         // Une condition invalide laisse simplement l'amélioration verrouillée
       }
-      return { upgrade, unlocked, progress, affordable: state.cookies >= upgrade.cost };
+      // Le gain annoncé est calculé avec la formule du jeu, pas approché.
+      const next = deriveStats({ ...state, upgrades: { ...state.upgrades, [upgrade.id]: true } }, now, 0);
+      const gain = {
+        mining: next.mining - base.mining,
+        click: next.perClickNoCombo - base.perClickNoCombo,
+      };
+      return { upgrade, unlocked, progress, gain, affordable: state.cookies >= upgrade.cost };
     });
 
     // Les achetables d'abord, puis les plus proches d'être débloquées
@@ -82,7 +121,7 @@ function Upgrades({ state, stats, onBuy }) {
       const rank = (r) => (r.unlocked && r.affordable ? 0 : r.unlocked ? 1 : 2);
       return rank(a) - rank(b) || b.progress - a.progress || a.upgrade.cost - b.upgrade.cost;
     });
-  }, [state]);
+  }, [state, now]);
 
   const buyable = rows.filter((r) => r.unlocked && r.affordable);
   const rest = rows.filter((r) => !(r.unlocked && r.affordable)).slice(0, 12);

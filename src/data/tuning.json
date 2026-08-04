@@ -1,6 +1,12 @@
 {
   "mode": "standard",
   "standard": {
+    "balance": {
+      "click_price_factor": 1,
+      "click_share": 0.06,
+      "reference_clicks_per_second": 5,
+      "reference_combo": 2.2
+    },
     "early": {
       "window_s": 300,
       "miner_discount": 0.35,

@@ -1,4 +1,4 @@
-import { ITEMS } from "./items.js";
+import { ITEMS, BALANCE } from "./items.js";
 
 // === Améliorations ===
 //
@@ -67,7 +67,7 @@ function makeTierUpgrade(item, n) {
 // --- Reversement du minage vers le clic ------------------------------------
 
 /** Part fixe du minage reversée à chaque clic. Filet de sécurité, pas un axe. */
-export const SHARE_BASE = 0.03;
+export const SHARE_BASE = BALANCE.click_share ?? 0.03;
 
 // Il n'existe volontairement pas de famille qui multiplierait la seule
 // puissance de clic. Une telle échelle ×2 sans équivalent côté minage faisait

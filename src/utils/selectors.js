@@ -4,7 +4,7 @@
 // noms internes gardent parfois « cpc » / « cps »; l'interface, elle, ne parle
 // que de « puissance de clic » et de « minage ».
 
-import { ITEMS, ITEM_BY_ID } from "../data/items.js";
+import { ITEMS, ITEM_BY_ID, BALANCE } from "../data/items.js";
 import { getUpgrade, SHARE_BASE } from "../data/upgrades.js";
 import { miningFrom, clickPowerFrom, computePerItemMult } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
@@ -125,8 +125,15 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   };
 }
 
+// Référence de calibration: le joueur actif « normal ». Cinq clics par seconde
+// est ce qu'on tient réellement au pouce sur mobile — sept était une cadence de
+// souris soutenue, irréaliste comme moyenne. Le combo de référence est celui
+// qu'on tient en moyenne, pas son maximum.
+export const REF_CLICKS_PER_SECOND = BALANCE.reference_clicks_per_second ?? 5;
+export const REF_COMBO = BALANCE.reference_combo ?? 2.2;
+
 /** Revenu par seconde d'un joueur actif, pour comparer au mode passif. */
-export function activeIncome(state, clicksPerSecond = 7, now = Date.now()) {
+export function activeIncome(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now = Date.now()) {
   const stats = deriveStats(state, now, COMBO.clicksToMax);
   return stats.mining + stats.perClick * clicksPerSecond;
 }
@@ -135,7 +142,7 @@ export function activeIncome(state, clicksPerSecond = 7, now = Date.now()) {
  * Rapport entre jeu actif et jeu passif. Sert au diagnostic d'équilibrage.
  * `combo` par défaut: le combo moyen réellement tenu, pas son maximum.
  */
-export function activeRatio(state, clicksPerSecond = 7, now = Date.now(), combo = 2.2) {
+export function activeRatio(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now = Date.now(), combo = REF_COMBO) {
   const stats = deriveStats(state, now);
   if (stats.mining <= 0) return Infinity;
   return (stats.mining + stats.perClickNoCombo * combo * clicksPerSecond) / stats.mining;

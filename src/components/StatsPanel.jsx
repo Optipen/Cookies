@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES, TIER_STYLE } from "../data/achiev
 import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
 import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct } from "../utils/format.js";
-import { activeRatio } from "../utils/selectors.js";
+import { activeRatio, REF_CLICKS_PER_SECOND, REF_COMBO } from "../utils/selectors.js";
 
 const Stat = memo(function Stat({ label, value, hint }) {
   return (
@@ -76,7 +76,7 @@ function StatsPanel({ state, stats }) {
           <Stat
             label="Actif / passif"
             value={`${activeRatio(state).toFixed(2)}×`}
-            hint="Gain d'un joueur qui clique vs idle"
+            hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${REF_COMBO}`}
           />
         </div>
       </section>

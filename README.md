@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (136 tests)                    |
+| `npm test`          | Suite de tests (143 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -35,44 +35,100 @@ Le jeu tourne sur deux axes qui fonctionnent **en même temps** :
 ```
 minage          = Σ(mineurs   × valeur × palier) × (1 + 0,02·chips) × staking × céleste
 puissance clic  = (1 + Σ(cliqueurs × valeur × palier)) × (1 + 0,02·chips) × staking × céleste
-par clic        = (puissance clic + minage × 3 %) × combo
+par clic        = (puissance clic + minage × 6 %) × combo
 ```
 
 Les deux sommes sont **linéaires et sans plafond** : le millionième Cliqueur
 ajoute exactement autant que le premier. Il n'existe aucune asymptote, aucun
 softcap, aucun ×13.
 
+Les 6 % sont un filet de sécurité à valeur fixe, pas un axe de progression :
+même sans le moindre Cliqueur, la puissance de clic reste proportionnelle à
+l'empire. Rien ne permet de les faire monter — une famille d'améliorations qui
+le faisait envoyait le rapport actif/passif au-delà de 8×.
+
 ### Valeurs propres et additives
 
-| Cliqueurs | | Mineurs | |
-| --- | --- | --- | --- |
-| Curseur | +0,25 /clic | Four | +2 /s |
-| Mamie | +1 | Boulangerie | +10 |
-| Gant de frappe | +5 | Ferme | +50 |
-| Bras robotisé | +25 | Usine | +250 |
-| Exosquelette | +100 | Banque | +1 000 |
-| IA de frappe | +500 | Temple | +5 000 |
-| Machine à Temps | +2 500 | Laboratoire | +25 000 |
-| Singularité tactile | +10 000 | Portail | +100 000 |
+Un Mineur vaut dix fois son Cliqueur de même rang, et coûte exactement le même
+prix. Le premier achat de la partie est donc un vrai choix, à prix égal :
+produire pendant que tu ne joues pas, ou frapper plus fort quand tu joues.
 
-L'addition est exacte : puissance 1 + un Curseur = **exactement 1,25**. Les
-multiplicateurs nets (×2, ×3, ×5) sont réservés aux paliers de possession
-(10, 25, 50, 100, 200, 400, puis ×1,7).
-
-### Comment le rapport reste tenu sans plafond
-
-Un Mineur vaut dix fois son Cliqueur de même rang, et coûte 1,5 fois moins.
-C'est cette échelle de valeurs — pas un amortissement — qui fixe le rapport
-entre jeu actif et jeu passif. Mesuré en simulation sur 7 jours et 21
-prestiges, à 7 clics/s et combo moyen ×2,2 :
-
-| Temps de jeu | 1 min | 10 min | 1 j | 3 j | 7 j |
+| Rang | Cliqueur | | Mineur | | Prix de base |
 | --- | --- | --- | --- | --- | --- |
-| Actif / passif | 3,77× | 2,78× | **2,98×** | **2,98×** | **2,98×** |
+| 1 | Curseur | +0,25 /clic | Four | +2 /s | 60 |
+| 2 | Mamie | +1 | Boulangerie | +10 | 1 000 |
+| 3 | Gant de frappe | +5 | Ferme | +50 | 8 000 |
+| 4 | Bras robotisé | +25 | Usine | +250 | 60 000 |
+| 5 | Exosquelette | +100 | Banque | +1 000 | 340 000 |
+| 6 | IA de frappe | +500 | Temple | +5 000 | 2 400 000 |
+| 7 | Machine à Temps | +2 500 | Laboratoire | +25 000 | 17 000 000 |
+| 8 | Singularité tactile | +10 000 | Portail | +100 000 | 95 000 000 |
 
-Le rapport suit l'effort réel : 3 clics/s → 1,83× · 5 → 2,40× · 7 → 2,98× ·
-12 → 4,43×. Il est visible dans **Profil → Statistiques**, pas au centre de
-l'écran.
+L'addition est exacte : puissance 1 + un Curseur = **exactement 1,25**. Le prix,
+lui, croît de 15 % par exemplaire.
+
+**Un Mineur rapporte deux gains, dans deux unités différentes.** Un Portail
+donne **+100 000 /s de minage** *et*, par la part reversée, **+6 000 /clic**.
+Ces deux nombres ne s'additionnent pas — l'un est une production par seconde,
+l'autre une puissance par clic — et la boutique les affiche séparément.
+
+### Paliers : ×1,7 espace les seuils, il ne multiplie rien
+
+Deux nombres différents, souvent confondus :
+
+| | Rôle | Valeurs |
+| --- | --- | --- |
+| **Seuil** (`tierThreshold`) | à combien d'exemplaires le palier se débloque | 10, 25, 50, 100, 200, 400, puis **×1,7** à chaque fois |
+| **Multiplicateur** (`tierMultiplier`) | ce que le palier multiplie | **×2**, puis ×3, puis ×5 — jamais ×1,7 |
+
+Le ×1,7 est donc un **espacement**. Le joueur ne voit que des multiplicateurs
+nets. Les seuils montent sans fin : il n'y a pas de dernier palier.
+
+### Calibration : 5 clics/seconde, combo moyen ×2,2
+
+La référence d'un joueur « normalement actif » est **5 clics/seconde**, pas 7 :
+sept est une cadence de souris soutenue, intenable au pouce sur mobile. Le combo
+de référence est ×2,2 — celui qu'on tient en moyenne, pas son maximum de ×3.
+
+```
+rapport actif / passif = (minage + par clic hors combo × combo × clics/s) / minage
+```
+
+Mesuré en simulation sur **90 jours et 28 prestiges**, à 5 clics/s :
+
+| Temps de jeu | 1 min | 10 min | 1 j | 7 j | 14 j | 30 j | 60 j | 90 j |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Actif / passif | 3,65× | 2,91× | **2,75×** | **2,75×** | **2,75×** | **2,76×** | **2,75×** | **2,75×** |
+
+Le rapport se stabilise en dix minutes et **ne dérive plus** : il est identique
+au premier jour et au quatre-vingt-dixième, après vingt-huit renaissances. Sur
+un scénario extrême de **300 prestiges forcés** (renaissance toutes les six
+heures, empire jamais mûr), il descend à 1,91× — le jeu actif reste toujours
+devant le jeu passif, jamais l'inverse.
+
+Le rapport suit l'effort réel, **sans plafond** — mesuré à 7 jours de jeu :
+
+| Clics/s | 2 | 3 | **5** | 7 | 10 | 15 | 20 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Actif / passif | 1,70× | 2,04× | **2,75×** | 3,46× | 4,51× | 6,29× | 8,06× |
+
+Doubler la cadence double l'écart au passif, à l'infini : les joueurs rapides
+dépassent donc 3× sans que rien ne les en empêche. Le rapport est visible dans
+**Profil → Statistiques**, pas au centre de l'écran.
+
+### Les deux boutons de réglage
+
+Ils vivent dans [`src/data/tuning.json`](src/data/tuning.json), section
+`balance`, et ont été mesurés plutôt que devinés :
+
+| Réglage | Valeur | Effet mesuré |
+| --- | --- | --- |
+| `click_share` | 0,06 | **Le levier utile.** 3 % → 2,41× · 5 % → 2,63× · 6 % → **2,75×** · 7 % → 2,85× |
+| `click_price_factor` | 1 | Quasi sans effet sur un empire mûr (1,5 → 1 ne déplace le rapport que de 2,74× à 2,75×), mais remonte le plancher des parties à prestiges répétés de 1,76× à 1,91× |
+
+Le prix est un levier faible parce que les prix sont exponentiels : diviser le
+prix des Cliqueurs par 2,5 ne fait acheter que deux exemplaires de plus par
+rang. C'est **l'échelle des valeurs**, pas les prix, qui fixe le rapport.
 
 ### Combo
 
@@ -105,9 +161,50 @@ clics ; s'arrêter le fait retomber en quelques secondes.
 Six onglets : Boutique (filtres Tout / Clic / Minage), Améliorations, Quêtes,
 CRMB, Prestige, Profil (statistiques, succès, apparences).
 
-Chaque achat affiche l'avant → après (`1 → 1,25 /clic`) et un objectif permanent
-reste visible sous le cookie : « Prochain palier : 24/25 Exosquelette ×2 » ou
-« Prochain achat dans ~18 s ».
+### Ce qu'une ligne de boutique annonce
+
+Trois informations, jamais mélangées :
+
+```
+🖱️  Curseur ×1 320                                    2,41M
+    +0,25 /clic de base          ← valeur propre, elle ne bouge jamais
+    Gain réel  +60 /clic         ← ce que CET achat ajoute, ici et maintenant
+    329,97K → 330,03K /clic      ← avant → après
+```
+
+La valeur propre est le nombre rond de la fiche. Le gain réel est calculé avec
+la formule du jeu, paliers, chips et staking compris — le chiffre annoncé est
+celui que tu obtiendras. L'avant → après situe le gain dans l'échelle du moment,
+et devient illisible tout seul quand l'empire est énorme : c'est exactement
+pourquoi la ligne « gain réel » existe.
+
+Un Mineur en affiche deux, chacun dans son unité :
+
+```
+🌀  Portail ×3
+    +100 000 /s de base
+    Gain réel  +100 000 /s   +6 000 /clic
+    1,20M → 1,30M /s
+```
+
+Un objectif permanent reste visible sous le cookie : « Prochain palier : 24/25
+Exosquelette ×2 » ou « Prochain achat dans ~18 s ».
+
+### Aucun achat inutile
+
+Le gain marginal du N+1-ième exemplaire, tous bâtiments déjà possédés à N :
+
+| N | Curseur | Singularité | Four | Portail |
+| --- | --- | --- | --- | --- |
+| 0 | +0,25 /clic | +10 000 /clic | +2 /s · +0,12 /clic | +100 000 /s · +6 000 /clic |
+| 10³ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
+| 10⁶ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
+| 10⁹ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
+
+Le gain ne décroît jamais. Au-delà de 10¹² exemplaires **de chaque bâtiment**,
+un +0,25 passe sous la précision d'un flottant 64 bits ; cet état est de toute
+façon inatteignable, le prix du 10¹²-ième Curseur dépassant l'infini
+représentable.
 
 Raccourcis : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet, `Maj` + clic pour
 acheter ×10, `Ctrl` + clic pour ×100.
@@ -133,10 +230,11 @@ aucune boucle de rendu possible, et le moteur se teste sans React.
 temps de jeu sont regroupés dans un commit unique toutes les 500 ms, au lieu
 d'un intervalle par sous-système.
 
-**Les formules vivent au même endroit.** `deriveStats(state)` produit CPS, CPC,
-part de clic et coûts. La boutique affiche le gain réel calculé avec cette
-fonction, jamais une approximation : le chiffre annoncé est celui que tu
-obtiendras.
+**Les formules vivent au même endroit.** `deriveStats(state)` produit minage,
+puissance de clic, part reversée et coûts. La boutique et le panneau
+d'améliorations affichent le gain réel en appelant cette même fonction sur
+l'état d'après achat, jamais une approximation : le chiffre annoncé est celui
+que tu obtiendras.
 
 **Les particules ne passent pas par React.** Elles vivent dans un ref et sont
 animées en `requestAnimationFrame` qui écrit directement dans le DOM et
@@ -144,8 +242,9 @@ s'arrête dès que la scène est vide. La pluie de miettes tombe en animation CS
 Aucune image ne déclenche de rendu React.
 
 Le réglage de l'équilibrage vit dans [`src/data/tuning.json`](src/data/tuning.json) :
-fenêtre de début de partie, fréquence des événements, cadence des boucles,
-rendement hors-ligne, paliers de prix.
+`balance` (part reversée, écart de prix, cadence et combo de référence), fenêtre
+de début de partie, fréquence des événements, cadence des boucles, rendement
+hors-ligne. Recalibrer le jeu ne demande donc pas de toucher au code.
 
 ## Montée en charge
 
@@ -179,3 +278,12 @@ Export et import se font depuis ⚙️ → *Exporter / Importer la sauvegarde*.
 - **Vercel** : importer le dépôt, le reste est déjà configuré.
 - **Netlify / autre statique** : `npm run build`, publier `dist/`, avec une
   réécriture de toutes les routes vers `/index.html`.
+
+[`vercel.json`](vercel.json) fixe deux règles de cache opposées. Le format JSON
+n'admet pas de commentaire — et le schéma Vercel rejette toute clé inconnue, y
+compris un champ `comment` — donc elles sont expliquées ici :
+
+| Chemin | Cache | Pourquoi |
+| --- | --- | --- |
+| `/assets/*` | un an, `immutable` | les fichiers produits par Vite portent un hash dans leur nom : un contenu différent a forcément une URL différente |
+| `/sw.js` | `max-age=0, must-revalidate` | sans revalidation, un navigateur garderait l'ancien service worker et figerait le jeu sur une version périmée |
