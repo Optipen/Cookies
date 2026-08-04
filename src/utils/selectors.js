@@ -110,7 +110,9 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const clickSteps = prestige.clickSteps + permanents;
 
   const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, mineSteps);
-  const mining = baseMining * buffMine;
+  // Les buffs de quêtes sont des multiplicateurs en quarts (×1,5 · ×2,5):
+  // grille × 1,5 quitte la grille. Même pli que pour le clic.
+  const mining = snapDown(baseMining * buffMine);
 
   const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, clickSteps);
   const ownPower = (state.cpcBase || 1) + buildingsPower;

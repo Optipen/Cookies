@@ -62,6 +62,20 @@ describe("les cinq chiffres", () => {
     expect(c.prodClics).toBeCloseTo(d.perClick * 4, 9);
   });
 
+  it("restent sur la grille même sous un buff en quarts", () => {
+    // Les récompenses de quêtes multiplient par ×1,5 ou ×2,25: grille × 1,5
+    // quitte la grille. Minage et clic replient le produit avant l'écran.
+    const s2 = partie((x) => {
+      x.items = { oven: 13, grandma: 7, cursor: 9 };
+      x.buffs = { cpsMulti: 1.5, cpcMulti: 2.25, until: LATER + 10_000, label: "×1,5 minage" };
+    });
+    const d2 = deriveStats(s2, LATER, 24);
+    expect(onGrid(d2.mining), `minage ${d2.mining}`).toBe(true);
+    expect(onGrid(d2.perClickNoCombo), `puissance ${d2.perClickNoCombo}`).toBe(true);
+    expect(onGrid(d2.perClick), `parClic ${d2.perClick}`).toBe(true);
+    expect(d2.mining).toBe(snapDown(d2.baseMining * 1.5));
+  });
+
   it("font du « par clic » le gain réel d'un appui, combo compris", () => {
     for (const streak of [0, 12, 24, 36]) {
       const stats = deriveStats(s, LATER, streak);
