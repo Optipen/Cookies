@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup, waitFor, within } from "@testing-library/react";
 import CookieCraze from "../components/CookieCraze.jsx";
 import { SAVE_KEY, createFreshState } from "../utils/state.js";
 import { COMBO } from "../utils/combo.js";
@@ -203,7 +203,15 @@ describe("prestige", () => {
       fireEvent.click(prestigeButton);
     });
 
-    expect(window.confirm).toHaveBeenCalled();
+    // La confirmation est EN JEU, pas une boîte système: le dialogue nomme
+    // l'action par son verbe et Annuler est le premier bouton.
+    const dialogue = screen.getByTestId("confirmation");
+    expect(dialogue.textContent).toContain("chips célestes");
+    await act(async () => {
+      fireEvent.click(within(dialogue).getByRole("button", { name: "Renaître" }));
+    });
+
+    expect(screen.queryByTestId("confirmation")).toBeNull();
     // La partie repart de zéro et les chips sont crédités
     expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
     expect(chipsAttendus).toBeGreaterThan(0);
@@ -243,7 +251,12 @@ describe("réinitialisation", () => {
       fireEvent.click(screen.getByRole("menuitem", { name: /Réinitialiser/i }));
     });
 
-    expect(window.confirm).toHaveBeenCalled();
+    const dialogue = screen.getByTestId("confirmation");
+    await act(async () => {
+      fireEvent.click(within(dialogue).getByRole("button", { name: "Réinitialiser" }));
+    });
+
+    expect(screen.queryByTestId("confirmation")).toBeNull();
     expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
   });
 });

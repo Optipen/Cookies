@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { costOf, bulkCost, unitPrice, maxAffordable } from "../utils/selectors.js";
 import { createFreshState } from "../utils/state.js";
 import { ITEMS, ITEM_BY_ID } from "../data/items.js";
-import { lisible } from "../utils/grid.js";
+import { lisible, prixLisible } from "../utils/grid.js";
+import { fmt } from "../utils/format.js";
 
 const LATER = 6e5; // hors de la fenêtre de début de partie
 const partie = (mutate = () => {}) => {
@@ -25,30 +26,40 @@ const unParUn = (state, id, n) => {
   return total;
 };
 
-describe("un achat groupé coûte exactement la somme des achats un par un", () => {
-  // C'est la seule garantie qui compte pour le joueur: le sélecteur ×10 ne doit
-  // être ni une remise cachée ni une pénalité cachée.
+describe("un achat groupé ne coûte jamais plus que la somme des achats un par un", () => {
+  // C'est la garantie qui compte pour le joueur: le sélecteur ×10 n'est jamais
+  // une pénalité cachée. Chaque UNITÉ est posée sur la grille des prix; le lot
+  // en est la somme exacte, sauf quand cette somme traverse une décade — elle
+  // est alors repliée vers le BAS, d'au plus un quart de son cran d'affichage.
+  const verifieLot = (s, id, n, etiquette = "") => {
+    const lot = costOf(s, id, n, LATER);
+    const un = unParUn(s, id, n);
+    expect(lot, etiquette).toBeLessThanOrEqual(un);
+    const cran = un >= 100_000 ? Math.pow(10, Math.floor(Math.log10(un))) / 4 : 1;
+    expect(un - lot, etiquette).toBeLessThan(cran);
+    return lot;
+  };
+
   for (const id of ["cursor", "oven", "portal", "singularity"]) {
     it(`${ITEM_BY_ID[id].name}: ×10 depuis zéro`, () => {
-      const s = partie();
-      expect(costOf(s, id, 10, LATER)).toBe(unParUn(s, id, 10));
+      verifieLot(partie(), id, 10);
     });
 
     it(`${ITEM_BY_ID[id].name}: ×25 depuis un parc déjà constitué`, () => {
-      const s = partie((x) => (x.items = { [id]: 37 }));
-      expect(costOf(s, id, 25, LATER)).toBe(unParUn(s, id, 25));
+      verifieLot(partie((x) => (x.items = { [id]: 37 })), id, 25);
     });
   }
 
   it("tient aussi avec une réduction de coût du prestige", () => {
-    // `cheap_bricks` retire 5 % par niveau. Un arrondi appliqué une seule fois
-    // au lot rendait l'achat groupé moins cher que les achats unitaires.
+    // `cheap_bricks` retire 5 % par niveau. La remise s'applique à chaque
+    // exemplaire AVANT sa pose sur la grille: c'est la remise qui s'adapte au
+    // quart près, pas l'affichage qui ment.
     for (const niveaux of [1, 5, 10]) {
       const s = partie((x) => {
         x.items = { oven: 12 };
         x.prestige = { chips: 500, spent: 0, upgrades: { cheap_bricks: niveaux } };
       });
-      expect(costOf(s, "oven", 10, LATER), `niveau ${niveaux}`).toBe(unParUn(s, "oven", 10));
+      verifieLot(s, "oven", 10, `niveau ${niveaux}`);
     }
   });
 
@@ -57,19 +68,19 @@ describe("un achat groupé coûte exactement la somme des achats un par un", () 
       x.items = { bakery: 8 };
       x.flags.discountAll = { value: 0.25, until: LATER + 60_000 };
     });
-    expect(costOf(s, "bakery", 10, LATER)).toBe(unParUn(s, "bakery", 10));
+    verifieLot(s, "bakery", 10);
   });
 
   it("tient quand deux remises se cumulent et tombent sur des centimes", () => {
     // Cas le plus exigeant: ×0,95 puis ×0,75 donnent 0,7125, qui ne tombe juste
-    // sur aucun prix rond. Un arrondi appliqué au lot au lieu de chaque
-    // exemplaire s'y verrait immédiatement.
+    // sur aucun prix rond. La pose sur la grille se fait par exemplaire, jamais
+    // sur le lot entier.
     const s = partie((x) => {
       x.items = { bakery: 8 };
       x.prestige = { chips: 500, spent: 0, upgrades: { cheap_bricks: 1 } };
       x.flags.discountAll = { value: 0.25, until: LATER + 60_000 };
     });
-    expect(costOf(s, "bakery", 10, LATER)).toBe(unParUn(s, "bakery", 10));
+    verifieLot(s, "bakery", 10);
   });
 
   it("tient pour « Max »", () => {
@@ -79,8 +90,7 @@ describe("un achat groupé coûte exactement la somme des achats un par un", () 
     });
     const n = maxAffordable(s, "cursor", 1000, LATER);
     expect(n).toBeGreaterThan(0);
-    const prix = costOf(s, "cursor", n, LATER);
-    expect(prix).toBe(unParUn(s, "cursor", n));
+    const prix = verifieLot(s, "cursor", n);
     expect(prix).toBeLessThanOrEqual(s.cookies);
     // …et pas un exemplaire de plus.
     expect(costOf(s, "cursor", n + 1, LATER)).toBeGreaterThan(s.cookies);
@@ -108,6 +118,35 @@ describe("les prix restent lisibles et strictement croissants", () => {
         expect(unitPrice(item, n + 1)).toBeGreaterThan(unitPrice(item, n));
       }
     }
+  });
+
+  it("le prix PAYÉ ne stagne jamais et reste posé sur la grille des quarts", () => {
+    // Le prix facturé passe par `prixLisible`: son second chiffre est un quart.
+    // La pose ne doit ni faire stagner l'échelle, ni la faire reculer.
+    const ouverte = partie((x) => {
+      x.ascension = { stars: 99, spent: 0, tracks: { horizon: 4 }, count: 1 };
+    });
+    for (const item of ITEMS) {
+      let precedent = 0;
+      for (let k = 0; k < 60; k++) {
+        const s = { ...ouverte, items: { [item.id]: k } };
+        const p = costOf(s, item.id, 1, LATER);
+        expect(p, `${item.name} #${k}`).toBeGreaterThan(precedent);
+        expect(prixLisible(p), `${item.name} #${k}`).toBe(p);
+        precedent = p;
+      }
+    }
+  });
+
+  it("s'affiche exactement: le texte à l'écran EST le prix payé", () => {
+    // `compact` sait rendre toute mantisse posée sur les quarts sans la
+    // tronquer — c'est ce qui rend la pose honnête de bout en bout.
+    expect(fmt(5_750_000)).toBe("5,75M");
+    expect(fmt(57_500_000)).toBe("57,5M");
+    expect(fmt(575_000_000)).toBe("575M");
+    expect(fmt(11_750_000)).toBe("11,75M");
+    expect(fmt(2_750_000_000_000)).toBe("2,75T");
+    expect(fmt(125_000)).toBe("125K");
   });
 
   it("rend un prix entier, jamais nul, jamais négatif", () => {

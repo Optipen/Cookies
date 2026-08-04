@@ -2,8 +2,9 @@ import React, { memo, useMemo, useState } from "react";
 import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES, TIER_STYLE } from "../data/achievements.js";
 import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
-import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct } from "../utils/format.js";
+import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct, fmtMult } from "../utils/format.js";
 import { activeRatio, REF_CLICKS_PER_SECOND, REF_COMBO } from "../utils/selectors.js";
+import { snap } from "../utils/grid.js";
 
 const Stat = memo(function Stat({ label, value, hint }) {
   return (
@@ -75,8 +76,8 @@ function StatsPanel({ state, stats }) {
           <Stat label="Temps de jeu" value={fmtDuration(state.stats?.playtimeMs || 0)} />
           <Stat
             label="Actif / passif"
-            value={`${activeRatio(state).toFixed(2)}×`}
-            hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${REF_COMBO}`}
+            value={`≈${fmtMult(snap(activeRatio(state)))}×`}
+            hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${fmtMult(REF_COMBO)}`}
           />
         </div>
       </section>

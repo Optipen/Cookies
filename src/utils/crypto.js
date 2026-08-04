@@ -9,7 +9,7 @@
 // distribuait des centaines de millions en fin de partie; une monnaie qu'on
 // gagne sans effort ne récompense plus rien.
 
-import { tierState, niceIntAt } from "./grid.js";
+import { tierState, niceIntAt, prixLisible } from "./grid.js";
 
 export const CRMB = {
   name: "CrumbCoin",
@@ -127,7 +127,9 @@ export function priceTrend(priceHistory = []) {
 export function minerCost(minerId, owned) {
   const m = MINERS.find((x) => x.id === minerId);
   if (!m) return Infinity;
-  return Math.ceil(m.base * Math.pow(m.growth, owned));
+  // Même règle que la boutique: le prix affiché est le prix payé, au quart
+  // près de son ordre de grandeur (« 17,3M » devenait « 17,5M »).
+  return prixLisible(Math.ceil(m.base * Math.pow(m.growth, owned)));
 }
 
 // CRMB par seconde produit par le matériel

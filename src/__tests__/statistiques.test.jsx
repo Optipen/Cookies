@@ -7,6 +7,7 @@ import { createFreshState, SAVE_KEY } from "../utils/state.js";
 import { RATE_WINDOW_MS, RATE_IDLE_MS } from "../hooks/useClickRate.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { SHARE_BASE } from "../data/upgrades.js";
+import { onGrid, snapDown } from "../utils/grid.js";
 
 const LATER = 6e5;
 const partie = (mutate = () => {}) => {
@@ -48,14 +49,17 @@ describe("les cinq chiffres", () => {
     // Ce n'est pas le même minage recompté: c'est un gain supplémentaire, versé
     // à chaque clic, dans une autre unité. La preuve: à cadence nulle il
     // disparaît complètement, et le total retombe au minage seul.
-    expect(d.sharedClick).toBeCloseTo(d.baseMining * SHARE_BASE, 9);
+    // La part reversée est posée sur la grille AVANT d'entrer dans le clic:
+    // 6 % du minage est un nombre quelconque, l'écran n'en montre jamais.
+    expect(d.sharedClick).toBe(snapDown(d.baseMining * SHARE_BASE));
+    expect(onGrid(d.sharedClick)).toBe(true);
     expect(productionStats(d, 0).total).toBe(d.mining);
 
     // Et à cadence non nulle, l'écart au minage vaut exactement ce que les
     // clics rapportent — rien de plus, rien de moins.
     const c = productionStats(d, 4);
     expect(c.total - c.minage).toBeCloseTo(d.perClick * 4, 9);
-    expect(c.prodClics).toBeCloseTo(d.perClickNoCombo * d.combo * 4, 9);
+    expect(c.prodClics).toBeCloseTo(d.perClick * 4, 9);
   });
 
   it("font du « par clic » le gain réel d'un appui, combo compris", () => {
@@ -63,7 +67,10 @@ describe("les cinq chiffres", () => {
       const stats = deriveStats(s, LATER, streak);
       const c = productionStats(stats, 5);
       expect(c.parClic).toBe(stats.perClick);
-      expect(c.parClic).toBeCloseTo(stats.perClickNoCombo * stats.combo, 9);
+      // Le produit par le combo est replié sur la grille, plancher au « sans
+      // combo »: ce qui s'affiche est ce qui est crédité, au quart près.
+      expect(c.parClic).toBe(snapDown(stats.perClickNoCombo * stats.combo, stats.perClickNoCombo));
+      expect(onGrid(c.parClic)).toBe(true);
     }
   });
 

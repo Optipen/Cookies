@@ -13,7 +13,7 @@ import { stakingTier, miningRate, stakingYieldPerSecond, ledgerSteps } from "./c
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
 import { creditedRate } from "./rate.js";
-import { lisible } from "./grid.js";
+import { lisible, prixLisible, snapDown } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -117,11 +117,16 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const flatClick = ownPower * clickUpgradeMult(upgrades);
 
   const share = shareOf();
-  const sharedClick = baseMining * share;
+  // La part reversée est 6 % du minage: un nombre quelconque. Posée sur la
+  // grille AVANT d'entrer dans la puissance de clic, sinon elle contamine
+  // tout ce qui s'affiche en « /clic » (« +2,23 », « +0,31 »…).
+  const sharedClick = snapDown(baseMining * share);
 
   const combo = comboMultiplier(comboStreak);
-  const perClickNoCombo = (flatClick + sharedClick) * buffClick;
-  const perClick = perClickNoCombo * combo;
+  const perClickNoCombo = snapDown((flatClick + sharedClick) * buffClick, 1);
+  // grille × combo quitte la grille (2,5 × 1,75 = 4,375): on re-quantifie le
+  // résultat, plancher au « sans combo » — le combo n'enlève jamais rien.
+  const perClick = snapDown(perClickNoCombo * combo, perClickNoCombo);
 
   return {
     // Noms « métier »
@@ -230,11 +235,16 @@ export function productionStats(stats, cadence = 0) {
   const brute = Number(cadence);
   const mesuree = Number.isFinite(brute) && brute > 0 ? brute : 0;
   const creditee = creditedRate(mesuree);
-  const prodClics = creditee > 0 ? stats.perClickNoCombo * stats.combo * creditee : 0;
+  // La cadence annoncée est ENTIÈRE: c'est la seule forme qui garde le produit
+  // « puissance × cadence » sur la grille des quarts. « ≈3 /s » est aussi la
+  // seule précision honnête pour une moyenne glissante.
+  const cadenceAffichee = creditee > 0 ? Math.max(1, Math.round(creditee)) : 0;
+  const prodClics = cadenceAffichee > 0 ? stats.perClick * cadenceAffichee : 0;
   return {
     parClic: stats.perClick,
     cadence: mesuree,
     creditee,
+    cadenceAffichee,
     prodClics,
     minage: stats.mining,
     total: stats.mining + prodClics,
@@ -345,10 +355,15 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
     if (k === 0 && offert) continue;
     const brut = unitPrice(item, owned + k);
     if (!isFinite(brut)) return Infinity;
-    total += Math.max(1, Math.ceil(brut * mult));
+    // Chaque UNITÉ est posée sur la grille des prix (remise comprise): le lot
+    // reste ainsi la somme exacte des achats un par un.
+    total += Math.max(1, prixLisible(Math.ceil(brut * mult)));
     if (!isFinite(total)) return Infinity;
   }
-  return total;
+  // Une somme d'unités propres peut déborder de la grille de SON ordre de
+  // grandeur quand le lot traverse une décade. On la replie vers le BAS: un
+  // lot ne coûte jamais plus que la somme des unités.
+  return prixLisible(total, Math.floor);
 }
 
 /** Quantité d'achat selon les modificateurs clavier. */

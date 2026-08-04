@@ -115,5 +115,24 @@ export function lisible(n) {
   return Math.round(n / ordre) * ordre;
 }
 
+/**
+ * Prix « propre »: le second chiffre est un quart.
+ *
+ * Sous cent mille, un prix est un entier et s'affiche en toutes lettres: rien
+ * à faire. Au-delà, l'écran passe en compact et chaque décimale affichée doit
+ * tomber sur la grille: on pose le prix sur 0,25 × 10^⌊log₁₀⌋ — 5 625 000
+ * devient 5 750 000 (« 5,75M »), 56 300 000 devient 57 500 000 (« 57,5M »).
+ * Le prix payé EST le prix affiché, remises comprises: c'est la remise qui
+ * s'adapte au quart près, pas l'affichage qui ment.
+ */
+export function prixLisible(n, arrondir = Math.round) {
+  if (!Number.isFinite(n) || n <= 0) return n;
+  if (n < 100_000) return Math.round(n);
+  const pas = Math.pow(10, Math.floor(Math.log10(n))) / 4;
+  // L'epsilon évite qu'un nombre DÉJÀ posé sur la grille glisse d'un cran
+  // vers le bas à cause d'un reste flottant (23 devenant 22,999…).
+  return arrondir(n / pas + (arrondir === Math.floor ? 1e-9 : 0)) * pas;
+}
+
 /** Vrai si `n` tombe exactement sur la grille. Utilisé par les tests. */
 export const onGrid = (n) => Math.abs(n - snap(n)) < 1e-9;

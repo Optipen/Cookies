@@ -292,9 +292,9 @@ export const QUESTS = [
     tier: "main",
     icon: "🪙",
     cooldownS: 600,
-    eligible: (ctx) => ctx.bank > ctx.crmbPrice * 0.5,
-    target: (state) => ({ amount: 0.05, balanceAtStart: state.crypto?.totalBought || 0 }),
-    title: () => "Acheter 0,05 CRMB au marché",
+    eligible: (ctx) => ctx.bank > ctx.crmbPrice * 1.2,
+    target: (state) => ({ amount: 1, balanceAtStart: state.crypto?.totalBought || 0 }),
+    title: () => "Acheter 1 CRMB au marché",
     desc: () => "Le marché fluctue. Achète quand le cours baisse.",
     progress: (state, meta) => {
       const diff = Math.max(0, (state.crypto?.totalBought || 0) - (meta.balanceAtStart || 0));
@@ -343,9 +343,9 @@ export const QUESTS = [
     tier: "daily",
     icon: "📊",
     cooldownS: 3600,
-    eligible: (ctx) => ctx.crmbBalance > 0.02 || ctx.bank > ctx.crmbPrice,
-    target: (state) => ({ amount: 0.2, soldAtStart: state.crypto?.totalSold || 0 }),
-    title: () => "Vendre 0,2 CRMB au marché",
+    eligible: (ctx) => ctx.crmbBalance >= 1 || ctx.bank > ctx.crmbPrice * 1.2,
+    target: (state) => ({ amount: 1, soldAtStart: state.crypto?.totalSold || 0 }),
+    title: () => "Vendre 1 CRMB au marché",
     desc: () => "Achète bas, vends haut. Le spread est de 2 %.",
     progress: (state, meta) => {
       const diff = Math.max(0, (state.crypto?.totalSold || 0) - (meta.soldAtStart || 0));

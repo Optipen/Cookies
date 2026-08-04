@@ -47,7 +47,18 @@ function compact(n) {
   let cran = Math.min(SUFFIXES.length - 1, Math.floor(Math.log10(abs) / 3));
   let valeur = abs / Math.pow(1000, cran);
 
-  const decimales = (v) => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
+  // Une mantisse posée sur la grille des quarts s'affiche EXACTEMENT, quelle
+  // que soit sa taille: « 11,75M » plutôt que « 11,8M ». Les prix sont tous
+  // construits ainsi; les autres nombres gardent les trois chiffres
+  // significatifs habituels.
+  const decimales = (v) => {
+    const quarts = v * 4;
+    if (Math.abs(quarts - Math.round(quarts)) < 1e-6) {
+      const q = Math.round(quarts);
+      return q % 4 === 0 ? 0 : q % 2 === 0 ? 1 : 2;
+    }
+    return v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  };
   let arrondi = Number(valeur.toFixed(decimales(valeur)));
   if (arrondi >= 1000 && cran < SUFFIXES.length - 1) {
     cran += 1;
