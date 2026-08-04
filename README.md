@@ -56,11 +56,13 @@ Tout vit dans [`src/utils/grid.js`](src/utils/grid.js).
 
 ```
 crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
+           + contrats(Registre) + niveaux(Éclat)
 global     = 1 + 0,25 × crans                        ← un multiple de 0,25, toujours
 valeur(b)  = grille↓(valeur_base(b) × palier(b) × global)   ≥ valeur_base(b)
 minage     = Σ(mineurs   × valeur(b))
 puiss. clic= 1 + Σ(cliqueurs × valeur(b))
 par clic   = (puissance clic + minage × 6 %) × combo
+combo      = 1 + 0,25 × niveau,  niveau de 0 à 3
 ```
 
 La **quantification par exemplaire** (`grille↓`) est ce qui garantit que le

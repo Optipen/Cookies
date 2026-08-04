@@ -66,11 +66,14 @@ export const shareOf = () => SHARE_BASE;
  * Toutes les valeurs dérivées d'un état, en un seul passage.
  *
  * Formule complète:
- *   crans       = paliers(chips) + paliers(staking) + niveaux(arbre)
- *   global      = 1 + 0,25 × crans          ← un multiple de 0,25, toujours
- *   minage      = Σ(mineurs   × valeur × palier) × global
- *   clicPropre  = (1 + Σ(cliqueurs × valeur × palier) × global)
- *   parClic     = (clicPropre + minage × part) × combo × buff
+ *   crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
+ *              + contrats(Registre) + niveaux(Éclat)
+ *   global     = 1 + 0,25 × crans           ← un multiple de 0,25, toujours
+ *   valeur(b)  = grille↓(valeur_base(b) × palier(b) × global) ≥ valeur_base(b)
+ *   minage     = Σ(mineurs   × valeur(b)) × buff
+ *   clicPropre = (1 + Σ(cliqueurs × valeur(b))) × buff
+ *   parClic    = (clicPropre + minage_base × 6 %) × combo
+ *   combo      = 1 + 0,25 × niveau,  niveau ∈ [0, 3]
  *
  * Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
  * multiplicateurs: ×2,25 × ×1,25 valait ×2,8125 et un Curseur annonçait alors
