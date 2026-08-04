@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (143 tests)                    |
+| `npm test`          | Suite de tests (146 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -30,19 +30,48 @@ Le jeu tourne sur deux axes qui fonctionnent **en même temps** :
   **Cliqueurs** ;
 - **Minage** — les cookies générés chaque seconde, porté par les **Mineurs**.
 
+### La grille : des nombres choisis, jamais calculés
+
+**Aucun multiplicateur visible n'est le résultat d'un calcul.** Ils sont tous
+pris sur une grille :
+
+```
+×1 · ×1,25 · ×1,50 · ×1,75 · ×2 · ×2,25 · ×2,50 · ×2,75 · ×3 …
+```
+
+Ce n'est pas un arrondi d'affichage : la valeur montrée **est** la valeur
+utilisée dans la formule. Un ×1,02 ou un ×2,08 n'est donc pas corrigé, il est
+impossible à produire. Les valeurs, prix et récompenses suivent la même
+logique, sur l'échelle `1 · 2,5 · 5 · 10 · 25 · 50 · 100 · 250 …`.
+
+Rien ne donne « +2 % ». Une source de bonus fait **franchir un palier**, et
+franchir un palier ajoute exactement +0,25. Entre deux paliers le nombre ne
+bouge pas — c'est une barre de progression qui montre ce qu'il reste, parce
+qu'un palier qu'on voit approcher se remarque mieux qu'un pourcentage qui
+grignote.
+
+Tout vit dans [`src/utils/grid.js`](src/utils/grid.js).
+
 ### La formule
 
 ```
-minage          = Σ(mineurs   × valeur × palier) × (1 + 0,02·chips) × staking × céleste
-puissance clic  = (1 + Σ(cliqueurs × valeur × palier)) × (1 + 0,02·chips) × staking × céleste
-par clic        = (puissance clic + minage × 6 %) × combo
+crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
+global     = 1 + 0,25 × crans                        ← un multiple de 0,25, toujours
+minage     = Σ(mineurs   × valeur × palier) × global
+puiss. clic= 1 + Σ(cliqueurs × valeur × palier) × global
+par clic   = (puissance clic + minage × 5 %) × combo
 ```
+
+Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
+multiplicateurs. C'est le point clé : ×2,25 × ×1,25 vaut ×2,8125, et un Curseur
+annonçait alors « +2,81 /clic ». En sommant les crans on obtient ×2,75, et il
+annonce « +2,75 ».
 
 Les deux sommes sont **linéaires et sans plafond** : le millionième Cliqueur
 ajoute exactement autant que le premier. Il n'existe aucune asymptote, aucun
 softcap, aucun ×13.
 
-Les 6 % sont un filet de sécurité à valeur fixe, pas un axe de progression :
+Les 5 % sont un filet de sécurité à valeur fixe, pas un axe de progression :
 même sans le moindre Cliqueur, la puissance de clic reste proportionnelle à
 l'empire. Rien ne permet de les faire monter — une famille d'améliorations qui
 le faisait envoyait le rapport actif/passif au-delà de 8×.
@@ -55,105 +84,131 @@ produire pendant que tu ne joues pas, ou frapper plus fort quand tu joues.
 
 | Rang | Cliqueur | | Mineur | | Prix de base |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Curseur | +0,25 /clic | Four | +2 /s | 60 |
+| 1 | Curseur | +0,25 /clic | Four | +2 /s | 100 |
 | 2 | Mamie | +1 | Boulangerie | +10 | 1 000 |
-| 3 | Gant de frappe | +5 | Ferme | +50 | 8 000 |
-| 4 | Bras robotisé | +25 | Usine | +250 | 60 000 |
-| 5 | Exosquelette | +100 | Banque | +1 000 | 340 000 |
-| 6 | IA de frappe | +500 | Temple | +5 000 | 2 400 000 |
-| 7 | Machine à Temps | +2 500 | Laboratoire | +25 000 | 17 000 000 |
-| 8 | Singularité tactile | +10 000 | Portail | +100 000 | 95 000 000 |
+| 3 | Gant de frappe | +5 | Ferme | +50 | 10 000 |
+| 4 | Bras robotisé | +25 | Usine | +250 | 100 000 |
+| 5 | Exosquelette | +100 | Banque | +1 000 | 1 000 000 |
+| 6 | IA de frappe | +500 | Temple | +5 000 | 10 000 000 |
+| 7 | Machine à Temps | +2 500 | Laboratoire | +25 000 | 100 000 000 |
+| 8 | Singularité tactile | +10 000 | Portail | +100 000 | 1 000 000 000 |
+
+Un rang coûte dix fois le précédent et rapporte cinq fois plus : il devient
+rentable après quelques exemplaires de celui d'en dessous, ce qui fait
+apparaître un nouveau bâtiment toutes les trois à cinq minutes.
 
 L'addition est exacte : puissance 1 + un Curseur = **exactement 1,25**. Le prix,
-lui, croît de 15 % par exemplaire.
+lui, croît de 22 % par exemplaire.
 
 **Un Mineur rapporte deux gains, dans deux unités différentes.** Un Portail
-donne **+100 000 /s de minage** *et*, par la part reversée, **+6 000 /clic**.
+donne **+100 000 /s de minage** *et*, par la part reversée, **+5 000 /clic**.
 Ces deux nombres ne s'additionnent pas — l'un est une production par seconde,
 l'autre une puissance par clic — et la boutique les affiche séparément.
 
-### Paliers : ×1,7 espace les seuils, il ne multiplie rien
+### Paliers : doubler le parc, doubler le rendement
 
-Deux nombres différents, souvent confondus :
+Une seule règle, et un seul nombre à retenir :
 
 | | Rôle | Valeurs |
 | --- | --- | --- |
-| **Seuil** (`tierThreshold`) | à combien d'exemplaires le palier se débloque | 10, 25, 50, 100, 200, 400, puis **×1,7** à chaque fois |
-| **Multiplicateur** (`tierMultiplier`) | ce que le palier multiplie | **×2**, puis ×3, puis ×5 — jamais ×1,7 |
+| **Seuil** (`tierThreshold`) | à combien d'exemplaires le palier se débloque | 10, 20, 40, 80, 160, 320 … un doublement à chaque fois, sans fin |
+| **Multiplicateur** (`tierMultiplier`) | ce que le palier multiplie | **×2**, toujours |
 
-Le ×1,7 est donc un **espacement**. Le joueur ne voit que des multiplicateurs
-nets. Les seuils montent sans fin : il n'y a pas de dernier palier.
+Doubler son parc le rend deux fois meilleur. L'échelle précédente (seuils
+10/25/50/100/200/400, multiplicateurs ×2 puis ×3 puis ×5) cumulait **×360** à
+quatre cents exemplaires et faisait s'emballer la partie en quelques minutes.
 
-### Calibration : 5 clics/seconde, combo moyen ×2,2
+### Le rythme
+
+Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs
+sont simulés sur quatre-vingt-dix jours
+([`src/data/tuning.json`](src/data/tuning.json) tient les réglages) :
+
+| Profil | Premier achat | Premier palier | Premier prestige | Nouveau bâtiment |
+| --- | --- | --- | --- | --- |
+| Occasionnel (3 clics/s) | 20 s | 32 min | 105 min | ~5 min |
+| **Normal (5 clics/s)** | **9 s** | **17 min** | **81 min** | **~3 min** |
+| Très actif (7 clics/s) | 6 s | 11 min | 51 min | ~2 min |
+| Minage surtout | 80 s | 26 min | 84 min | ~33 min |
+| Achats au hasard | 10 s | 23 min | 89 min | ~3 min |
+| Optimiseur | 6 s | 10 min | 41 min | ~2 min |
+
+Cinq minutes de jeu donnent **24 000 cookies cuits** pour un joueur normal, là
+où la version précédente en donnait 100 000 — et le premier prestige demandait
+une demi-heure au lieu d'une heure et demie.
+
+### Calibration : 5 clics/seconde, combo moyen ×2,25
 
 La référence d'un joueur « normalement actif » est **5 clics/seconde**, pas 7 :
 sept est une cadence de souris soutenue, intenable au pouce sur mobile. Le combo
-de référence est ×2,2 — celui qu'on tient en moyenne, pas son maximum de ×3.
+de référence est ×2,25 — celui qu'on tient en moyenne, pas son maximum de ×3.
 
 ```
 rapport actif / passif = (minage + par clic hors combo × combo × clics/s) / minage
 ```
 
-Mesuré en simulation sur **90 jours et 28 prestiges**, à 5 clics/s :
+Mesuré sur **90 jours**, pour les six profils :
 
-| Temps de jeu | 1 min | 10 min | 1 j | 7 j | 14 j | 30 j | 60 j | 90 j |
+| Profil | 5 min | 15 min | 1 h | 1 j | 3 j | 7 j | 30 j | 90 j |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Actif / passif | 3,65× | 2,91× | **2,75×** | **2,75×** | **2,75×** | **2,76×** | **2,75×** | **2,75×** |
+| Occasionnel | 2,08× | 1,86× | 1,81× | 1,78× | 1,62× | 1,76× | 1,77× | 1,73× |
+| **Normal** | **2,97×** | **2,73×** | **2,74×** | **2,69×** | **2,66×** | **2,48×** | **2,67×** | **2,62×** |
+| Très actif | 4,02× | 3,74× | 3,72× | 3,58× | 3,32× | 3,55× | 3,60× | 3,49× |
+| Minage surtout | 1,13× | 1,07× | 1,06× | 1,06× | 1,06× | 1,06× | 1,06× | 1,06× |
+| Au hasard | 2,85× | 2,66× | 2,55× | 2,00× | 3,02× | 2,97× | 2,52× | 2,43× |
+| Optimiseur | 4,23× | 3,84× | 3,93× | 3,88× | 3,91× | 3,81× | 3,87× | 3,74× |
 
-Le rapport se stabilise en dix minutes et **ne dérive plus** : il est identique
-au premier jour et au quatre-vingt-dixième, après vingt-huit renaissances. Sur
-un scénario extrême de **300 prestiges forcés** (renaissance toutes les six
-heures, empire jamais mûr), il descend à 1,91× — le jeu actif reste toujours
-devant le jeu passif, jamais l'inverse.
+Le rapport se stabilise en un quart d'heure et **ne dérive plus** : il est le
+même au premier jour et au quatre-vingt-dixième, après dix-neuf renaissances.
 
-Le rapport suit l'effort réel, **sans plafond** — mesuré à 7 jours de jeu :
+Il suit l'effort réel, **sans plafond** : doubler la cadence double l'écart au
+passif, à l'infini. Un joueur très actif ou optimisateur dépasse donc 3× sans
+que rien ne l'en empêche. Un joueur qui ne clique presque jamais reste à 1,06× —
+son jeu tourne quand même, il gagne juste moins qu'en jouant. Le rapport est
+visible dans **Profil → Statistiques**, pas au centre de l'écran.
 
-| Clics/s | 2 | 3 | **5** | 7 | 10 | 15 | 20 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Actif / passif | 1,70× | 2,04× | **2,75×** | 3,46× | 4,51× | 6,29× | 8,06× |
+### Les boutons de réglage
 
-Doubler la cadence double l'écart au passif, à l'infini : les joueurs rapides
-dépassent donc 3× sans que rien ne les en empêche. Le rapport est visible dans
-**Profil → Statistiques**, pas au centre de l'écran.
+Tous dans [`src/data/tuning.json`](src/data/tuning.json), section `balance`, et
+mesurés plutôt que devinés :
 
-### Les deux boutons de réglage
-
-Ils vivent dans [`src/data/tuning.json`](src/data/tuning.json), section
-`balance`, et ont été mesurés plutôt que devinés :
-
-| Réglage | Valeur | Effet mesuré |
+| Réglage | Valeur | Ce qu'il fait |
 | --- | --- | --- |
-| `click_share` | 0,06 | **Le levier utile.** 3 % → 2,41× · 5 % → 2,63× · 6 % → **2,75×** · 7 % → 2,85× |
-| `click_price_factor` | 1 | Quasi sans effet sur un empire mûr (1,5 → 1 ne déplace le rapport que de 2,74× à 2,75×), mais remonte le plancher des parties à prestiges répétés de 1,76× à 1,91× |
+| `price_scale` | 4 | Le temps de retour d'un achat, donc l'espacement entre deux achats. À 1 le premier achat tombait en 3 s et il s'en enchaînait 137 en dix minutes |
+| `price_growth` | 1,22 | La vitesse générale. 1,15 → premier prestige à 30 min · 1,22 → 81 min · 1,30 → 41 min mais premier palier à 100 min |
+| `tier_first` | 10 | Le premier palier de bâtiment. À 25, il n'arrivait qu'après une heure |
+| `click_share` | 0,05 | Le rapport actif/passif. 3 % → 2,41× · 5 % → **2,7×** · 7 % → 2,85× |
+| `click_price_factor` | 1 | Un Cliqueur coûte le même prix que le Mineur de même rang : le premier achat de la partie est un vrai choix, à prix égal |
 
-Le prix est un levier faible parce que les prix sont exponentiels : diviser le
-prix des Cliqueurs par 2,5 ne fait acheter que deux exemplaires de plus par
-rang. C'est **l'échelle des valeurs**, pas les prix, qui fixe le rapport.
+Le prix unitaire est un levier faible sur un empire mûr — diviser le prix des
+Cliqueurs par 2,5 ne fait acheter que deux exemplaires de plus par rang. C'est
+**l'échelle des valeurs**, pas les prix, qui fixe le rapport actif/passif ; ce
+sont les prix qui fixent le rythme.
 
 ### Combo
 
-Cliquer sans interruption fait monter un multiplicateur jusqu'à ×3 en trente
-clics ; s'arrêter le fait retomber en quelques secondes.
+Huit crans nets, de ×1 à ×3, un tous les quatre clics enchaînés. La jauge montre
+les huit segments et le cran suivant (« ×1,75 → ×2 ») : le multiplicateur ne
+glisse jamais, il saute. S'arrêter le fait retomber en quelques secondes.
 
 ## Le jeu
 
-- **16 bâtiments** : 8 Cliqueurs et 8 Mineurs, aux prix géométriques (×1,15 par
+- **16 bâtiments** : 8 Cliqueurs et 8 Mineurs, aux prix géométriques (×1,22 par
   exemplaire), sans mur de progression.
 - **Améliorations infinies** : générées à la demande. Chaque bâtiment débloque
-  un palier à 10, 25, 50, 100, 200, 400 exemplaires puis tous les ×1,7 — ×2,
-  puis ×3, puis ×5. Il n'y a pas de dernière amélioration.
+  un palier ×2 à 10, 20, 40, 80, 160 exemplaires — un doublement à chaque fois.
+  Il n'y a pas de dernière amélioration.
 - **26 quêtes** réparties en 8 catégories (clic, banque, achat, production,
   crypto, événement, style, quotidien). Trois quêtes actives, trois
   quotidiennes, une série de jours consécutifs, et un bouton pour passer une
   quête qui ne te plaît pas.
-- **Économie CrumbCoin** : cours variable avec retour à la moyenne, achat/vente
-  avec 2 % de frais, cinq machines de minage qui tournent même hors-ligne, et
-  du staking à paliers verrouillés (5 % à 120 % APR) qui booste toute la
-  production.
+- **Économie CrumbCoin** : une monnaie de **récompense**, pas un compteur qui
+  monte tout seul — voir plus bas.
 - **Arbre céleste** : 8 améliorations permanentes achetées avec les chips de
-  prestige, dont six sans niveau maximum. Elles survivent à toutes les
-  renaissances suivantes.
-- **53 succès** en 9 catégories, avec récompense en cookies.
+  prestige, deux sans niveau maximum, chaque niveau valant +0,25. Elles
+  survivent à toutes les renaissances suivantes.
+- **53 succès** en 9 catégories, avec récompense en cookies — et en CRMB à
+  partir du palier Or.
 - **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes flash.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
@@ -161,34 +216,64 @@ clics ; s'arrêter le fait retomber en quelques secondes.
 Six onglets : Boutique (filtres Tout / Clic / Minage), Améliorations, Quêtes,
 CRMB, Prestige, Profil (statistiques, succès, apparences).
 
-### Ce qu'une ligne de boutique annonce
+### Le CRMB est une récompense, pas un revenu
 
-Trois informations, jamais mélangées :
+Cuire des cookies ne rapporte **aucun** CRMB. Le robinet historique en versait
+0,001 tous les 20 000 cookies, soit des centaines de millions en fin de partie :
+une monnaie qu'on gagne sans effort ne récompense plus rien.
 
-```
-🖱️  Curseur ×1 320                                    2,41M
-    +0,25 /clic de base          ← valeur propre, elle ne bouge jamais
-    Gain réel  +60 /clic         ← ce que CET achat ajoute, ici et maintenant
-    329,97K → 330,03K /clic      ← avant → après
-```
+| Source | Montant | Fréquence |
+| --- | --- | --- |
+| Quêtes | +1, +2 ou +5 | 10 quêtes sur 26 en donnent — **≈ 4 CRMB par heure** de jeu actif |
+| Succès Or | +1 | 15 succès |
+| Succès Platine | +2 | 9 succès |
+| Succès Légendaire | +5 | 4 succès |
+| Matériel de minage | 0,05 à 25 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
 
-La valeur propre est le nombre rond de la fiche. Le gain réel est calculé avec
-la formule du jeu, paliers, chips et staking compris — le chiffre annoncé est
-celui que tu obtiendras. L'avant → après situe le gain dans l'échelle du moment,
-et devient illisible tout seul quand l'empire est énorme : c'est exactement
-pourquoi la ligne « gain réel » existe.
+Les 53 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
+un revenu. Toutes les récompenses sont des entiers — le bonus de quête de
+l'arbre céleste ne s'applique qu'aux cookies, sinon il rendrait « 1,25 CRMB ».
 
-Un Mineur en affiche deux, chacun dans son unité :
+Et il y a de quoi les dépenser :
 
-```
-🌀  Portail ×3
-    +100 000 /s de base
-    Gain réel  +100 000 /s   +6 000 /clic
-    1,20M → 1,30M /s
-```
+- **Staking** — bloquer du CRMB fait franchir des paliers de production
+  (+0,25 chacun) et rapporte 1 à 10 % **par jour** selon la durée du verrou.
+  Premier palier après un quart d'heure, ×2 après deux heures et demie.
+- **Les deux dernières apparences** ne s'achètent qu'en CRMB : 10 et 25, soit
+  plusieurs sessions d'écart.
+- **Le marché**, avec 2 % de frais dans les deux sens.
 
-Un objectif permanent reste visible sous le cookie : « Prochain palier : 24/25
-Exosquelette ×2 » ou « Prochain achat dans ~18 s ».
+### Une seule notification, en haut, rarement
+
+Le jeu récompensait tant de petites choses que la pile de notifications était
+pleine en permanence — et, sur téléphone, posée pile sur la boutique.
+
+| Ce qui arrive | Ce que ça donne |
+| --- | --- |
+| Un clic, un petit achat | Un chiffre qui monte sur place. Aucune notification |
+| Un achat refusé | Une secousse courte. Aucun texte — le bouton grisé le disait déjà |
+| Plusieurs succès ou quêtes d'un coup | **Une seule** notification groupée |
+| Nouveau bâtiment, gros palier | Un bandeau |
+| Prestige, cookie doré | Une grande animation, jamais écartée |
+
+Un seul emplacement, **en haut** : la boutique et la navigation vivent sous le
+pouce et rien ne les recouvre. Au plus **un bandeau ordinaire toutes les dix
+secondes** ; ce qui arrive trop tôt est écarté, pas mis en file — une file ne
+fait que retarder l'avalanche.
+
+### Pensé pour le pouce
+
+- Boutique en **une seule colonne**, grandes cartes.
+- Chaque carte sépare deux zones : la gauche ouvre le détail, la droite achète.
+  On ne déclenche jamais l'un en visant l'autre.
+- Fermée, une carte ne montre que ce qui décide l'achat : nom, quantité
+  possédée, **gain réel**, prix. Le détail — valeur de base, second gain,
+  avant → après — s'ouvre d'un appui.
+- Une **barre de progression** vers l'achat quand il n'est pas encore payable.
+- Sélecteur **×1 · ×10 · Max**, collé en haut de la liste.
+- **Navigation en barre basse** sur téléphone, avec la marge de sécurité iOS ;
+  la page réserve sa hauteur pour qu'aucun bouton ne finisse dessous. Au-dessus
+  de `lg`, la même barre reprend sa place en tête du panneau.
 
 ### Aucun achat inutile
 
@@ -196,18 +281,17 @@ Le gain marginal du N+1-ième exemplaire, tous bâtiments déjà possédés à N
 
 | N | Curseur | Singularité | Four | Portail |
 | --- | --- | --- | --- | --- |
-| 0 | +0,25 /clic | +10 000 /clic | +2 /s · +0,12 /clic | +100 000 /s · +6 000 /clic |
-| 10³ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
-| 10⁶ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
-| 10⁹ | +0,25 | +10 000 | +2 · +0,12 | +100 000 · +6 000 |
+| 0 | +0,25 /clic | +10 000 /clic | +2 /s · +0,10 /clic | +100 000 /s · +5 000 /clic |
+| 10³ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
+| 10⁶ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
+| 10⁹ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
 
 Le gain ne décroît jamais. Au-delà de 10¹² exemplaires **de chaque bâtiment**,
 un +0,25 passe sous la précision d'un flottant 64 bits ; cet état est de toute
 façon inatteignable, le prix du 10¹²-ième Curseur dépassant l'infini
 représentable.
 
-Raccourcis : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet, `Maj` + clic pour
-acheter ×10, `Ctrl` + clic pour ×100.
+Raccourcis clavier : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet.
 
 ## Architecture
 
@@ -235,6 +319,12 @@ puissance de clic, part reversée et coûts. La boutique et le panneau
 d'améliorations affichent le gain réel en appelant cette même fonction sur
 l'état d'après achat, jamais une approximation : le chiffre annoncé est celui
 que tu obtiendras.
+
+**Les nombres visibles sont choisis, pas calculés.** `grid.js` ne convertit
+jamais un pourcentage en multiplicateur : il compte des paliers franchis et rend
+`1 + 0,25 × paliers`. Un ×1,02 ne peut donc pas exister, même transitoirement.
+Et les sources s'additionnent avant conversion, une seule fois, pour que la
+composition reste sur la grille.
 
 **Les particules ne passent pas par React.** Elles vivent dans un ref et sont
 animées en `requestAnimationFrame` qui écrit directement dans le DOM et

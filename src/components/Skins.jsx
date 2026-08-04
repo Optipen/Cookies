@@ -36,7 +36,11 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
         <div className="min-w-0 flex-1">
           <div className="font-bold text-amber-950">{skin.name}</div>
           {skin.description && <div className="text-[11px] text-amber-800/75 leading-snug">{skin.description}</div>}
-          {!owned && <div className="mt-0.5 text-xs font-bold text-amber-700 tabular-nums">{fmt(skin.price)} 🍪</div>}
+          {!owned && (
+            <div className="mt-0.5 text-xs font-bold text-amber-700 tabular-nums">
+              {skin.crmb ? `${skin.crmb} CRMB 🪙` : `${fmt(skin.price)} 🍪`}
+            </div>
+          )}
         </div>
       </div>
 
@@ -65,7 +69,9 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
                 : "bg-stone-100 border-stone-200 text-stone-500 cursor-not-allowed"
             }`}
           >
-            {affordable ? `Acheter · ${fmt(skin.price)}` : `Manque ${fmt(missing)}`}
+            {affordable
+              ? `Acheter · ${skin.crmb ? `${skin.crmb} CRMB` : fmt(skin.price)}`
+              : `Manque ${skin.crmb ? `${fmt(missing)} CRMB` : fmt(missing)}`}
           </button>
         )}
       </div>
@@ -94,8 +100,14 @@ function Skins({ state, skins, onBuy, onEquip, onPreview, onStopPreview }) {
             skin={skin}
             owned={!!state.skinsOwned[skin.id]}
             equipped={state.skin === skin.id}
-            affordable={state.cookies >= skin.price}
-            missing={Math.max(0, skin.price - state.cookies)}
+            affordable={
+              skin.crmb ? (state.crypto?.balance || 0) >= skin.crmb : state.cookies >= skin.price
+            }
+            missing={
+              skin.crmb
+                ? Math.max(0, skin.crmb - (state.crypto?.balance || 0))
+                : Math.max(0, skin.price - state.cookies)
+            }
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             onBuy={onBuy}

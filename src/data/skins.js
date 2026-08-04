@@ -32,8 +32,12 @@ export const SKINS = {
     className: "contrast-[1.1] saturate-[0.9]",
     description: "Élégance sombre.",
   },
-  ice: { id: "ice", name: "Ice", price: 500_000, src: "/cookie-ice.png", description: "Fraîcheur glaciale." },
-  fire: { id: "fire", name: "Lava", price: 2_000_000, src: "/cookie-fire.png", description: "Puissance volcanique." },
+  // Les deux dernières apparences ne s'achètent pas en cookies mais en CRMB.
+  // Une monnaie de récompense doit avoir quelque chose de désirable à acheter,
+  // sinon elle s'accumule sans que personne ne la regarde. Dix CRMB, c'est
+  // environ deux heures et demie de quêtes: un objectif de plusieurs sessions.
+  ice: { id: "ice", name: "Ice", price: 0, crmb: 10, src: "/cookie-ice.png", description: "Fraîcheur glaciale. Payable en CRMB." },
+  fire: { id: "fire", name: "Lava", price: 0, crmb: 25, src: "/cookie-fire.png", description: "Puissance volcanique. Payable en CRMB." },
 };
 
 export const SKIN_LIST = Object.values(SKINS);

@@ -21,10 +21,11 @@ export const fmt = (n) => {
   const { value, suffix, tier } = scale(n);
   let digits = 2;
   if (tier === 0) {
-    // Sous 1, arrondir à une décimale écrasait les petits montants:
-    // un objectif de 0,05 CRMB s'affichait « 0,1 ».
+    // Deux décimales sous 1 — trois donnaient « +0,688 /clic », illisible.
+    // Le CRMB, seul montant qui avait besoin de trois décimales, se compte
+    // désormais en entiers.
     if (Number.isInteger(value)) digits = 0;
-    else if (Math.abs(value) < 1) digits = 3;
+    else if (Math.abs(value) < 1) digits = 2;
     else digits = 1;
   }
   return value.toLocaleString(LOCALE, { maximumFractionDigits: digits }) + suffix;

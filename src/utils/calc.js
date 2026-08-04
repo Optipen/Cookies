@@ -1,6 +1,6 @@
 import { ITEMS } from "../data/items.js";
 import { getUpgrade } from "../data/upgrades.js";
-import { tierState } from "./grid.js";
+import { tierState, stepsReached, multOf } from "./grid.js";
 
 /**
  * Multiplicateur propre à chaque bâtiment: améliorations de palier (×2).
@@ -52,23 +52,31 @@ export const chipTier = (chips = 0) => tierState(Math.max(0, chips || 0));
 export const chipMult = (chips = 0) => chipTier(chips).mult;
 
 /**
- * Bonus commun aux deux familles: chips célestes et staking CRMB.
+ * Bonus global: chips célestes, staking CRMB et arbre céleste **s'additionnent**.
+ *
+ * Chaque source apporte un nombre entier de crans de +0,25, et c'est la SOMME
+ * des crans qui donne le multiplicateur — jamais le produit des multiplicateurs.
+ * Multiplier ×2,25 par ×1,25 donnait ×2,8125, et un Curseur affichait alors
+ * « +2,81 /clic ». En additionnant les crans on obtient ×2,75, et le Curseur
+ * affiche « +2,75 ».
  *
  * Il s'applique au clic ET au minage. Quand il ne portait que le minage, chaque
  * prestige faisait décrocher le clic un peu plus — le rapport entre jeu actif et
  * jeu passif dérivait vers zéro au fil des renaissances.
- *
- * Les deux facteurs sont sur la grille, leur produit l'est donc aussi.
  */
-export const globalBonus = (chips = 0, stakeMulti = 1) => chipMult(chips) * (stakeMulti || 1);
+export const globalSteps = (chips = 0, stakeSteps = 0, treeSteps = 0) =>
+  stepsReached(Math.max(0, chips || 0)) + Math.max(0, stakeSteps || 0) + Math.max(0, treeSteps || 0);
+
+export const globalBonus = (chips = 0, stakeSteps = 0, treeSteps = 0) =>
+  multOf(globalSteps(chips, stakeSteps, treeSteps));
 
 /** Cookies produits chaque seconde par les Mineurs. */
-export const miningFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) =>
-  sumFamily(items, upgrades, "mine") * globalBonus(chips, stakeMulti);
+export const miningFrom = (items = {}, upgrades = {}, chips = 0, stakeSteps = 0, treeSteps = 0) =>
+  sumFamily(items, upgrades, "mine") * globalBonus(chips, stakeSteps, treeSteps);
 
 /** Cookies ajoutés à chaque clic par les Cliqueurs. */
-export const clickPowerFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) =>
-  sumFamily(items, upgrades, "click") * globalBonus(chips, stakeMulti);
+export const clickPowerFrom = (items = {}, upgrades = {}, chips = 0, stakeSteps = 0, treeSteps = 0) =>
+  sumFamily(items, upgrades, "click") * globalBonus(chips, stakeSteps, treeSteps);
 
 // Noms historiques, conservés pour les modules qui les importent encore.
 export const cpsFrom = miningFrom;

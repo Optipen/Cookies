@@ -6,7 +6,7 @@
 
 import { ITEMS, ITEM_BY_ID, BALANCE } from "../data/items.js";
 import { getUpgrade, SHARE_BASE } from "../data/upgrades.js";
-import { miningFrom, clickPowerFrom, computePerItemMult } from "./calc.js";
+import { miningFrom, clickPowerFrom, computePerItemMult, globalBonus } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
 import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
 import { chipTier } from "./calc.js";
@@ -76,17 +76,20 @@ export const shareOf = () => SHARE_BASE;
  * Toutes les valeurs dérivées d'un état, en un seul passage.
  *
  * Formule complète:
- *   global      = chips(palier) × staking(palier)          ← toujours sur la grille
- *   minage      = Σ(mineurs × valeur × palier) × global × céleste
- *   clicPropre  = (base + Σ(cliqueurs × valeur × palier)) × global × céleste
+ *   crans       = paliers(chips) + paliers(staking) + niveaux(arbre)
+ *   global      = 1 + 0,25 × crans          ← un multiple de 0,25, toujours
+ *   minage      = Σ(mineurs   × valeur × palier) × global
+ *   clicPropre  = (1 + Σ(cliqueurs × valeur × palier) × global)
  *   parClic     = (clicPropre + minage × part) × combo × buff
+ *
+ * Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
+ * multiplicateurs: ×2,25 × ×1,25 valait ×2,8125 et un Curseur annonçait alors
+ * « +2,81 /clic ». En sommant les crans on obtient ×2,75, et il annonce
+ * « +2,75 ». C'est la même idée que la grille, appliquée à la composition.
  *
  * Les deux sommes sont linéaires et sans plafond: le millionième Cliqueur
  * ajoute exactement autant que le premier. L'équilibre entre les deux axes est
  * tenu par les prix, pas par un amortissement.
- *
- * Tous les facteurs de la ligne « global » sont des multiples de 0,25 choisis,
- * jamais des pourcentages accumulés: c'est ce qui interdit les ×1,02.
  */
 export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const prestige = prestigeEffects(state);
@@ -99,15 +102,19 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const buffMine = buffActive ? state.buffs.cpsMulti || 1 : 1;
   const buffClick = buffActive ? state.buffs.cpcMulti || 1 : 1;
 
-  const baseMining =
-    miningFrom(state.items || {}, state.upgrades || {}, state.prestige?.chips || 0, stakeMult) * prestige.cpsMult;
+  // Un seul multiplicateur global par axe, obtenu en additionnant les crans de
+  // toutes les sources. C'est cette addition qui garde les gains lisibles.
+  const chips = state.prestige?.chips || 0;
+  const items = state.items || {};
+  const upgrades = state.upgrades || {};
+
+  const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, prestige.mineSteps);
   const mining = baseMining * buffMine;
 
   const earlyMult = isEarlyWindow(state, now) ? earlyCfg().click_base_mult || 1 : 1;
-  const chips = state.prestige?.chips || 0;
-  const buildingsPower = clickPowerFrom(state.items || {}, state.upgrades || {}, chips, stakeMult);
+  const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, prestige.clickSteps);
   const ownPower = (state.cpcBase || 1) + buildingsPower;
-  const flatClick = ownPower * earlyMult * clickUpgradeMult(state.upgrades) * prestige.cpcMult;
+  const flatClick = ownPower * earlyMult * clickUpgradeMult(upgrades);
 
   const share = shareOf();
   const sharedClick = baseMining * share;
@@ -140,11 +147,14 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     // bouge pas entre deux crans, mais on voit le suivant approcher.
     chipTier: chipTierState,
     stakeTier,
+    // Multiplicateur global effectif de chaque axe, tel qu'on peut l'annoncer.
+    mineMult: globalBonus(chips, stakeTier.steps, prestige.mineSteps),
+    clickMult: globalBonus(chips, stakeTier.steps, prestige.clickSteps),
     prestige,
     buffActive,
     buffCps: buffMine,
     buffCpc: buffClick,
-    perItemMult: computePerItemMult(state.items || {}, state.upgrades || {}),
+    perItemMult: computePerItemMult(items, upgrades),
     // Matériel d'extraction CRMB — sans rapport avec le minage de cookies
     crmbRate: miningRate(state.crypto?.miners) * prestige.cryptoMult,
     stakingYield: stakingYieldPerSecond(positions) * prestige.cryptoMult,

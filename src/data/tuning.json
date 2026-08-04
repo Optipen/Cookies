@@ -14,7 +14,7 @@
       "window_s": 300,
       "miner_discount": 0.35,
       "free_first_miner": true,
-      "click_base_mult": 1.5,
+      "click_base_mult": 1,
       "flash": {
         "no_purchase_threshold_s": 30,
         "discount": 0.3

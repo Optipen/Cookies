@@ -186,28 +186,32 @@ const Notice = memo(function Notice({ notice, reducedMotion }) {
     info: "from-stone-700 to-stone-800",
   };
   return (
-    <AnimatePresence>
-      {notice && (
-        <motion.div
-          key={notice.id}
-          role="status"
-          initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: grand ? 0.8 : 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }}
-          transition={
-            reducedMotion
-              ? { duration: 0.15 }
-              : { type: "spring", stiffness: grand ? 260 : 420, damping: grand ? 16 : 30 }
-          }
-          className={`fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none text-white text-center
-            top-[max(0.75rem,env(safe-area-inset-top))] w-[min(92vw,28rem)]
-            rounded-2xl shadow-2xl bg-gradient-to-r ${tons[notice.tone] || tons.info}
-            ${grand ? "px-5 py-3.5 text-base font-black" : "px-4 py-2.5 text-sm font-semibold"}`}
-        >
-          {notice.msg}
-        </motion.div>
-      )}
-    </AnimatePresence>
+    // Le centrage vit sur le conteneur, pas sur l'élément animé: Framer Motion
+    // écrit `transform` en style inline et écrasait le `-translate-x-1/2` de la
+    // classe, ce qui décalait la notification hors de l'écran à droite.
+    <div className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center px-3 pointer-events-none">
+      <AnimatePresence>
+        {notice && (
+          <motion.div
+            key={notice.id}
+            role="status"
+            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: grand ? 0.8 : 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }}
+            transition={
+              reducedMotion
+                ? { duration: 0.15 }
+                : { type: "spring", stiffness: grand ? 260 : 420, damping: grand ? 16 : 30 }
+            }
+            className={`max-w-md text-white text-center rounded-2xl shadow-2xl bg-gradient-to-r ${
+              tons[notice.tone] || tons.info
+            } ${grand ? "px-5 py-3.5 text-base font-black" : "px-4 py-2.5 text-sm font-semibold"}`}
+          >
+            {notice.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 });
 
@@ -602,7 +606,8 @@ export default function CookieCraze() {
       const s = stateRef.current;
       const skin = SKINS[skinId];
       if (!skin || s.skinsOwned[skinId]) return;
-      if (s.cookies < skin.price) {
+      const enCrmb = (skin.crmb || 0) > 0;
+      if (enCrmb ? (s.crypto?.balance || 0) < skin.crmb : s.cookies < skin.price) {
         refuse();
         return;
       }
@@ -610,10 +615,11 @@ export default function CookieCraze() {
       particlesRef.current?.burstGold(24);
       setState((prev) => ({
         ...prev,
-        cookies: prev.cookies - skin.price,
+        cookies: enCrmb ? prev.cookies : prev.cookies - skin.price,
+        crypto: enCrmb ? { ...prev.crypto, balance: (prev.crypto?.balance || 0) - skin.crmb } : prev.crypto,
         skinsOwned: { ...prev.skinsOwned, [skinId]: true },
         skin: skinId,
-        stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + skin.price },
+        stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + (enCrmb ? 0 : skin.price) },
       }));
       notify.event(`Nouvelle apparence — ${skin.name}`, "success");
     },
@@ -964,7 +970,11 @@ export default function CookieCraze() {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap" data-menu-root>
-            <HeaderStat label="Par clic" value={fmt(stats.perClick)} title="Cookies gagnés à chaque clic" />
+            <HeaderStat
+              label="Par clic"
+              value={fmt(stats.perClickNoCombo)}
+              title="Puissance de clic, combo non compris"
+            />
             <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
               <HeaderStat label="Chips" value={availableChips(state)} tone="violet" title="Chips célestes disponibles" />
@@ -1060,11 +1070,11 @@ export default function CookieCraze() {
         {/* ---------- Corps ---------- */}
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 md:gap-6 items-start">
           {/* --- Scène du cookie --- */}
-          <section className={`rounded-3xl glass-warm shadow-xl p-4 md:p-6 ${shaking ? "animate-shake" : ""}`}>
+          <section className={`rounded-3xl glass-warm shadow-xl p-3 md:p-6 ${shaking ? "animate-shake" : ""}`}>
             <div className="text-center">
               <div className="text-sm md:text-base text-amber-800 font-medium">Cookies en banque</div>
               <div
-                className="text-5xl md:text-7xl font-black tracking-tight tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600"
+                className="text-4xl md:text-7xl font-black tracking-tight tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600"
                 aria-live="polite"
                 aria-atomic="true"
               >
@@ -1080,8 +1090,8 @@ export default function CookieCraze() {
             </div>
 
             {/* Le grand cookie */}
-            <div className="relative mt-4 flex items-center justify-center">
-              <div className="relative w-64 h-64 sm:w-80 sm:h-80 md:w-[26rem] md:h-[26rem]">
+            <div className="relative mt-2 md:mt-4 flex items-center justify-center">
+              <div className="relative w-52 h-52 sm:w-72 sm:h-72 md:w-[24rem] md:h-[24rem]">
                 <div
                   className={`absolute inset-0 rounded-full bg-gradient-to-br from-amber-300/30 via-orange-400/20 to-transparent blur-3xl ${
                     reducedMotion ? "" : "animate-pulse-slow"

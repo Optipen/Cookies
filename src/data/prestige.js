@@ -122,9 +122,14 @@ export function prestigeEffects(state) {
   const goldenLevels = Math.min(e.lucky_star.maxLevel, lvl("lucky_star"));
 
   return {
-    // Sur la grille par construction: 1 + 0,25 × niveau.
-    cpsMult: snap(1 + lvl("celestial_dough") * e.celestial_dough.effect.perLevel),
-    cpcMult: snap(1 + lvl("golden_fingers") * e.golden_fingers.effect.perLevel),
+    // Des CRANS, pas des multiplicateurs: ils s'additionnent à ceux des chips
+    // et du staking avant d'être convertis une seule fois en ×N. Convertir
+    // chaque source séparément puis multiplier redonnait des ×2,8125.
+    mineSteps: lvl("celestial_dough"),
+    clickSteps: lvl("golden_fingers"),
+    // Multiplicateurs isolés, pour l'affichage de l'arbre uniquement.
+    cpsMult: snap(1 + lvl("celestial_dough") * STEP),
+    cpcMult: snap(1 + lvl("golden_fingers") * STEP),
     costMult: 1 - costReduction,
     startFraction: Math.min(e.head_start.effect.cap, lvl("head_start") * e.head_start.effect.perLevel),
     offlineMult: 1 + lvl("night_shift") * e.night_shift.effect.perLevel,

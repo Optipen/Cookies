@@ -74,7 +74,7 @@ const ItemCard = memo(function ItemCard({
 
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline gap-1.5">
-              <span className="font-bold text-amber-950 truncate">{item.name}</span>
+              <span className="font-bold text-amber-950 leading-tight line-clamp-2">{item.name}</span>
               {owned > 0 && (
                 <span className="shrink-0 text-xs font-semibold text-amber-600 tabular-nums">×{owned}</span>
               )}
@@ -93,7 +93,7 @@ const ItemCard = memo(function ItemCard({
           onClick={onBuy}
           disabled={!achetable}
           aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmt(price)} cookies`}
-          className={`relative w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
+          className={`relative w-24 sm:w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
             achetable
               ? "border-amber-200 bg-gradient-to-b from-amber-400 to-orange-500 text-white active:from-amber-500 active:to-orange-600"
               : "border-stone-200 bg-stone-200/60 text-stone-500 cursor-not-allowed"
@@ -108,7 +108,7 @@ const ItemCard = memo(function ItemCard({
             {isFree ? "Offert" : qty > 1 ? `Acheter ×${qty}` : "Acheter"}
           </span>
           <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmt(price)}</span>
-          {!achetable && eta != null && isFinite(eta) && (
+          {!achetable && eta != null && eta <= 86_400_000 && (
             <span className="text-[9px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
           )}
         </button>
