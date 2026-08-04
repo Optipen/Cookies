@@ -60,7 +60,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline justify-between gap-2">
             <span className="font-semibold text-amber-950 truncate">{upgrade.name}</span>
-            <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+            <span className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
               {upgrade.badge}
             </span>
           </div>
@@ -75,7 +75,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
         </div>
       ) : (
         <div className="mt-1.5">
-          <div className="flex items-center justify-between text-[10px] text-amber-700 mb-1">
+          <div className="flex items-center justify-between text-[11px] text-amber-700 mb-1">
             <span className="truncate">🔒 {upgrade.hint}</span>
             <span className="tabular-nums shrink-0 ml-2">{Math.floor(progress * 100)} %</span>
           </div>
@@ -135,11 +135,11 @@ function Upgrades({ state, stats, onBuy }) {
 
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-amber-700">👆 Puissance de clic</div>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700">👆 Puissance de clic</div>
           <div className="text-sm font-bold text-amber-950 tabular-nums">{fmt(stats.perClickNoCombo)} /clic</div>
         </div>
         <div className="rounded-xl bg-emerald-100/60 border border-emerald-200 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-emerald-700">⛏️ Minage</div>
+          <div className="text-[11px] uppercase tracking-wide text-emerald-700">⛏️ Minage</div>
           <div className="text-sm font-bold text-emerald-950 tabular-nums">{fmt(stats.mining)} /s</div>
         </div>
       </div>

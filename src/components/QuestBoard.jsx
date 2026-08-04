@@ -56,7 +56,7 @@ const RewardChips = memo(function RewardChips({ quest, state, ctx }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1">
       {chips.map((c) => (
-        <span key={c.key} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${c.cls}`}>
+        <span key={c.key} className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md border ${c.cls}`}>
           {c.label}
         </span>
       ))}

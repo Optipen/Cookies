@@ -48,7 +48,7 @@ export default class ErrorBoundary extends React.Component {
           <p className="mt-2 text-sm text-amber-800/80">
             Une erreur inattendue s&apos;est produite. Ta sauvegarde est intacte : recharge la page pour reprendre.
           </p>
-          <pre className="mt-3 text-[10px] text-left text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 overflow-auto max-h-28">
+          <pre className="mt-3 text-[11px] text-left text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 overflow-auto max-h-28">
             {String(this.state.error?.message || this.state.error)}
           </pre>
           <div className="mt-4 flex flex-col gap-2">

@@ -95,7 +95,7 @@ const ItemCard = memo(function ItemCard({
           }`}
         >
           {flash && (
-            <span className="absolute -top-0.5 right-1 px-1.5 rounded-full text-[10px] font-bold bg-red-600 text-white shadow">
+            <span className="absolute -top-0.5 right-1 px-1.5 rounded-full text-[11px] font-bold bg-red-600 text-white shadow">
               -{Math.round(flash.discount * 100)} % <FlashTimer until={flash.until} />
             </span>
           )}
@@ -104,7 +104,7 @@ const ItemCard = memo(function ItemCard({
           </span>
           <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmt(price)}</span>
           {!achetable && eta != null && eta <= 86_400_000 && (
-            <span className="text-[10px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
+            <span className="text-[11px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
           )}
         </button>
       </div>
@@ -235,7 +235,7 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
   const mineRows = useMemo(() => (filter === "click" ? [] : build(MINER_ITEMS)), [build, filter]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-shop>
       <Section
         label={LABELS.click}
         total={stats.perClickNoCombo}

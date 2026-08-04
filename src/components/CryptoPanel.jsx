@@ -165,7 +165,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             }`}
           >
             Acheter
-            <span className="block text-[10px] font-normal tabular-nums opacity-90">{fmt(buyCost)} 🍪</span>
+            <span className="block text-[11px] font-normal tabular-nums opacity-90">{fmt(buyCost)} 🍪</span>
           </button>
           <button
             type="button"
@@ -178,10 +178,10 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             }`}
           >
             Vendre
-            <span className="block text-[10px] font-normal tabular-nums opacity-90">+{fmt(sellGain)} 🍪</span>
+            <span className="block text-[11px] font-normal tabular-nums opacity-90">+{fmt(sellGain)} 🍪</span>
           </button>
         </div>
-        <p className="mt-1.5 text-[10px] text-cyan-700/80">
+        <p className="mt-1.5 text-[11px] text-cyan-700/80">
           Frais de marché {Math.round(CRMB.spread * 100)} % · Gains/pertes réalisés : {" "}
           <b className={(crypto.realizedPnl || 0) >= 0 ? "text-emerald-700" : "text-red-700"}>
             {(crypto.realizedPnl || 0) >= 0 ? "+" : ""}
@@ -213,7 +213,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
               }`}
             >
               <div className="text-xs font-bold">{t.name}</div>
-              <div className={`text-[10px] ${tierId === t.id ? "text-violet-100" : "text-violet-600"}`}>
+              <div className={`text-[11px] ${tierId === t.id ? "text-violet-100" : "text-violet-600"}`}>
                 {fmtPct(t.perDay)} par jour · poids ×{t.boostMult}
               </div>
             </button>

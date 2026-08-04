@@ -8,9 +8,9 @@ import { activeRatio, REF_CLICKS_PER_SECOND, REF_COMBO } from "../utils/selector
 const Stat = memo(function Stat({ label, value, hint }) {
   return (
     <div className="rounded-xl bg-white/70 border border-amber-200 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wide text-amber-700">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-amber-700">{label}</div>
       <div className="text-sm font-bold text-amber-950 tabular-nums truncate">{value}</div>
-      {hint && <div className="text-[10px] text-amber-700/70">{hint}</div>}
+      {hint && <div className="text-[11px] text-amber-700/70">{hint}</div>}
     </div>
   );
 });
@@ -27,7 +27,7 @@ const Badge = memo(function Badge({ achievement, unlocked }) {
       }`}
     >
       <div className="text-[11px] font-bold leading-tight truncate">{unlocked ? achievement.name : "???"}</div>
-      <div className="text-[9px] opacity-70 mt-0.5 leading-tight line-clamp-2">
+      <div className="text-[11px] opacity-70 mt-0.5 leading-tight line-clamp-2">
         {unlocked ? style.label : achievement.desc}
       </div>
     </div>

@@ -387,6 +387,45 @@ entière, et aucun identifiant réaffiché deux fois.
 Un achat ordinaire ne notifie rien : le chiffre monte sur sa propre carte. Un
 achat refusé ne notifie rien non plus — le bouton tremble, c'est tout.
 
+### Mobile : mesuré, pas supposé
+
+Six gabarits, inspectés dans un vrai navigateur avec
+[`scripts/mobile.mjs`](scripts/mobile.mjs) — position réelle des éléments,
+taille réelle des cibles, taille réelle des polices.
+
+| Gabarit | Haut de la boutique | Écran | Débordement | Cibles < 44 px | Textes < 11 px |
+| --- | --- | --- | --- | --- | --- |
+| iPhone SE 320×568 | **528 px** | 568 | non | 0 | 0 |
+| iPhone 8 375×667 | 592 px | 667 | non | 0 | 0 |
+| iPhone 14 390×844 | 592 px | 844 | non | 0 | 0 |
+| iPhone 14 Pro Max 430×932 | 592 px | 932 | non | 0 | 0 |
+| Tablette 768×1024 | 947 px | 1024 | non | 0 | 0 |
+| Ordinateur 1440×980 | 322 px | 980 | non | 0 | 0 |
+
+**Sur un iPhone SE, la boutique commençait à 709 px — entièrement sous la ligne
+de flottaison.** Trois choses la faisaient descendre :
+
+- **l'en-tête tenait sur trois lignes** en 320 px : le titre, puis quatre
+  pastilles, puis le bouton de réglages tout seul. Il tient maintenant sur une
+  ligne, et les deux pastilles que la barre de production répète mot pour mot
+  (« Par clic », « Minage ») disparaissent sous `sm` ;
+- **le total cuit et les compteurs décoratifs** occupaient deux lignes sans
+  servir à la moindre décision. Ils réapparaissent dès `xs` et restent dans
+  Profil → Statistiques ;
+- **le cookie faisait 208 px** ; il en fait 144 sur le plus petit écran, 192
+  dès 360 px de large.
+
+Les six boutons de la boutique — Tout / Clic / Minage et ×1 / ×10 / Max — sont
+**toujours sur deux rangées**. Sur une seule, « ×10 » sortait de l'écran en
+320 px et « Max » était coupé dans le panneau latéral de 400 px. Un point de
+rupture par taille d'écran n'aurait pas suffi : le panneau reste large de
+400 px même sur un écran de 1 440.
+
+Le premier écran montre, sans défiler : le solde, les cinq statistiques
+(par clic, cadence, production des clics, minage, total), le cookie, le combo
+dès le premier appui, le prochain objectif, les filtres, le sélecteur de
+quantité et le début de la boutique.
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs

@@ -38,7 +38,9 @@ export default [
     // Outils de mesure lancés à la main (`npx vite-node scripts/…`). Ils
     // tournent sous Node et n'existent que pour écrire dans la console.
     files: ["scripts/**/*.mjs"],
-    languageOptions: { globals: { ...globals.node } },
+    // `globals.browser` en plus de Node: `scripts/mobile.mjs` fait exécuter du
+    // code DANS la page via `page.evaluate`, donc `document` y est légitime.
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: { "no-console": "off" },
   },
   {

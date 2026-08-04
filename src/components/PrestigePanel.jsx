@@ -97,7 +97,7 @@ const VaultTrack = memo(function VaultTrack({ track, level, cost, affordable, ma
             </span>
           </div>
           <p className="text-[11px] text-sky-900/80 leading-snug">{track.desc}</p>
-          <p className="text-[10px] text-sky-800/60 leading-snug mt-0.5">{track.detail}</p>
+          <p className="text-[11px] text-sky-800/60 leading-snug mt-0.5">{track.detail}</p>
         </div>
       </div>
       <button
@@ -147,15 +147,15 @@ function PrestigePanel({ state, effects, onPrestige, onBuyNode, onAscend, onBuyT
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-xl bg-white/70 border border-violet-200 py-2">
-            <div className="text-[10px] text-violet-700 uppercase tracking-wide">Disponibles</div>
+            <div className="text-[11px] text-violet-700 uppercase tracking-wide">Disponibles</div>
             <div className="text-lg font-black text-violet-900 tabular-nums">{chips}</div>
           </div>
           <div className="rounded-xl bg-white/70 border border-violet-200 py-2">
-            <div className="text-[10px] text-violet-700 uppercase tracking-wide">Gagnés</div>
+            <div className="text-[11px] text-violet-700 uppercase tracking-wide">Gagnés</div>
             <div className="text-lg font-black text-violet-900 tabular-nums">{state.prestige?.chips || 0}</div>
           </div>
           <div className="rounded-xl bg-white/70 border border-violet-200 py-2">
-            <div className="text-[10px] text-violet-700 uppercase tracking-wide">Prestiges</div>
+            <div className="text-[11px] text-violet-700 uppercase tracking-wide">Prestiges</div>
             <div className="text-lg font-black text-violet-900 tabular-nums">{state.stats?.prestigeCount || 0}</div>
           </div>
         </div>
@@ -201,15 +201,15 @@ function PrestigePanel({ state, effects, onPrestige, onBuyNode, onAscend, onBuyT
 
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white/70 border border-sky-200 py-2">
-              <div className="text-[10px] text-sky-700 uppercase tracking-wide">Étoiles libres</div>
+              <div className="text-[11px] text-sky-700 uppercase tracking-wide">Étoiles libres</div>
               <div className="text-lg font-black text-sky-900 tabular-nums">{etoiles}</div>
             </div>
             <div className="rounded-xl bg-white/70 border border-sky-200 py-2">
-              <div className="text-[10px] text-sky-700 uppercase tracking-wide">Ascensions</div>
+              <div className="text-[11px] text-sky-700 uppercase tracking-wide">Ascensions</div>
               <div className="text-lg font-black text-sky-900 tabular-nums">{state.ascension?.count || 0}</div>
             </div>
             <div className="rounded-xl bg-white/70 border border-sky-200 py-2">
-              <div className="text-[10px] text-sky-700 uppercase tracking-wide">Rangs ouverts</div>
+              <div className="text-[11px] text-sky-700 uppercase tracking-wide">Rangs ouverts</div>
               <div className="text-lg font-black text-sky-900 tabular-nums">{16 + asc.horizon * 2}</div>
             </div>
           </div>
@@ -269,7 +269,7 @@ function PrestigePanel({ state, effects, onPrestige, onBuyNode, onAscend, onBuyT
 
       <section>
         <h3 className="text-base font-bold text-violet-950 mb-2">Arbre céleste</h3>
-        <div className="mb-2 flex flex-wrap gap-1 text-[10px]">
+        <div className="mb-2 flex flex-wrap gap-1 text-[11px]">
           <span className="px-2 py-1 rounded-lg bg-violet-100 text-violet-800 font-semibold">
             Production {fmtPct(effects.cpsMult - 1)}
           </span>

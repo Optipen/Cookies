@@ -17,7 +17,7 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
       }`}
     >
       {equipped && (
-        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
           Équipé
         </span>
       )}

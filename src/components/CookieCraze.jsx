@@ -118,7 +118,7 @@ const ComboMeter = memo(function ComboMeter({ display }) {
         <span className={`font-black tabular-nums ${plein ? "text-orange-600" : "text-amber-700"}`}>
           ×{fmtMult(mult)}
           {plein ? (
-            <span className="ml-1 text-[10px] font-bold uppercase tracking-wide">max</span>
+            <span className="ml-1 text-[11px] font-bold uppercase tracking-wide">max</span>
           ) : (
             <span className="ml-1 font-medium text-amber-600/70">→ ×{fmtMult(mult + STEP)}</span>
           )}
@@ -179,21 +179,21 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
             {/* Arrondie au quart: annoncer « 4,3333 clics/s » sur une moyenne
                 glissante serait faussement précis. Le « ≈ » le dit. */}
             {c.actif ? fmtApprox(snap(c.creditee)) : "—"}
-            <span className="text-[10px] font-semibold opacity-70"> /s</span>
+            <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
         <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
           <div className="text-sm font-black text-amber-700 tabular-nums leading-tight" data-testid="stat-clics">
             {fmt(c.prodClics)}
-            <span className="text-[10px] font-semibold opacity-70"> /s</span>
+            <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
       </div>
       {/* La cadence créditée est bornée. On le dit quand on y touche, plutôt
           que de laisser croire qu'accélérer rapporte encore. */}
       {c.bornee && (
-        <p className="mt-1 text-center text-[10px] font-semibold text-orange-700">
+        <p className="mt-1 text-center text-[11px] font-semibold text-orange-700">
           Cadence créditée limitée à {CREDIT_MAX_CPS} clics/s
         </p>
       )}
@@ -241,7 +241,7 @@ const NextGoal = memo(function NextGoal({ state, stats }) {
   if (!goal && !cheapest) return null;
 
   return (
-    <div className="mt-3 mx-auto max-w-sm rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
+    <div className="mt-2 sm:mt-3 mx-auto max-w-sm rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-1.5 sm:py-2" data-testid="objectif">
       {goal && (
         <div className="flex items-center justify-between gap-2 text-[11px]">
           <span className="text-amber-800 truncate">
@@ -346,7 +346,7 @@ const Banner = memo(function Banner({ banner }) {
           transition={{ type: "spring", stiffness: 300, damping: 22 }}
           className="fixed left-1/2 top-20 -translate-x-1/2 z-40 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-2xl text-center pointer-events-none"
         >
-          <div className="text-[10px] uppercase tracking-[0.2em] opacity-90">{banner.title}</div>
+          <div className="text-[11px] uppercase tracking-[0.2em] opacity-90">{banner.title}</div>
           <div className="text-lg font-black leading-tight">{banner.sub}</div>
         </motion.div>
       )}
@@ -1279,25 +1279,32 @@ export default function CookieCraze() {
     >
       {/* La marge basse réserve la place de la navigation fixe: aucun bouton de
           la boutique ne peut finir caché dessous. */}
-      <div className="mx-auto max-w-7xl px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="mx-auto max-w-7xl px-3 py-2 sm:py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
         {/* ---------- En-tête ---------- */}
-        <header className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5">
-            <span className="text-3xl drop-shadow-sm" aria-hidden="true">
+        {/* L'en-tête tenait sur TROIS lignes en 320 px de large — titre, puis
+            quatre pastilles, puis le bouton de réglages tout seul — et poussait
+            la boutique à 709 px sur un écran de 568. Il tient maintenant sur
+            une ligne: le titre rétrécit, et les deux chiffres que la barre de
+            production répète mot pour mot disparaissent sous `sm`. */}
+        <header className="flex items-center justify-between gap-2 flex-nowrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-2xl sm:text-3xl drop-shadow-sm shrink-0" aria-hidden="true">
               🍪
             </span>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-700 to-orange-600">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-700 to-orange-600 truncate">
               Cookie Craze
             </h1>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap" data-menu-root>
-            <HeaderStat
-              label="Par clic"
-              value={fmt(stats.perClick)}
-              title={`Gain réel d'un appui, combo ×${fmtMult(stats.combo)} compris`}
-            />
-            <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
+          <div className="flex items-center gap-1.5 flex-wrap justify-end" data-menu-root>
+            <span className="hidden sm:contents">
+              <HeaderStat
+                label="Par clic"
+                value={fmt(stats.perClick)}
+                title={`Gain réel d'un appui, combo ×${fmtMult(stats.combo)} compris`}
+              />
+              <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
+            </span>
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
               <HeaderStat label="Chips" value={availableChips(state)} tone="violet" title="Chips célestes disponibles" />
             )}
@@ -1380,7 +1387,7 @@ export default function CookieCraze() {
                       className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       ♻️ Réinitialiser
-                      <span className="block text-[10px] text-red-400">Maj + clic : effacer aussi le prestige</span>
+                      <span className="block text-[11px] text-red-400">Maj + clic : effacer aussi le prestige</span>
                     </button>
                   </motion.div>
                 )}
@@ -1390,19 +1397,25 @@ export default function CookieCraze() {
         </header>
 
         {/* ---------- Corps ---------- */}
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 md:gap-6 items-start">
+        <div className="mt-2 sm:mt-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-3 sm:gap-4 md:gap-6 items-start">
           {/* --- Scène du cookie --- */}
-          <section className={`rounded-3xl glass-warm shadow-xl p-3 md:p-6 ${shaking ? "animate-shake" : ""}`}>
+          <section className={`rounded-3xl glass-warm shadow-xl p-2 sm:p-3 md:p-6 ${shaking ? "animate-shake" : ""}`}>
             <div className="text-center">
-              <div className="text-sm md:text-base text-amber-800 font-medium">Cookies en banque</div>
+              <div className="text-[11px] sm:text-sm md:text-base text-amber-800 font-medium">Cookies en banque</div>
               <div
-                className="text-4xl md:text-7xl font-black tracking-tight tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600"
+                className="text-3xl sm:text-4xl md:text-7xl font-black tracking-tight tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600"
                 aria-live="polite"
                 aria-atomic="true"
+                data-testid="solde"
               >
                 {fmtInt(state.cookies)}
               </div>
-              <div className="text-xs md:text-sm text-amber-800/80">{fmtInt(state.lifetime)} cuits au total</div>
+              {/* Le total cuit ne sert à aucune décision immédiate: il coûtait une
+                  ligne au-dessus de la boutique sur un écran de 568 px. Il reste
+                  visible dès `xs`, et dans Profil → Statistiques partout. */}
+              <div className="hidden xs:block text-xs md:text-sm text-amber-800/80">
+                {fmtInt(state.lifetime)} cuits au total
+              </div>
               <ProductionBar stats={stats} cadence={clickRate.rate} />
               <ComboMeter display={combo.display} />
               <BuffBadge buffs={state.buffs} />
@@ -1410,8 +1423,8 @@ export default function CookieCraze() {
             </div>
 
             {/* Le grand cookie */}
-            <div className="relative mt-2 md:mt-4 flex items-center justify-center">
-              <div className="relative w-52 h-52 sm:w-72 sm:h-72 md:w-[24rem] md:h-[24rem]">
+            <div className="relative mt-1 sm:mt-2 md:mt-4 flex items-center justify-center">
+              <div className="relative w-36 h-36 xs:w-48 xs:h-48 sm:w-72 sm:h-72 md:w-[24rem] md:h-[24rem]">
                 <div
                   className={`absolute inset-0 rounded-full bg-gradient-to-br from-amber-300/30 via-orange-400/20 to-transparent blur-3xl ${
                     reducedMotion ? "" : "animate-pulse-slow"
@@ -1454,7 +1467,10 @@ export default function CookieCraze() {
 
             <NextGoal state={state} stats={stats} />
 
-            <div className="mt-2 flex items-center justify-center gap-3 text-xs text-amber-700">
+            {/* Décoratifs: ils ne servent à aucune décision et coûtaient une
+                ligne au-dessus de la boutique. Ils restent visibles à partir de
+                la tablette, et dans Profil → Statistiques sur mobile. */}
+            <div className="mt-2 hidden sm:flex items-center justify-center gap-3 text-xs text-amber-700">
               <span>🍪 Croqués : <b className="tabular-nums">{state.cookieEatenCount || 0}</b></span>
               <span aria-hidden="true">·</span>
               <span>👆 Clics : <b className="tabular-nums">{fmtInt(state.stats.clicks || 0)}</b></span>
@@ -1500,7 +1516,7 @@ export default function CookieCraze() {
                     <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-orange-500 lg:hidden" aria-hidden="true" />
                   )}
                   {t.id === "quests" && questAlert > 0 && tab !== "quests" && (
-                    <span className="absolute top-1 right-1/4 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold grid place-items-center lg:-top-1 lg:-right-1">
+                    <span className="absolute top-1 right-1/4 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[11px] font-bold grid place-items-center lg:-top-1 lg:-right-1">
                       {questAlert}
                     </span>
                   )}
@@ -1513,8 +1529,17 @@ export default function CookieCraze() {
                 <>
                   {/* Filtres et quantité restent collés en haut du panneau: sur
                       mobile la liste défile sous eux, ils ne disparaissent jamais. */}
-                  <div className="sticky top-0 z-10 -mx-3 md:-mx-4 px-3 md:px-4 pb-2 pt-0.5 bg-gradient-to-b from-amber-50 via-amber-50/95 to-transparent flex items-center gap-2">
-                    <div className="flex gap-1" role="group" aria-label="Filtrer les bâtiments">
+                  {/* Six boutons ne tiennent ni sur une ligne de 320 px ni dans
+                      le panneau latéral de 400 px: le « ×10 » sortait de
+                      l'écran sur mobile et « Max » était coupé sur ordinateur.
+                      Ils sont donc TOUJOURS sur deux rangées, quelle que soit
+                      la largeur: un point de rupture par taille d'écran ne sait
+                      rien de la largeur du panneau, qui reste à 400 px même sur
+                      un écran de 1 440. Chaque groupe prend toute la ligne, les
+                      libellés restent lisibles, et la cible de 44 px est tenue
+                      partout. */}
+                  <div className="sticky top-0 z-10 -mx-3 md:-mx-4 px-3 md:px-4 pb-2 pt-0.5 bg-gradient-to-b from-amber-50 via-amber-50/95 to-transparent flex flex-col gap-1.5">
+                    <div className="flex gap-1 w-full" role="group" aria-label="Filtrer les bâtiments">
                       {[
                         ["all", "Tout"],
                         ["click", "👆 Clic"],
@@ -1525,7 +1550,7 @@ export default function CookieCraze() {
                           type="button"
                           onClick={() => setShopFilter(id)}
                           aria-pressed={shopFilter === id}
-                          className={`px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
+                          className={`flex-1 px-1.5 sm:px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                             shopFilter === id
                               ? "bg-amber-500 text-white shadow"
                               : "bg-white/80 text-amber-800 border border-amber-200"
@@ -1535,14 +1560,14 @@ export default function CookieCraze() {
                         </button>
                       ))}
                     </div>
-                    <div className="ml-auto flex gap-1" role="group" aria-label="Quantité d'achat">
+                    <div className="flex gap-1 w-full" role="group" aria-label="Quantité d'achat">
                       {[1, 10, "max"].map((q) => (
                         <button
                           key={q}
                           type="button"
                           onClick={() => setBuyQty(q)}
                           aria-pressed={buyQty === q}
-                          className={`px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
+                          className={`flex-1 px-1.5 sm:px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
                             buyQty === q
                               ? "bg-orange-500 text-white shadow"
                               : "bg-white/80 text-amber-800 border border-amber-200"
