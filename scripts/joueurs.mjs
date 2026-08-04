@@ -64,9 +64,9 @@ function auditerLaPage() {
     // sauf au solde de cookies (la seule exception voulue).
     const solde = parent.closest("[data-testid='solde']") !== null;
     let m;
-    const reVirgule = /(\d{1,3}(?:[\s  ]\d{3})+|\d+),(\d+)/g;
+    const reVirgule = /(\d{1,3}(?:[\s\u202F\u00A0]\d{3})+|\d+),(\d+)/g;
     while ((m = reVirgule.exec(t)) !== null) {
-      const v = parseFloat(m[1].replace(/[\s  ]/g, "") + "." + m[2]);
+      const v = parseFloat(m[1].replace(/[\s\u202F\u00A0]/g, "") + "." + m[2]);
       // multiple de 0,25 ? — ×10000 pour rester en entiers jusqu'à 4 décimales
       const hors = Math.round(v * 10000) % 2500 !== 0;
       if (hors && !solde) {
@@ -540,6 +540,15 @@ async function lea(page, o) {
   if (await renaitre.isEnabled().catch(() => false)) {
     const texte = (await renaitre.textContent().catch(() => "")).trim();
     await renaitre.click();
+    await attendre(600);
+    // La confirmation est en jeu désormais: on capture le dialogue, puis OUI.
+    const dialogue = page.locator("[data-testid='confirmation']");
+    if (await dialogue.isVisible().catch(() => false)) {
+      await o.shot("confirmation-renaissance");
+      await dialogue.locator("button", { hasText: /^Renaître$/ }).click().catch(() => {});
+    } else {
+      o.note("CONFIRMATION-ABSENTE", "renaissance sans dialogue de confirmation");
+    }
     await attendre(1500);
     o.note("renaissance", texte);
     await o.shot("prestige-apres-renaissance");
@@ -555,6 +564,14 @@ async function lea(page, o) {
   if (await ascendre.isEnabled().catch(() => false)) {
     const texte = (await ascendre.textContent().catch(() => "")).trim();
     await ascendre.click();
+    await attendre(600);
+    const dialogueAsc = page.locator("[data-testid='confirmation']");
+    if (await dialogueAsc.isVisible().catch(() => false)) {
+      await o.shot("confirmation-ascension");
+      await dialogueAsc.locator("button", { hasText: /^Ascendre$/ }).click().catch(() => {});
+    } else {
+      o.note("CONFIRMATION-ABSENTE", "ascension sans dialogue de confirmation");
+    }
     await attendre(1500);
     o.note("ascension", texte);
     await o.shot("prestige-apres-ascension");
@@ -599,6 +616,9 @@ async function session(j) {
   if (j.save) {
     await page.addInitScript(
       ({ save, cle, decalage }) => {
+        // Un rechargement en cours de session NE remet PAS la sauvegarde de
+        // départ: c'est précisément la continuité qu'on veut mesurer.
+        if (localStorage.getItem(cle) || localStorage.getItem("cookieCrazeSaveV6")) return;
         const s = { ...save };
         const maintenant = Date.now();
         s.createdAt = maintenant - 3 * 86_400_000;
