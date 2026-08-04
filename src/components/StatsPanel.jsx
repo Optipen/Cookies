@@ -3,6 +3,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES, TIER_STYLE } from "../data/achiev
 import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
 import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct } from "../utils/format.js";
+import { activeRatio } from "../utils/selectors.js";
 
 const Stat = memo(function Stat({ label, value, hint }) {
   return (
@@ -60,18 +61,23 @@ function StatsPanel({ state, stats }) {
         <div className="grid grid-cols-2 gap-2">
           <Stat label="Cookies en banque" value={fmtInt(state.cookies)} />
           <Stat label="Cuits au total" value={fmtInt(state.lifetime)} />
-          <Stat label="Production" value={`${fmt(stats.cps)} /s`} hint={`Record ${fmt(state.stats?.bestCps || 0)} /s`} />
-          <Stat label="Par clic" value={fmt(stats.cpc)} />
+          <Stat label="Minage" value={`${fmt(stats.mining)} /s`} hint={`Record ${fmt(state.stats?.bestCps || 0)} /s`} />
+          <Stat label="Puissance de clic" value={`${fmt(stats.perClickNoCombo)} /clic`} />
           <Stat label="Clics" value={fmtInt(state.stats?.clicks || 0)} />
           <Stat label="Cookies dorés" value={fmtInt(state.stats?.goldenClicks || 0)} />
-          <Stat label="Bâtiments" value={fmtInt(buildings)} />
+          <Stat label="Cliqueurs + Mineurs" value={fmtInt(buildings)} />
           <Stat label="Améliorations" value={`${Object.keys(state.upgrades || {}).length}`} />
           <Stat label="Quêtes terminées" value={fmtInt(questsDone)} hint={`Série ${state.quests?.streak || 0} j`} />
           <Stat label="Cookies croqués" value={fmtInt(state.cookieEatenCount || 0)} />
-          <Stat label="CRMB miné" value={fmtCrmb(state.crypto?.totalMined || 0)} hint={`${miners} mineurs`} />
+          <Stat label="CRMB extrait" value={fmtCrmb(state.crypto?.totalMined || 0)} hint={`${miners} machines`} />
           <Stat label="Boost staking" value={fmtPct(stats.stakeMult - 1, 1)} />
           <Stat label="Chips célestes" value={fmtInt(state.prestige?.chips || 0)} hint={`${state.stats?.prestigeCount || 0} prestiges`} />
           <Stat label="Temps de jeu" value={fmtDuration(state.stats?.playtimeMs || 0)} />
+          <Stat
+            label="Actif / passif"
+            value={`${activeRatio(state).toFixed(2)}×`}
+            hint="Gain d'un joueur qui clique vs idle"
+          />
         </div>
       </section>
 

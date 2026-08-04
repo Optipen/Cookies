@@ -1,20 +1,87 @@
-export const ITEMS = [
-  // === Tiers CPS (production passive) ===
-  { id: "oven",     mode: "cps",  name: "Four",           emoji: "🔥", base: 60,         growth: 1.13,  cps: 0.6,    desc: "Produit des cookies lentement.", synergy: "Se combine avec les améliorations Four pour doubler le gain." },
-  { id: "bakery",   mode: "cps",  name: "Boulangerie",   emoji: "🥖", base: 500,        growth: 1.135, cps: 5,      desc: "Production régulière de cookies.", synergy: "Booste avec les améliorations de production CPS globales." },
-  { id: "farm_cps", mode: "cps",  name: "Ferme",          emoji: "🌾", base: 5000,       growth: 1.14,  cps: 32,     desc: "Champs dédiés au blé sucré.", synergy: "Synergie avec Ferme (clic) et améliorations agricoles." },
-  { id: "factory_cps", mode: "cps", name: "Usine",        emoji: "🏭", base: 60000,      growth: 1.145, cps: 180,    desc: "Ligne de production industrielle.", synergy: "Combo puissant avec Usine (clic) et tech industrielles." },
-  { id: "bank_cps", mode: "cps",  name: "Banque",         emoji: "🏦", base: 750000,     growth: 1.15,  cps: 900,    desc: "Intérêts en cookies composés.", synergy: "Amplifiée par Banque (clic) et améliorations financières." },
-  { id: "temple",   mode: "cps",  name: "Temple",         emoji: "⛩️", base: 9000000,   growth: 1.155, cps: 4200,   desc: "Rituels d'efficacité sacrée.", synergy: "Bonus mystique avec améliorations divines." },
-  { id: "lab",      mode: "cps",  name: "Laboratoire",    emoji: "🧪", base: 120000000,  growth: 1.16,  cps: 18000,  desc: "Science du cookie appliquée.", synergy: "Recherche avancée avec améliorations scientifiques." },
-  { id: "portal",   mode: "cps",  name: "Portail",        emoji: "🌀", base: 1800000000, growth: 1.165, cps: 75000,  desc: "Importe des cookies d'ailleurs.", synergy: "Portail dimensionnel amplifié par tech interdimensionnelle." },
+// === Bâtiments ===
+//
+// Deux familles parallèles, qui fonctionnent en même temps:
+//  · les Cliqueurs augmentent la puissance de clic (cookies gagnés à chaque clic);
+//  · les Mineurs augmentent le minage (cookies générés chaque seconde).
+//
+// Les valeurs sont volontairement « propres » (+0,25 · +1 · +5 · +25 …) et
+// strictement additives: acheter un Curseur quand la puissance vaut 1 la porte
+// à exactement 1,25. Aucune n'est plafonnée.
+//
+// Les identifiants sont conservés depuis les versions précédentes pour que les
+// sauvegardes existantes gardent leurs bâtiments; seuls les noms affichés et
+// les valeurs ont changé.
 
-  // === Tiers Multiplicateur de clic (CPC) — contributions additivement, softcap côté calcul ===
-  { id: "cursor",   mode: "mult", name: "Curseur",        emoji: "🖱️", base: 18,        growth: 1.15,  mult: 0.04,  desc: "Augmente la puissance des clics.", synergy: "Synergie avec Mamie et upgrades Curseur (x2, x4...)." },
-  { id: "grandma",  mode: "mult", name: "Mamie",          emoji: "👵", base: 140,       growth: 1.155, mult: 0.14,  desc: "Recettes maison éprouvées.", synergy: "Boost Curseur de +1% par Mamie. Recettes améliorées avec upgrades." },
-  { id: "farm",     mode: "mult", name: "Ferme (clic)",    emoji: "🌾", base: 1400,      growth: 1.16,  mult: 0.7,   desc: "Boost agricole pour les clics.", synergy: "Synergie avec Ferme CPS et améliorations agricoles." },
-  { id: "factory",  mode: "mult", name: "Usine (clic)",    emoji: "🏭", base: 18000,     growth: 1.165, mult: 2.8,   desc: "Assemblage de clics optimisé.", synergy: "Combo industriel avec Usine CPS et tech d'efficacité." },
-  { id: "bank",     mode: "mult", name: "Banque (clic)",   emoji: "🏦", base: 220000,    growth: 1.17,  mult: 9.0,   desc: "Crédit de puissance de clic.", synergy: "Amplifiée par Banque CPS et investissements financiers." },
-  { id: "ai",       mode: "mult", name: "IA Boulangerie",  emoji: "🤖", base: 3000000,   growth: 1.175, mult: 27,    desc: "Optimisation ML de vos clics.", synergy: "Apprentissage machine adaptatif avec améliorations tech." },
-  { id: "tm",       mode: "mult", name: "Machine à Temps", emoji: "⌛", base: 32000000,  growth: 1.18,  mult: 72,    desc: "Plie le temps pour cliquer plus fort.", synergy: "Manipulation temporelle avec améliorations quantiques." },
+/**
+ * Écart de prix entre un Cliqueur et le Mineur de même rang.
+ *
+ * Il sert à égaliser l'attractivité des deux familles, pas à régler le rapport
+ * actif/passif: avec des prix exponentiels, un facteur constant ne décale les
+ * quantités achetées que d'une poignée d'exemplaires. Le rapport se règle par
+ * l'échelle des VALEURS (un Mineur vaut dix fois son Cliqueur de même rang).
+ */
+export const CLICK_PRICE_FACTOR = 1.5;
+
+/** Croissance du prix à chaque exemplaire acheté. */
+export const PRICE_GROWTH = 1.15;
+
+// Prix de base des Mineurs, par rang.
+const MINE_BASE = [60, 1_000, 8_000, 60_000, 340_000, 2_400_000, 17_000_000, 95_000_000];
+
+const mineItem = (rank, id, name, emoji, value, desc) => ({
+  id,
+  mode: "mine",
+  rank,
+  name,
+  emoji,
+  value, // cookies par seconde
+  base: MINE_BASE[rank],
+  growth: PRICE_GROWTH,
+  desc,
+});
+
+const clickItem = (rank, id, name, emoji, value, desc) => ({
+  id,
+  mode: "click",
+  rank,
+  name,
+  emoji,
+  value, // cookies ajoutés à chaque clic
+  base: Math.round(MINE_BASE[rank] * CLICK_PRICE_FACTOR),
+  growth: PRICE_GROWTH,
+  desc,
+});
+
+// --- Cliqueurs: puissance de clic ------------------------------------------
+export const CLICKERS = [
+  clickItem(0, "cursor", "Curseur", "🖱️", 0.25, "Un curseur de plus sur le cookie."),
+  clickItem(1, "grandma", "Mamie", "👵", 1, "Elle tape fort, et avec amour."),
+  clickItem(2, "farm", "Gant de frappe", "🧤", 5, "Un gant lesté, pour taper plus fort."),
+  clickItem(3, "factory", "Bras robotisé", "🦾", 25, "Précision industrielle à chaque frappe."),
+  clickItem(4, "bank", "Exosquelette", "🦿", 100, "Multiplie la force de ta main."),
+  clickItem(5, "ai", "IA de frappe", "🤖", 500, "Elle anticipe tes clics."),
+  clickItem(6, "tm", "Machine à Temps", "⌛", 2_500, "Chaque clic se répète dans le passé."),
+  clickItem(7, "singularity", "Singularité tactile", "🌌", 10_000, "Un seul clic, une infinité d'impacts."),
 ];
+
+// --- Mineurs: production automatique ---------------------------------------
+export const MINER_ITEMS = [
+  mineItem(0, "oven", "Four", "🔥", 2, "Cuit des cookies en continu."),
+  mineItem(1, "bakery", "Boulangerie", "🥖", 10, "Une équipe qui ne dort jamais."),
+  mineItem(2, "farm_cps", "Ferme", "🌾", 50, "Champs de blé sucré à perte de vue."),
+  mineItem(3, "factory_cps", "Usine", "🏭", 250, "Ligne de production industrielle."),
+  mineItem(4, "bank_cps", "Banque", "🏦", 1_000, "Des intérêts en cookies composés."),
+  mineItem(5, "temple", "Temple", "⛩️", 5_000, "Rituels d'efficacité sacrée."),
+  mineItem(6, "lab", "Laboratoire", "🧪", 25_000, "La science du cookie appliquée."),
+  mineItem(7, "portal", "Portail", "🌀", 100_000, "Importe des cookies d'une autre réalité."),
+];
+
+export const ITEMS = [...CLICKERS, ...MINER_ITEMS];
+
+export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+/** Libellés affichés — le jeu ne parle jamais de « CPC » ni de « CPS ». */
+export const LABELS = {
+  click: { one: "Cliqueur", many: "Cliqueurs", axis: "Puissance de clic", unit: "/clic", icon: "👆" },
+  mine: { one: "Mineur", many: "Mineurs", axis: "Minage", unit: "/s", icon: "⛏️" },
+};

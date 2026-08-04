@@ -2,116 +2,100 @@ import { ITEMS } from "./items.js";
 
 // === Améliorations ===
 //
-// Elles sont générées à la demande, pas listées en dur. L'ancienne version en
-// comptait dix au total: le joueur les avait toutes achetées en une vingtaine
-// de minutes et cet axe de progression était définitivement épuisé.
+// Générées à la demande plutôt que listées en dur: la réserve est infinie, il
+// n'existe pas de « dernière amélioration ».
+//
+// Règle de lisibilité: les bonus sont toujours des valeurs propres. Les
+// bâtiments apportent des additions nettes (+0,25 · +1 · +5 …) et les
+// améliorations, réservées aux paliers, des multiplicateurs nets (×2 · ×3 · ×5)
+// ou des points entiers de reversement (+1 %).
 //
 // Un identifiant encode tout ce qu'il faut pour reconstruire l'amélioration
-// (`tier:oven:50`, `share:3`, `global:2`), ce qui permet de les fabriquer à
-// l'infini tout en gardant des sauvegardes lisibles.
-
-// --- Paliers de possession ------------------------------------------------
-
-/** Seuil de la n-ième amélioration d'un bâtiment: 10, 25, 50, 100, 200, puis ×1,6. */
-export function tierThreshold(n) {
-  const early = [10, 25, 50, 100, 200];
-  if (n < early.length) return early[n];
-  return Math.round(200 * Math.pow(1.6, n - early.length + 1));
-}
-
-/** Index du prochain palier strictement supérieur à `owned`. */
-export function nextTierIndex(owned) {
-  let n = 0;
-  while (tierThreshold(n) <= owned) n++;
-  return n;
-}
+// (`tier:oven:4`, `share:3`, `global:2`), ce qui garde les sauvegardes lisibles.
 
 const NAMES = [
   "huilé", "renforcé", "optimisé", "industrialisé", "automatisé",
   "quantique", "transcendant", "cosmique", "divin", "absolu",
 ];
-const tierName = (item, n) => `${item.name} ${NAMES[n % NAMES.length]}${n >= NAMES.length ? ` ${Math.floor(n / NAMES.length) + 1}` : ""}`;
 
-/** Coût d'une amélioration de palier: environ 12 exemplaires du bâtiment au seuil. */
-function tierCost(item, threshold) {
-  return Math.ceil(item.base * Math.pow(item.growth, threshold) * 12);
+const ordinal = (n) => (n >= NAMES.length ? ` ${Math.floor(n / NAMES.length) + 1}` : "");
+
+// --- Paliers de possession -------------------------------------------------
+
+/** Seuil du n-ième palier: 10, 25, 50, 100, 200, 400, puis ×1,7. */
+export function tierThreshold(n) {
+  const early = [10, 25, 50, 100, 200, 400];
+  if (n < early.length) return early[n];
+  return Math.round(400 * Math.pow(1.7, n - early.length + 1));
 }
+
+/** Multiplicateur du n-ième palier: ×2 puis ×3 puis ×5. Toujours net. */
+export function tierMultiplier(n) {
+  if (n < 3) return 2;
+  if (n < 5) return 3;
+  return 5;
+}
+
+/** Coût d'un palier: environ quinze exemplaires du bâtiment au seuil atteint. */
+const tierCost = (item, threshold) => Math.ceil(item.base * Math.pow(item.growth, threshold) * 15);
 
 function makeTierUpgrade(item, n) {
   const threshold = tierThreshold(n);
+  const value = tierMultiplier(n);
+  const unit = item.mode === "click" ? "/clic" : "/s";
   return {
     id: `tier:${item.id}:${n}`,
     kind: "tier",
-    name: tierName(item, n),
-    desc: `Double la production de ${item.name}.`,
+    family: item.mode,
+    name: `${item.name} ${NAMES[n % NAMES.length]}${ordinal(n)}`,
+    desc: `Chaque ${item.name} rapporte ${value} fois plus.`,
     emoji: item.emoji,
     target: item.id,
     type: "mult",
-    value: 2,
+    value,
+    badge: `×${value}`,
+    unit,
     cost: tierCost(item, threshold),
     threshold,
     unlock: (s) => (s.items?.[item.id] || 0) >= threshold,
     progress: (s) => Math.min(1, (s.items?.[item.id] || 0) / threshold),
-    hint: `Nécessite ${threshold} × ${item.name}`,
+    hint: `${threshold} × ${item.name}`,
+    remaining: (s) => Math.max(0, threshold - (s.items?.[item.id] || 0)),
   };
 }
 
-// --- Part de clic ----------------------------------------------------------
-// C'est l'axe qui garde le clic pertinent en fin de partie: chaque niveau
-// augmente la fraction de la production automatique reversée à chaque clic.
+// --- Reversement du minage vers le clic ------------------------------------
 
-// Part de production reversée par clic.
-//
-// La part de base croît de façon logarithmique avec les bâtiments de clic:
-// jamais plafonnée — donc ces bâtiments gardent une valeur à l'infini — mais
-// assez lente pour que le clic reste 2,5 à 3 fois meilleur que l'idle, sans
-// jamais l'écraser.
-export const SHARE_BASE = 0.04;
-export const SHARE_PER_DECADE = 0.005;
+/** Part fixe du minage reversée à chaque clic. Filet de sécurité, pas un axe. */
+export const SHARE_BASE = 0.03;
 
-// Les améliorations « Doigté » ajoutent des paliers décroissants: elles restent
-// gratifiantes sans faire diverger le ratio actif/passif.
-export const shareUpgradeValue = (n) => 0.005 * Math.pow(0.8, n);
-
-const shareUnlockLifetime = (n) => 5_000 * Math.pow(6, n);
-
-function makeShareUpgrade(n) {
-  const required = shareUnlockLifetime(n);
-  return {
-    id: `share:${n}`,
-    kind: "share",
-    name: `Doigté ${NAMES[n % NAMES.length]}`,
-    desc: `+${(shareUpgradeValue(n) * 100).toFixed(2)} point de production reversée à chaque clic.`,
-    emoji: "👆",
-    target: "share",
-    type: "share",
-    value: shareUpgradeValue(n),
-    cost: Math.ceil(required * 1.5),
-    unlock: (s) => (s.lifetime || 0) >= required,
-    progress: (s) => Math.min(1, (s.lifetime || 0) / required),
-    hint: `Nécessite ${required.toExponential(0)} cookies cuits`,
-  };
-}
+// Il n'existe volontairement pas de famille qui multiplierait la seule
+// puissance de clic. Une telle échelle ×2 sans équivalent côté minage faisait
+// grimper le rapport actif/passif au-delà de 1 000× en six heures de jeu
+// simulé. Les deux axes progressent par les mêmes leviers: paliers par bâtiment
+// (×2 · ×3 · ×5) et bonus globaux.
 
 // --- Bonus globaux ---------------------------------------------------------
 
-const globalUnlockLifetime = (n) => 250_000 * Math.pow(25, n);
+const globalUnlockLifetime = (n) => 1_000_000 * Math.pow(60, n);
 
 function makeGlobalUpgrade(n) {
   const required = globalUnlockLifetime(n);
   return {
     id: `global:${n}`,
     kind: "global",
-    name: `Levure ${NAMES[n % NAMES.length]}`,
-    desc: "+25 % sur tous les bâtiments.",
+    family: "all",
+    name: `Levure ${NAMES[n % NAMES.length]}${ordinal(n)}`,
+    desc: "Double le rendement de tous les bâtiments.",
     emoji: "🌟",
     target: "all",
     type: "mult",
-    value: 1.25,
-    cost: Math.ceil(required * 2),
+    value: 2,
+    badge: "×2",
+    cost: Math.ceil(required * 4),
     unlock: (s) => (s.lifetime || 0) >= required,
     progress: (s) => Math.min(1, (s.lifetime || 0) / required),
-    hint: `Nécessite ${required.toExponential(0)} cookies cuits`,
+    hint: `${required.toLocaleString("fr-FR")} cookies cuits`,
   };
 }
 
@@ -119,23 +103,20 @@ function makeGlobalUpgrade(n) {
 
 const cache = new Map();
 
-/** Reconstruit une amélioration depuis son identifiant. Rend `null` si inconnu. */
+/** Reconstruit une amélioration depuis son identifiant. `null` si inconnu. */
 export function getUpgrade(id) {
   if (cache.has(id)) return cache.get(id);
 
   let upgrade = null;
   const [kind, a, b] = String(id).split(":");
+  const idx = Number(kind === "tier" ? b : a);
+  const valid = Number.isInteger(idx) && idx >= 0;
 
-  if (kind === "tier") {
+  if (kind === "tier" && valid) {
     const item = ITEMS.find((i) => i.id === a);
-    const n = Number(b);
-    if (item && Number.isInteger(n) && n >= 0) upgrade = makeTierUpgrade(item, n);
-  } else if (kind === "share") {
-    const n = Number(a);
-    if (Number.isInteger(n) && n >= 0) upgrade = makeShareUpgrade(n);
-  } else if (kind === "global") {
-    const n = Number(a);
-    if (Number.isInteger(n) && n >= 0) upgrade = makeGlobalUpgrade(n);
+    if (item) upgrade = makeTierUpgrade(item, idx);
+  } else if (kind === "global" && valid) {
+    upgrade = makeGlobalUpgrade(idx);
   }
 
   cache.set(id, upgrade);
@@ -144,8 +125,7 @@ export function getUpgrade(id) {
 
 // --- Sélection pour l'interface -------------------------------------------
 
-/** Index de la première amélioration non achetée d'une famille. */
-const firstUnowned = (owned, make, limit = 40) => {
+const firstUnowned = (owned, make, limit = 60) => {
   for (let n = 0; n < limit; n++) {
     const up = make(n);
     if (!owned[up.id]) return up;
@@ -154,28 +134,25 @@ const firstUnowned = (owned, make, limit = 40) => {
 };
 
 /**
- * Améliorations à présenter maintenant: celles qui sont achetables, plus le
- * palier suivant de chaque famille en guise d'objectif. La liste reste courte
- * même si le catalogue est infini.
+ * Améliorations à présenter maintenant: les achetables, plus le prochain palier
+ * de chaque famille en guise d'objectif visible. La liste reste courte même si
+ * le catalogue est infini.
  */
 export function availableUpgrades(state) {
   const owned = state.upgrades || {};
   const list = [];
 
   for (const item of ITEMS) {
-    const ownedCount = state.items?.[item.id] || 0;
-    // Le premier palier non acheté, même s'il n'est pas encore atteint:
-    // il sert de jalon visible « encore N bâtiments ».
-    for (let n = 0; n < 60; n++) {
+    const count = state.items?.[item.id] || 0;
+    for (let n = 0; n < 80; n++) {
       const up = makeTierUpgrade(item, n);
       if (owned[up.id]) continue;
       list.push(up);
-      // Un seul palier d'avance par bâtiment, sauf si plusieurs sont déjà atteints
-      if (up.threshold > ownedCount) break;
+      if (up.threshold > count) break;
     }
   }
 
-  for (const make of [makeShareUpgrade, makeGlobalUpgrade]) {
+  for (const make of [makeGlobalUpgrade]) {
     const next = firstUnowned(owned, make);
     if (next) list.push(next);
   }
@@ -183,20 +160,22 @@ export function availableUpgrades(state) {
   return list;
 }
 
-/** Nombre d'améliorations achetées, pour les succès et les statistiques. */
-export const ownedUpgradeCount = (state) => Object.keys(state.upgrades || {}).length;
-
-/** Bonus de part apporté par les améliorations « Doigté ». */
-export function shareUpgradeBonus(upgrades = {}) {
-  let bonus = 0;
-  for (const id in upgrades) {
-    if (!upgrades[id]) continue;
-    const up = getUpgrade(id);
-    if (up?.type === "share") bonus += up.value;
+/**
+ * Prochain objectif à afficher en permanence: le palier le plus proche d'être
+ * atteint, tous bâtiments confondus.
+ */
+export function nextMilestone(state) {
+  let best = null;
+  for (const item of ITEMS) {
+    const count = state.items?.[item.id] || 0;
+    for (let n = 0; n < 80; n++) {
+      const up = makeTierUpgrade(item, n);
+      if (state.upgrades?.[up.id]) continue;
+      if (up.threshold <= count) continue; // déjà atteint, l'amélioration est en boutique
+      const left = up.threshold - count;
+      if (!best || left < best.left) best = { upgrade: up, item, owned: count, left };
+      break;
+    }
   }
-  return bonus;
+  return best;
 }
-
-// Compat: certains modules importaient une liste. On expose la fenêtre courante
-// via `availableUpgrades`, et ce tableau reste vide pour éviter tout usage erroné.
-export const UPGRADES = [];

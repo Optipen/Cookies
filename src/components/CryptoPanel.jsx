@@ -257,13 +257,13 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
       {/* --- Minage --- */}
       <section className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-zinc-50 p-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900">⛏️ Minage</h3>
+          <h3 className="text-base font-bold text-slate-900">🖥️ Extraction CRMB</h3>
           <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg tabular-nums">
-            {fmtCrmb(stats.miningRate * 3600, 4)} CRMB/h
+            {fmtCrmb(stats.crmbRate * 3600, 4)} CRMB/h
           </span>
         </div>
         <p className="text-[11px] text-slate-600 mt-0.5">
-          Total miné : {fmtCrmb(crypto.totalMined || 0)} CRMB · le matériel continue hors-ligne.
+          Total extrait : {fmtCrmb(crypto.totalMined || 0)} CRMB · le matériel tourne aussi hors-ligne.
         </p>
 
         <div className="mt-2 space-y-1.5">

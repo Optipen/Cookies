@@ -16,11 +16,12 @@ import CookieBiteMask from "./CookieBiteMask.jsx";
 import Intro from "./Intro.jsx";
 
 import { ITEMS } from "../data/items.js";
+import { nextMilestone } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
-import { deriveStats, costOf, isEarlyWindow, COMBO } from "../utils/selectors.js";
+import { deriveStats, costOf, isEarlyWindow, timeToAfford, COMBO } from "../utils/selectors.js";
 import { fmt, fmtInt, fmtCrmb, fmtDuration } from "../utils/format.js";
 import {
   loadState,
@@ -97,6 +98,51 @@ const ComboMeter = memo(function ComboMeter({ display }) {
           style={{ width: `${pct}%` }}
         />
       </div>
+    </div>
+  );
+});
+
+/**
+ * Objectif permanent.
+ *
+ * Toujours quelque chose à viser: soit le prochain palier de bâtiment, soit le
+ * temps restant avant le prochain achat. Le joueur n'est jamais devant un écran
+ * sans horizon.
+ */
+const NextGoal = memo(function NextGoal({ state, stats }) {
+  const goal = useMemo(() => nextMilestone(state), [state]);
+  const cheapest = useMemo(() => {
+    let best = null;
+    for (const item of ITEMS) {
+      const price = costOf(state, item.id, 1);
+      if (price <= state.cookies) return null; // quelque chose est déjà achetable
+      if (!best || price < best.price) best = { item, price };
+    }
+    return best;
+  }, [state]);
+
+  if (!goal && !cheapest) return null;
+
+  return (
+    <div className="mt-3 mx-auto max-w-sm rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
+      {goal && (
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-amber-800 truncate">
+            <span aria-hidden="true">{goal.item.emoji}</span> Prochain palier :{" "}
+            <b className="tabular-nums">
+              {goal.owned}/{goal.upgrade.threshold}
+            </b>{" "}
+            {goal.item.name}
+          </span>
+          <span className="shrink-0 font-bold text-emerald-700">{goal.upgrade.badge}</span>
+        </div>
+      )}
+      {cheapest && (
+        <div className="text-[11px] text-amber-700/90 mt-0.5">
+          Prochain achat dans ~
+          <b className="tabular-nums">{fmtDuration(timeToAfford(state, cheapest.price, stats, 5))}</b>
+        </div>
+      )}
     </div>
   );
 });
@@ -447,8 +493,11 @@ export default function CookieCraze() {
           next.flags = { ...next.flags, freeFirstAutoGiven: true, freeFirstAutoItemId: itemId };
         }
         if (big) {
-          const delta = item?.mode === "cps" ? `+${fmt(after.cps - before.cps)} CPS` : `+${fmt(after.cpc - before.cpc)} / clic`;
-          next.fx = { ...prev.fx, banner: { title: "Gros achat", sub: delta, until: Date.now() + 2200 }, shakeUntil: Date.now() + 700 };
+          const delta =
+            item?.mode === "mine"
+              ? `${fmt(before.mining)} → ${fmt(after.mining)} /s`
+              : `${fmt(before.perClickNoCombo)} → ${fmt(after.perClickNoCombo)} /clic`;
+          next.fx = { ...prev.fx, banner: { title: "Palier franchi", sub: delta, until: Date.now() + 2200 }, shakeUntil: Date.now() + 700 };
         }
         return next;
       });
@@ -721,7 +770,7 @@ export default function CookieCraze() {
     const s = stateRef.current;
     const derived = deriveStats(s);
     const count = (s.cookieEatenCount || 0) + 1;
-    const bonus = Math.max(derived.cpc * (count % 5 === 0 ? 120 : 40), derived.cps * 45);
+    const bonus = Math.max(derived.perClick * (count % 5 === 0 ? 120 : 40), derived.mining * 45);
 
     audio.play("golden", 0.5);
     particlesRef.current?.burstGold(40);
@@ -856,8 +905,8 @@ export default function CookieCraze() {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap" data-menu-root>
-            <HeaderStat label="Clic" value={fmt(stats.cpc)} title="Cookies gagnés par clic" />
-            <HeaderStat label="Auto" value={`${fmt(stats.cps)}/s`} tone="emerald" title="Production automatique" />
+            <HeaderStat label="Par clic" value={fmt(stats.perClick)} title="Cookies gagnés à chaque clic" />
+            <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
               <HeaderStat label="Chips" value={availableChips(state)} tone="violet" title="Chips célestes disponibles" />
             )}
@@ -964,7 +1013,7 @@ export default function CookieCraze() {
               </div>
               <div className="text-xs md:text-sm text-amber-800/80">
                 {fmtInt(state.lifetime)} cuits au total
-                {stats.cps > 0 && <span className="text-emerald-700 font-semibold"> · {fmt(stats.cps)} / s</span>}
+                {stats.mining > 0 && <span className="text-emerald-700 font-semibold"> · {fmt(stats.mining)} / s minés</span>}
               </div>
               <ComboMeter display={combo.display} />
               <BuffBadge buffs={state.buffs} />
@@ -983,7 +1032,7 @@ export default function CookieCraze() {
                 <motion.button
                   type="button"
                   onClick={onCookieClick}
-                  aria-label={`Cliquer le cookie pour gagner ${fmt(stats.cpc)} cookies`}
+                  aria-label={`Cliquer le cookie pour gagner ${fmt(stats.perClick)} cookies`}
                   whileTap={reducedMotion ? undefined : { scale: 0.93 }}
                   whileHover={reducedMotion ? undefined : { scale: 1.03 }}
                   transition={{ type: "spring", stiffness: 400, damping: 17 }}
@@ -1014,7 +1063,9 @@ export default function CookieCraze() {
               </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-center gap-3 text-xs text-amber-700">
+            <NextGoal state={state} stats={stats} />
+
+            <div className="mt-2 flex items-center justify-center gap-3 text-xs text-amber-700">
               <span>🍪 Croqués : <b className="tabular-nums">{state.cookieEatenCount || 0}</b></span>
               <span aria-hidden="true">·</span>
               <span>👆 Clics : <b className="tabular-nums">{fmtInt(state.stats.clicks || 0)}</b></span>
@@ -1062,8 +1113,8 @@ export default function CookieCraze() {
                     <div className="flex gap-1" role="group" aria-label="Filtrer les bâtiments">
                       {[
                         ["all", "Tout"],
-                        ["mult", "👆 Clic"],
-                        ["cps", "⚙️ Auto"],
+                        ["click", "👆 Clic"],
+                        ["mine", "⛏️ Minage"],
                       ].map(([id, label]) => (
                         <button
                           key={id}

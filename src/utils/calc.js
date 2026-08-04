@@ -2,7 +2,8 @@ import { ITEMS } from "../data/items.js";
 import { getUpgrade } from "../data/upgrades.js";
 
 /**
- * Multiplicateur propre à chaque bâtiment: améliorations achetées + synergies.
+ * Multiplicateur propre à chaque bâtiment: améliorations de palier (×2, ×3, ×5)
+ * et synergies entre familles.
  */
 export const computePerItemMult = (items = {}, upgrades = {}) => {
   const mult = {};
@@ -19,45 +20,42 @@ export const computePerItemMult = (items = {}, upgrades = {}) => {
     }
   }
 
-  // Synergies croisées: un bâtiment renforce son voisin de gamme
-  const grandma = items.grandma || 0;
-  const farm = items.farm || 0;
-  const factory = items.factory || 0;
-  if (mult.cursor != null) mult.cursor *= 1 + 0.01 * grandma;
-  if (mult.grandma != null) mult.grandma *= 1 + 0.005 * farm;
-  if (mult.farm != null) mult.farm *= 1 + 0.002 * factory;
-
   return mult;
 };
 
-/** Production automatique, en cookies par seconde. */
-export const cpsFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) => {
+/**
+ * Somme additive d'une famille de bâtiments.
+ *
+ * Linéaire et sans plafond: chaque exemplaire ajoute exactement sa valeur,
+ * multipliée par les paliers achetés sur ce bâtiment. Aucune courbe
+ * d'amortissement n'intervient ici — l'équilibre passe par les prix.
+ */
+const sumFamily = (items, upgrades, mode) => {
   const mult = computePerItemMult(items, upgrades);
-  let cps = 0;
+  let total = 0;
   for (const it of ITEMS) {
-    if (it.mode === "cps") cps += (items[it.id] || 0) * it.cps * (mult[it.id] || 1);
+    if (it.mode !== mode) continue;
+    total += (items[it.id] || 0) * it.value * (mult[it.id] || 1);
   }
-  return cps * (1 + (chips || 0) * 0.02) * stakeMulti;
+  return total;
 };
 
 /**
- * Poids brut des bâtiments de clic.
+ * Bonus commun aux deux familles: chips célestes et staking CRMB.
  *
- * Ce nombre ne sert pas directement de multiplicateur: il alimente la « part de
- * production par clic » (voir `selectors.js`), qui sature vers un plafond que
- * les améliorations relèvent sans fin.
- *
- * L'ancienne formule appliquait un softcap rationnel `1 + s·K/(s+K)` dont
- * l'asymptote valait K+1 = 13. Le multiplicateur atteignait ×11,8 avec un seul
- * exemplaire de chaque bâtiment puis ne bougeait plus jamais: passé les sept
- * premiers achats, investir dans le clic ne servait plus à rien, et la
- * production automatique — elle, illimitée — écrasait le clic en dix minutes.
+ * Il s'applique au clic ET au minage. Quand il ne portait que le minage, chaque
+ * prestige faisait décrocher le clic un peu plus — le rapport entre jeu actif et
+ * jeu passif dérivait vers zéro au fil des renaissances.
  */
-export const clickWeightFrom = (items = {}, upgrades = {}) => {
-  const mult = computePerItemMult(items, upgrades);
-  let weight = 0;
-  for (const it of ITEMS) {
-    if (it.mode === "mult") weight += (items[it.id] || 0) * (it.mult || 0) * (mult[it.id] || 1);
-  }
-  return weight;
-};
+export const globalBonus = (chips = 0, stakeMulti = 1) => (1 + (chips || 0) * 0.02) * stakeMulti;
+
+/** Cookies produits chaque seconde par les Mineurs. */
+export const miningFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) =>
+  sumFamily(items, upgrades, "mine") * globalBonus(chips, stakeMulti);
+
+/** Cookies ajoutés à chaque clic par les Cliqueurs. */
+export const clickPowerFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) =>
+  sumFamily(items, upgrades, "click") * globalBonus(chips, stakeMulti);
+
+// Noms historiques, conservés pour les modules qui les importent encore.
+export const cpsFrom = miningFrom;

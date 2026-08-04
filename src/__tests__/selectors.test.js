@@ -3,15 +3,15 @@ import {
   deriveStats,
   costOf,
   bulkCost,
-  milestoneFactor,
   maxAffordable,
   buyQuantity,
-  clickShare,
   comboMultiplier,
   activeIncome,
+  activeRatio,
+  timeToAfford,
   COMBO,
 } from "../utils/selectors.js";
-import { cpsFrom, clickWeightFrom } from "../utils/calc.js";
+import { miningFrom, clickPowerFrom } from "../utils/calc.js";
 import { createFreshState } from "../utils/state.js";
 import { prestigeEffects, chipsFor, upgradeCost, availableChips, PRESTIGE_BY_ID } from "../data/prestige.js";
 import { ITEMS } from "../data/items.js";
@@ -26,45 +26,56 @@ const settled = (mutate = () => {}) => {
 };
 const LATER = 10 * 60 * 1000; // au-delà de early.window_s (300 s)
 
-describe("cpsFrom", () => {
-  it("calcule la production sans amélioration", () => {
-    expect(cpsFrom({ oven: 1 }, {}, 0)).toBeCloseTo(0.6);
-    expect(cpsFrom({}, {}, 0)).toBe(0);
+describe("minage", () => {
+  it("additionne exactement les valeurs des Mineurs", () => {
+    expect(miningFrom({ oven: 1 }, {}, 0)).toBe(2);
+    expect(miningFrom({ oven: 3, bakery: 2 }, {}, 0)).toBe(3 * 2 + 2 * 10);
+    expect(miningFrom({}, {}, 0)).toBe(0);
   });
 
   it("applique le bonus des chips de prestige", () => {
-    const base = cpsFrom({ oven: 10 }, {}, 0);
-    const withChips = cpsFrom({ oven: 10 }, {}, 50);
-    expect(withChips).toBeCloseTo(base * 2); // 50 chips = +100 %
+    const base = miningFrom({ oven: 10 }, {}, 0);
+    expect(miningFrom({ oven: 10 }, {}, 50)).toBeCloseTo(base * 2); // 50 chips = +100 %
   });
 });
 
 describe("puissance de clic", () => {
+  it("est strictement additive avec des valeurs propres", () => {
+    // Exigence de lisibilité: +0,25 doit porter la puissance de 1 à 1,25 pile.
+    const vide = deriveStats(settled(), LATER);
+    expect(vide.perClickNoCombo).toBe(1);
+
+    const unCurseur = deriveStats(settled((x) => (x.items = { cursor: 1 })), LATER);
+    expect(unCurseur.perClickNoCombo).toBe(1.25);
+
+    const quatre = deriveStats(settled((x) => (x.items = { cursor: 4 })), LATER);
+    expect(quatre.perClickNoCombo).toBe(2);
+
+    const mixte = deriveStats(settled((x) => (x.items = { cursor: 4, grandma: 1, farm: 1 })), LATER);
+    expect(mixte.perClickNoCombo).toBe(1 + 4 * 0.25 + 1 + 5);
+  });
+
   it("n'est jamais plafonnée", () => {
-    // Régression: l'ancienne formule `1 + s·K/(s+K)` avait une asymptote à 13.
-    // Le multiplicateur atteignait ×11,8 avec un exemplaire de chaque bâtiment
+    // Régression: l'ancienne formule `1 + s·K/(s+K)` plafonnait à ×13. Le
+    // multiplicateur atteignait ×11,8 avec un exemplaire de chaque bâtiment
     // puis ne bougeait plus, ce qui tuait le clic en dix minutes de jeu.
-    const one = clickWeightFrom({ cursor: 1 }, {});
-    const many = clickWeightFrom({ cursor: 1000 }, {});
-    const huge = clickWeightFrom({ cursor: 1_000_000 }, {});
-    expect(many).toBeGreaterThan(one * 900);
-    expect(huge).toBeGreaterThan(many * 900);
+    const echelles = [1, 1e3, 1e6, 1e9];
+    let precedent = 0;
+    for (const n of echelles) {
+      const p = clickPowerFrom({ cursor: n }, {});
+      expect(p).toBeCloseTo(n * 0.25, 5);
+      expect(p).toBeGreaterThan(precedent);
+      precedent = p;
+    }
   });
 
-  it("fait croître la part de production reversée par clic, sans limite", () => {
-    const modeste = clickShare(settled((x) => (x.items = { cursor: 10 })));
-    const gros = clickShare(settled((x) => (x.items = { cursor: 10_000, tm: 500 })));
-    const enorme = clickShare(settled((x) => (x.items = { cursor: 1e7, tm: 1e6 })));
-    expect(modeste).toBeGreaterThan(0);
-    expect(gros).toBeGreaterThan(modeste);
-    expect(enorme).toBeGreaterThan(gros);
-  });
-
-  it("croît de façon logarithmique, pour ne pas écraser l'idle", () => {
-    const a = clickShare(settled((x) => (x.items = { cursor: 100 })));
-    const b = clickShare(settled((x) => (x.items = { cursor: 10_000 })));
-    // Multiplier le parc par 100 ne doit pas multiplier la part par 100
-    expect(b).toBeLessThan(a * 3);
+  it("garde un gain strictement positif à toutes les échelles jouables", () => {
+    for (const n of [0, 10, 1e3, 1e6, 1e9]) {
+      const base = settled((x) => (x.items = { cursor: n }));
+      const avant = deriveStats(base, LATER).perClickNoCombo;
+      const apres = deriveStats({ ...base, items: { cursor: n + 1 } }, LATER).perClickNoCombo;
+      expect(apres - avant).toBeCloseTo(0.25, 6);
+    }
   });
 });
 
@@ -168,12 +179,6 @@ describe("coûts", () => {
     expect(bulkCost(item, 10, 1)).toBeGreaterThan(bulkCost(item, 0, 1));
   });
 
-  it("applique le renchérissement par paliers", () => {
-    expect(milestoneFactor(0)).toBe(1);
-    expect(milestoneFactor(10)).toBeGreaterThan(1);
-    expect(milestoneFactor(100)).toBeGreaterThan(milestoneFactor(10));
-  });
-
   it("rend un entier au minimum à 1", () => {
     const s = settled();
     const price = costOf(s, "oven", 1, LATER);
@@ -256,6 +261,46 @@ describe("maxAffordable", () => {
   });
 });
 
+describe("rapport actif / passif", () => {
+  it("récompense proportionnellement le rythme de clic", () => {
+    const s = settled((x) => {
+      x.items = { oven: 60, bakery: 40, farm_cps: 25, cursor: 60, grandma: 40, farm: 25 };
+    });
+    const lent = activeRatio(s, 3, LATER);
+    const normal = activeRatio(s, 7, LATER);
+    const rapide = activeRatio(s, 12, LATER);
+    expect(lent).toBeGreaterThan(1);
+    expect(normal).toBeGreaterThan(lent);
+    expect(rapide).toBeGreaterThan(normal);
+  });
+
+  it("reste dans la fourchette visée pour un rythme normal", () => {
+    const s = settled((x) => {
+      x.items = { oven: 60, bakery: 40, farm_cps: 25, cursor: 60, grandma: 40, farm: 25 };
+    });
+    const r = activeRatio(s, 7, LATER);
+    expect(r).toBeGreaterThan(2);
+    expect(r).toBeLessThan(4);
+  });
+});
+
+describe("timeToAfford", () => {
+  it("rend zéro quand c'est déjà payable", () => {
+    const s = settled((x) => (x.cookies = 1000));
+    expect(timeToAfford(s, 500, deriveStats(s, LATER))).toBe(0);
+  });
+
+  it("rend l'infini sans aucun revenu", () => {
+    const s = settled();
+    expect(timeToAfford(s, 500, deriveStats(s, LATER))).toBe(Infinity);
+  });
+
+  it("estime une durée cohérente", () => {
+    const s = settled((x) => (x.items = { oven: 10 })); // 20 /s
+    expect(timeToAfford(s, 200, deriveStats(s, LATER))).toBeCloseTo(10_000, -2);
+  });
+});
+
 describe("buyQuantity", () => {
   it("lit les modificateurs clavier", () => {
     expect(buyQuantity({})).toBe(1);
@@ -267,11 +312,15 @@ describe("buyQuantity", () => {
 });
 
 describe("prestige", () => {
-  it("convertit la production totale en chips", () => {
+  it("convertit la production totale en chips, en racine cubique", () => {
+    // Régression: en racine carrée, chips → production → chips divergeait
+    // (soixante prestiges et 6,5e13 chips en une semaine simulée).
     expect(chipsFor(0)).toBe(0);
-    expect(chipsFor(1e6)).toBe(1);
-    expect(chipsFor(4e6)).toBe(2);
+    expect(chipsFor(1e3)).toBe(1);
+    expect(chipsFor(8e3)).toBe(2);
     expect(chipsFor(-5)).toBe(0);
+    // Multiplier la production par mille ne multiplie les chips que par dix
+    expect(chipsFor(1e12)).toBe(chipsFor(1e9) * 10);
   });
 
   it("renchérit chaque niveau", () => {
@@ -287,6 +336,20 @@ describe("prestige", () => {
     expect(availableChips({ prestige: { chips: 10, spent: 4 } })).toBe(6);
     expect(availableChips({ prestige: { chips: 3, spent: 99 } })).toBe(0);
     expect(availableChips({})).toBe(0);
+  });
+
+  it("applique chips et staking aux DEUX axes", () => {
+    // Régression: quand seul le minage en profitait, chaque prestige faisait
+    // décrocher le clic un peu plus.
+    const sans = settled((x) => (x.items = { oven: 20, cursor: 20 }));
+    const avec = settled((x) => {
+      x.items = { oven: 20, cursor: 20 };
+      x.prestige = { chips: 50, spent: 0, upgrades: {} };
+    });
+    const a = deriveStats(sans, LATER);
+    const b = deriveStats(avec, LATER);
+    expect(b.mining / a.mining).toBeCloseTo(2, 5);
+    expect(b.buildingsPower / a.buildingsPower).toBeCloseTo(2, 5);
   });
 
   it("plafonne la réduction de coût", () => {

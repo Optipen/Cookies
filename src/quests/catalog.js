@@ -19,8 +19,8 @@ import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
 import { fmt } from "../utils/format.js";
 
-const CPS_ITEMS = ITEMS.filter((i) => i.mode === "cps");
-const CLICK_ITEMS = ITEMS.filter((i) => i.mode === "mult");
+const MINE_ITEMS = ITEMS.filter((i) => i.mode === "mine");
+const CLICK_ITEMS = ITEMS.filter((i) => i.mode === "click");
 
 const itemName = (id) => ITEMS.find((i) => i.id === id)?.name || id;
 const itemEmoji = (id) => ITEMS.find((i) => i.id === id)?.emoji || "📦";
@@ -65,7 +65,7 @@ const gainQuest = ({ id, tier, title, icon, mult, cooldownS, timeLimitS, weight 
     const gained = Math.max(0, (state.lifetime || 0) - (meta.lifetimeAtStart || 0));
     return { progress: Math.min(gained, meta.amount), target: meta.amount, done: gained >= meta.amount };
   },
-  reward: (state, ctx) => ({ cookies: cookieReward(ctx, 45), buff: buff("cps", 1.3, 25, "+30 % CPS") }),
+  reward: (state, ctx) => ({ cookies: cookieReward(ctx, 45), buff: buff("cps", 1.3, 25, "+30 % minage") }),
   weight: (ctx) => 1 + (ctx.cps > 0 ? 0.5 : 0),
 });
 
@@ -89,7 +89,7 @@ const clickQuest = ({ id, tier, icon, early, mid, late, timeLimitS, cooldownS, r
     const diff = Math.max(0, (state.stats.clicks || 0) - (meta.clicksAtStart || 0));
     return { progress: Math.min(diff, meta.clicks), target: meta.clicks, done: diff >= meta.clicks };
   },
-  reward: reward || ((state, ctx) => ({ cookies: cookieReward(ctx, 20), buff: buff("cpc", 1.35, 25, "+35 % CPC") })),
+  reward: reward || ((state, ctx) => ({ cookies: cookieReward(ctx, 20), buff: buff("cpc", 1.35, 25, "+35 % au clic") })),
   weight: weight || (() => 1),
 });
 
@@ -134,7 +134,7 @@ export const QUESTS = [
     late: 150,
     timeLimitS: 30,
     cooldownS: 120,
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 60), buff: buff("cpc", 1.8, 20, "+80 % CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 60), buff: buff("cpc", 1.8, 20, "+80 % au clic") }),
     weight: (ctx) => (ctx.level === "early" ? 1.4 : 0.9),
   }),
   clickQuest({
@@ -145,7 +145,7 @@ export const QUESTS = [
     mid: 600,
     late: 1200,
     cooldownS: 600,
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 0.02, buff: buff("cpc", 1.5, 60, "+50 % CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 0.02, buff: buff("cpc", 1.5, 60, "+50 % au clic") }),
   }),
   {
     id: "click_precision",
@@ -162,7 +162,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.stats.clicks || 0) - (meta.clicksAtStart || 0));
       return { progress: Math.min(diff, meta.clicks), target: meta.clicks, done: diff >= meta.clicks };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 90), buff: buff("cpc", 2.2, 15, "×2,2 CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 90), buff: buff("cpc", 2.2, 15, "×2,2 au clic") }),
     weight: () => 0.8,
   },
 
@@ -191,15 +191,15 @@ export const QUESTS = [
 
   // ============ ACHAT / BÂTIMENTS ============
   buyQuest({ id: "buy_starter", tier: "micro", icon: "🛒", pool: CLICK_ITEMS, qty: 3, cooldownS: 90 }),
-  buyQuest({ id: "buy_auto", tier: "micro", icon: "⚙️", pool: CPS_ITEMS, qty: 2, cooldownS: 90, categoryLabel: "production" }),
+  buyQuest({ id: "buy_auto", tier: "micro", icon: "⚙️", pool: MINE_ITEMS, qty: 2, cooldownS: 90, categoryLabel: "minage" }),
   buyQuest({
     id: "buy_bulk",
     tier: "main",
     icon: "📦",
-    pool: CPS_ITEMS,
+    pool: MINE_ITEMS,
     qty: (ctx) => byLevel(ctx, 5, 10, 20),
     cooldownS: 420,
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), crmb: 0.03, buff: buff("cps", 1.6, 45, "+60 % CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), crmb: 0.03, buff: buff("cps", 1.6, 45, "+60 % minage") }),
   }),
   {
     id: "diversify",
@@ -209,13 +209,13 @@ export const QUESTS = [
     cooldownS: 600,
     eligible: (ctx) => ctx.level !== "early",
     target: (state, ctx) => ({ kinds: byLevel(ctx, 4, 7, 10) }),
-    title: (meta) => `Posséder ${meta.kinds} types de bâtiments`,
+    title: (meta) => `Posséder ${meta.kinds} types de Cliqueurs et Mineurs`,
     desc: () => "Un empire équilibré résiste mieux.",
     progress: (state, meta) => {
       const kinds = ITEMS.filter((it) => (state.items[it.id] || 0) > 0).length;
       return { progress: Math.min(kinds, meta.kinds), target: meta.kinds, done: kinds >= meta.kinds };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), buff: buff("cps", 1.5, 60, "+50 % CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), buff: buff("cps", 1.5, 60, "+50 % minage") }),
     weight: () => 0.9,
   },
   {
@@ -236,10 +236,10 @@ export const QUESTS = [
     weight: () => 1,
   },
 
-  // ============ PRODUCTION / CPS ============
+  // ============ MINAGE ============
   {
     id: "cps_milestone",
-    category: "production",
+    category: "minage",
     tier: "main",
     icon: "📈",
     cooldownS: 300,
@@ -248,8 +248,8 @@ export const QUESTS = [
       const steps = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 50_000, 250_000, 1e6];
       return { cpsTarget: steps.find((x) => x > ctx.cps) || Math.ceil(ctx.cps * 1.4) };
     },
-    title: (meta) => `Atteindre ${fmt(meta.cpsTarget)} CPS`,
-    desc: () => "Fais monter ta production passive.",
+    title: (meta) => `Miner ${fmt(meta.cpsTarget)} cookies par seconde`,
+    desc: () => "Fais monter ton minage automatique.",
     progress: (state, meta, ctx) => ({
       progress: Math.min(ctx.cps, meta.cpsTarget),
       target: meta.cpsTarget,
@@ -260,14 +260,14 @@ export const QUESTS = [
   },
   {
     id: "idle_patience",
-    category: "production",
+    category: "minage",
     tier: "micro",
     icon: "🧘",
     cooldownS: 300,
     eligible: (ctx) => ctx.cps >= 5,
     target: (state, ctx) => ({ amount: Math.ceil(ctx.cps * 45), lifetimeAtStart: state.lifetime || 0, clicksAtStart: state.stats.clicks || 0 }),
     title: (meta) => `Produire ${fmt(meta.amount)} sans cliquer`,
-    desc: () => "Laisse tes bâtiments travailler. Un seul clic annule la quête.",
+    desc: () => "Laisse tes Mineurs travailler. Un seul clic annule la quête.",
     progress: (state, meta) => {
       const clicked = (state.stats.clicks || 0) > (meta.clicksAtStart || 0);
       const gained = Math.max(0, (state.lifetime || 0) - (meta.lifetimeAtStart || 0));
@@ -278,7 +278,7 @@ export const QUESTS = [
         failed: clicked,
       };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), buff: buff("cps", 2.0, 30, "×2 CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), buff: buff("cps", 2.0, 30, "×2 minage") }),
     weight: (ctx) => (ctx.level === "early" ? 0.4 : 1),
   },
 
@@ -314,7 +314,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.crypto?.positions || []).length - (meta.stakedAtStart || 0));
       return { progress: Math.min(diff, 1), target: 1, done: diff >= 1 };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 0.05, buff: buff("cps", 1.5, 60, "+50 % CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 0.05, buff: buff("cps", 1.5, 60, "+50 % minage") }),
     weight: () => 1.2,
   },
   {
@@ -325,8 +325,8 @@ export const QUESTS = [
     cooldownS: 900,
     eligible: (ctx) => ctx.bank >= MINERS[0].base * 0.6,
     target: (state) => ({ count: 1, minersAtStart: totalMiners(state.crypto?.miners) }),
-    title: () => "Installer un mineur",
-    desc: () => "Le matériel mine du CRMB en continu, même hors-ligne.",
+    title: () => "Installer une machine d'extraction",
+    desc: () => "Le matériel extrait du CRMB en continu, même hors-ligne.",
     progress: (state, meta) => {
       const diff = Math.max(0, totalMiners(state.crypto?.miners) - (meta.minersAtStart || 0));
       return { progress: Math.min(diff, meta.count), target: meta.count, done: diff >= meta.count };
@@ -365,7 +365,7 @@ export const QUESTS = [
       const held = (state.crypto?.balance || 0) + (state.crypto?.positions || []).reduce((s, p) => s + p.amount, 0);
       return { progress: Math.min(held, meta.amount), target: meta.amount, done: held >= meta.amount };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 0.5, buff: buff("cps", 2, 120, "×2 CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 0.5, buff: buff("cps", 2, 120, "×2 minage") }),
     weight: () => 0.7,
   },
 
@@ -384,7 +384,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.stats.goldenClicks || 0) - (meta.goldenAtStart || 0));
       return { progress: Math.min(diff, meta.count), target: meta.count, done: diff >= meta.count };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), crmb: 0.05, buff: buff("cpc", 2, 30, "×2 CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), crmb: 0.05, buff: buff("cpc", 2, 30, "×2 au clic") }),
     weight: () => 1,
   },
   {
@@ -401,7 +401,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.cookieEatenCount || 0) - (meta.eatenAtStart || 0));
       return { progress: Math.min(diff, meta.count), target: meta.count, done: diff >= meta.count };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 240), buff: buff("cpc", 1.8, 40, "+80 % CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 240), buff: buff("cpc", 1.8, 40, "+80 % au clic") }),
     weight: () => 0.9,
   },
 
@@ -439,7 +439,7 @@ export const QUESTS = [
       const gained = Math.max(0, (state.lifetime || 0) - (meta.lifetimeAtStart || 0));
       return { progress: Math.min(gained, meta.amount), target: meta.amount, done: gained >= meta.amount };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 900), crmb: 0.25, buff: buff("cps", 2.5, 120, "×2,5 CPS") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 900), crmb: 0.25, buff: buff("cps", 2.5, 120, "×2,5 minage") }),
     weight: () => 1,
   },
   {
@@ -456,7 +456,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.stats.clicks || 0) - (meta.clicksAtStart || 0));
       return { progress: Math.min(diff, meta.clicks), target: meta.clicks, done: diff >= meta.clicks };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 0.2, buff: buff("cpc", 2.5, 90, "×2,5 CPC") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 0.2, buff: buff("cpc", 2.5, 90, "×2,5 au clic") }),
     weight: () => 1,
   },
   {
@@ -487,7 +487,7 @@ export const CATEGORY_STYLE = {
   clic: { color: "sky", icon: "👆" },
   banque: { color: "amber", icon: "🍪" },
   achat: { color: "violet", icon: "🛒" },
-  production: { color: "emerald", icon: "⚙️" },
+  minage: { color: "emerald", icon: "⛏️" },
   crypto: { color: "cyan", icon: "🪙" },
   événement: { color: "yellow", icon: "⭐" },
   style: { color: "pink", icon: "🎨" },

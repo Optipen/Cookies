@@ -1,13 +1,12 @@
 import React, { memo, useMemo } from "react";
 import { availableUpgrades } from "../data/upgrades.js";
-import { ITEMS } from "../data/items.js";
-import { fmt, fmtPct } from "../utils/format.js";
+import { ITEM_BY_ID, LABELS } from "../data/items.js";
+import { fmt } from "../utils/format.js";
 
 const targetLabel = (upgrade) => {
-  if (upgrade.target === "all") return "Tous les bâtiments";
-  if (upgrade.target === "cpc") return "Puissance de clic";
-  if (upgrade.target === "share") return "Part de production par clic";
-  return ITEMS.find((i) => i.id === upgrade.target)?.name || upgrade.target;
+  if (upgrade.target === "all") return "Cliqueurs et Mineurs";
+  const item = ITEM_BY_ID[upgrade.target];
+  return item ? `${LABELS[item.mode].one} · ${item.name}` : upgrade.target;
 };
 
 const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, progress, onBuy }) {
@@ -35,7 +34,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
           <div className="flex items-baseline justify-between gap-2">
             <span className="font-semibold text-amber-950 truncate">{upgrade.name}</span>
             <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-              {upgrade.type === "share" ? `+${(upgrade.value * 100).toFixed(2)} pt` : `×${upgrade.value}`}
+              {upgrade.badge}
             </span>
           </div>
           <div className="text-[11px] text-amber-800/70 truncate">{targetLabel(upgrade)}</div>
@@ -95,15 +94,15 @@ function Upgrades({ state, stats, onBuy }) {
         <span className="text-[11px] text-amber-700">{Object.keys(state.upgrades || {}).length} achetées</span>
       </div>
 
-      <div className="rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
-        <div className="flex items-center justify-between text-[11px] text-amber-800">
-          <span>👆 Production reversée par clic</span>
-          <b className="tabular-nums text-amber-900">{fmtPct(stats.clickShare, 2)}</b>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-amber-700">👆 Puissance de clic</div>
+          <div className="text-sm font-bold text-amber-950 tabular-nums">{fmt(stats.perClickNoCombo)} /clic</div>
         </div>
-        <p className="text-[10px] text-amber-700/80 mt-0.5 leading-snug">
-          Chaque clic te rapporte cette fraction de ta production automatique. Les bâtiments de clic et les
-          améliorations « Doigté » la font monter, sans limite.
-        </p>
+        <div className="rounded-xl bg-emerald-100/60 border border-emerald-200 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wide text-emerald-700">⛏️ Minage</div>
+          <div className="text-sm font-bold text-emerald-950 tabular-nums">{fmt(stats.mining)} /s</div>
+        </div>
       </div>
 
       {buyable.length > 0 && (

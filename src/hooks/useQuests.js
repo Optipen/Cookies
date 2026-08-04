@@ -43,19 +43,21 @@ export function useQuests(state, setState, toast, onCelebrate) {
 
       for (const ev of result.events) {
         if (ev.type === "completed") {
+          // Notification courte: la carte de quête porte déjà le détail. Le
+          // libellé complet tenait sur trois lignes et masquait la boutique.
           const parts = [];
-          if (ev.reward?.cookies) parts.push(`+${fmt(ev.reward.cookies)} cookies`);
-          if (ev.reward?.crmb) parts.push(`+${fmtCrmb(ev.reward.crmb)} CRMB`);
+          if (ev.reward?.cookies) parts.push(`+${fmt(ev.reward.cookies)}`);
+          if (ev.reward?.crmb) parts.push(`+${fmtCrmb(ev.reward.crmb, 2)} CRMB`);
           if (ev.reward?.buff) parts.push(ev.reward.buff.label);
           if (ev.reward?.discount) parts.push(ev.reward.discount.label);
           toastRef.current(
-            `${ev.icon || "✅"} ${ev.daily ? "Quête du jour" : "Quête"} — ${ev.title}${parts.length ? " · " + parts.join(" · ") : ""}`,
+            `${ev.icon || "✅"} ${ev.daily ? "Quête du jour" : "Quête"} ✓ ${parts.join(" · ")}`,
             "success",
-            { ms: 4000 }
+            { ms: 3400 }
           );
           celebrateRef.current?.(ev);
         } else if (ev.type === "failed") {
-          toastRef.current(`⌛ Quête échouée — ${ev.title}`, "warn", { ms: 2500 });
+          toastRef.current("⌛ Quête échouée", "warn", { ms: 2200 });
         }
       }
     }, TICK_MS);

@@ -172,7 +172,7 @@ describe("prestige", () => {
   it("réinitialise la partie et crédite les chips", async () => {
     await startGame((s) => {
       s.cookies = 5e6;
-      s.lifetime = 9e6; // 3 chips
+      s.lifetime = 8e6; // cbrt(8e6/1e3) = 20 chips
       s.items = { oven: 20 };
     });
 
@@ -186,10 +186,9 @@ describe("prestige", () => {
     });
 
     expect(window.confirm).toHaveBeenCalled();
-    // La partie repart de zéro et 3 chips sont crédités
+    // La partie repart de zéro et les chips sont crédités
     expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
-    const chipTiles = screen.getAllByText("3", { selector: ".text-lg" });
-    expect(chipTiles.length).toBeGreaterThan(0);
+    expect(screen.getAllByText("20", { selector: ".text-lg" }).length).toBeGreaterThan(0);
   });
 
   it("achète un nœud de l'arbre céleste", async () => {

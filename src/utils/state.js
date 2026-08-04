@@ -1,4 +1,5 @@
 import { defaultCryptoState, CRMB } from "./crypto.js";
+import { getUpgrade } from "../data/upgrades.js";
 
 // === Feature flags ===
 // Un flag à false doit désactiver la feature *entièrement* — apparition comprise.
@@ -159,7 +160,15 @@ export function migrate(savedState, now = Date.now()) {
     merged.toasts = [];
     merged.fx = { banner: null, shakeUntil: 0, tag: null };
     merged.items = isObj(savedState.items) ? { ...savedState.items } : {};
-    merged.upgrades = isObj(savedState.upgrades) ? { ...savedState.upgrades } : {};
+    // Les améliorations sont générées: on écarte les identifiants qui ne
+    // correspondent plus à rien (anciens `cursor_10`, `share:2`, `cpc:1`…),
+    // sinon ils gonfleraient les compteurs sans produire d'effet.
+    merged.upgrades = {};
+    if (isObj(savedState.upgrades)) {
+      for (const id of Object.keys(savedState.upgrades)) {
+        if (savedState.upgrades[id] && getUpgrade(id)) merged.upgrades[id] = true;
+      }
+    }
     merged.unlocked = isObj(savedState.unlocked) ? { ...savedState.unlocked } : {};
     merged.cookieBites = Array.isArray(savedState.cookieBites) ? savedState.cookieBites : [];
 

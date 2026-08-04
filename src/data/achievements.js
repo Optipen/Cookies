@@ -16,8 +16,8 @@ export const ACHIEVEMENTS = [
   { id: "click_100k", tier: 4, cat: "clic", name: "Main bionique", desc: "100 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 100_000 },
 
   { id: "combo_max", tier: 2, cat: "clic", name: "Enchaînement", desc: "Atteindre un combo ×3.", cond: (s) => (s.stats?.bestCombo || 0) >= 2.99 },
-  { id: "share_10", tier: 3, cat: "clic", name: "Doigts de fée", desc: "10 % de production reversée par clic.", cond: (s, ctx) => (ctx?.clickShare || 0) >= 0.1 },
-  { id: "share_20", tier: 5, cat: "clic", name: "Toucher divin", desc: "20 % de production reversée par clic.", cond: (s, ctx) => (ctx?.clickShare || 0) >= 0.2 },
+  { id: "power_1k", tier: 3, cat: "clic", name: "Doigts de fée", desc: "Atteindre 1 000 de puissance de clic.", cond: (s, ctx) => (ctx?.perClickNoCombo || 0) >= 1_000 },
+  { id: "power_1m", tier: 5, cat: "clic", name: "Toucher divin", desc: "Atteindre 1 million de puissance de clic.", cond: (s, ctx) => (ctx?.perClickNoCombo || 0) >= 1e6 },
 
   // --- Banque ---
   { id: "bank_1k", tier: 1, cat: "banque", name: "Petit pécule", desc: "1 000 cookies en banque.", cond: (s) => (s.cookies || 0) >= 1_000 },
@@ -37,16 +37,16 @@ export const ACHIEVEMENTS = [
   { id: "grandma_100", tier: 3, cat: "empire", name: "Comité des mamies", desc: "100 Mamies.", cond: (s) => (s.items?.grandma || 0) >= 100 },
   { id: "cursor_50", tier: 1, cat: "empire", name: "Pieuvre", desc: "50 Curseurs.", cond: (s) => (s.items?.cursor || 0) >= 50 },
   { id: "portal_1", tier: 4, cat: "empire", name: "Ailleurs", desc: "Ouvrir un Portail.", cond: (s) => (s.items?.portal || 0) >= 1 },
-  { id: "diverse", tier: 3, cat: "empire", name: "Portefeuille équilibré", desc: "Posséder les 15 types de bâtiments.", cond: (s) => ITEMS.every((it) => (s.items?.[it.id] || 0) > 0) },
+  { id: "diverse", tier: 3, cat: "empire", name: "Portefeuille équilibré", desc: "Posséder les 16 types de Cliqueurs et Mineurs.", cond: (s) => ITEMS.every((it) => (s.items?.[it.id] || 0) > 0) },
   { id: "upgrades_5", tier: 1, cat: "empire", name: "Bricoleur", desc: "5 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 5 },
   { id: "upgrades_25", tier: 2, cat: "empire", name: "Ingénieur", desc: "25 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 25 },
   { id: "upgrades_75", tier: 3, cat: "empire", name: "Optimiseur", desc: "75 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 75 },
   { id: "upgrades_200", tier: 5, cat: "empire", name: "Perfectionniste", desc: "200 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 200 },
 
-  // --- Production ---
-  { id: "cps_10", tier: 1, cat: "production", name: "Ça tourne", desc: "10 CPS.", cond: (s, ctx) => (ctx?.cps || 0) >= 10 },
-  { id: "cps_1k", tier: 2, cat: "production", name: "Chaîne rodée", desc: "1 000 CPS.", cond: (s, ctx) => (ctx?.cps || 0) >= 1_000 },
-  { id: "cps_1m", tier: 4, cat: "production", name: "Usine à ciel ouvert", desc: "1 million de CPS.", cond: (s, ctx) => (ctx?.cps || 0) >= 1e6 },
+  // --- Minage ---
+  { id: "cps_10", tier: 1, cat: "minage", name: "Ça tourne", desc: "Miner 10 cookies par seconde.", cond: (s, ctx) => (ctx?.mining || 0) >= 10 },
+  { id: "cps_1k", tier: 2, cat: "minage", name: "Chaîne rodée", desc: "Miner 1 000 cookies par seconde.", cond: (s, ctx) => (ctx?.mining || 0) >= 1_000 },
+  { id: "cps_1m", tier: 4, cat: "minage", name: "Usine à ciel ouvert", desc: "Miner 1 million de cookies par seconde.", cond: (s, ctx) => (ctx?.mining || 0) >= 1e6 },
 
   // --- Événements ---
   { id: "golden_1", tier: 1, cat: "événement", name: "Doré !", desc: "Attraper un cookie doré.", cond: (s) => (s.stats?.goldenClicks || 0) >= 1 },
@@ -66,8 +66,8 @@ export const ACHIEVEMENTS = [
   { id: "crmb_first", tier: 1, cat: "crypto", name: "Premier satoshi", desc: "Obtenir du CRMB.", cond: (s) => heldCrmb(s) > 0 },
   { id: "crmb_1", tier: 2, cat: "crypto", name: "Investisseur", desc: "Détenir 1 CRMB.", cond: (s) => heldCrmb(s) >= 1 },
   { id: "crmb_10", tier: 3, cat: "crypto", name: "Baleine", desc: "Détenir 10 CRMB.", cond: (s) => heldCrmb(s) >= 10 },
-  { id: "miner_1", tier: 1, cat: "crypto", name: "Ça mine", desc: "Installer un mineur.", cond: (s) => totalMiners(s) >= 1 },
-  { id: "miner_50", tier: 3, cat: "crypto", name: "Datacenter", desc: "50 mineurs installés.", cond: (s) => totalMiners(s) >= 50 },
+  { id: "miner_1", tier: 1, cat: "crypto", name: "Ça extrait", desc: "Installer une machine d'extraction.", cond: (s) => totalMiners(s) >= 1 },
+  { id: "miner_50", tier: 3, cat: "crypto", name: "Datacenter", desc: "50 machines d'extraction installées.", cond: (s) => totalMiners(s) >= 50 },
   { id: "stake_1", tier: 2, cat: "crypto", name: "Bloqué", desc: "Ouvrir une position de staking.", cond: (s) => (s.crypto?.positions || []).length >= 1 },
   { id: "stake_long", tier: 3, cat: "crypto", name: "Main de diamant", desc: "Ouvrir une position verrouillée 24 h.", cond: (s) => (s.crypto?.positions || []).some((p) => p.tierId === "long") },
   { id: "trader_profit", tier: 3, cat: "crypto", name: "Trader gagnant", desc: "Dégager un profit net sur le marché.", cond: (s) => (s.crypto?.realizedPnl || 0) > 0 },
@@ -83,7 +83,7 @@ export const ACHIEVEMENTS = [
   { id: "skin_all", tier: 4, cat: "style", name: "Garde-robe complète", desc: "Posséder tous les skins.", cond: (s) => Object.values(s.skinsOwned || {}).filter(Boolean).length >= 7 },
 ];
 
-export const ACHIEVEMENT_CATEGORIES = ["clic", "banque", "empire", "production", "événement", "quête", "crypto", "prestige", "style"];
+export const ACHIEVEMENT_CATEGORIES = ["clic", "banque", "empire", "minage", "événement", "quête", "crypto", "prestige", "style"];
 
 export const TIER_STYLE = {
   1: { label: "Bronze", ring: "ring-amber-600/40", bg: "from-amber-100 to-amber-50", text: "text-amber-900" },

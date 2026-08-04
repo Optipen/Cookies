@@ -17,40 +17,75 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (123 tests)                    |
+| `npm test`          | Suite de tests (136 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
 
-## Équilibrage : le clic ne meurt jamais
+## Équilibrage : deux axes, aucun plafond
 
-C'est la règle qui structure tout le reste. **Un joueur actif gagne environ
-2,5 à 3 fois plus qu'un joueur qui laisse l'onglet tourner** — à tous les
-stades de la partie, de la première minute à la centième heure.
+Le jeu tourne sur deux axes qui fonctionnent **en même temps** :
 
-Deux mécanismes le garantissent :
+- **Puissance de clic** — les cookies gagnés à chaque clic, portée par les
+  **Cliqueurs** ;
+- **Minage** — les cookies générés chaque seconde, porté par les **Mineurs**.
 
-- **Part de production par clic.** Chaque clic reverse une fraction de ta
-  production automatique. Comme cette part est un *pourcentage* du CPS, le clic
-  suit mécaniquement la croissance de l'empire et ne peut jamais décrocher. Les
-  bâtiments de clic la font monter logarithmiquement — sans plafond, donc ils
-  gardent une valeur à l'infini — et les améliorations « Doigté » l'augmentent
-  encore.
-- **Combo.** Cliquer sans interruption fait monter un multiplicateur jusqu'à
-  ×3 en trente clics ; s'arrêter le fait retomber en quelques secondes. C'est
-  ce qui récompense la présence.
+### La formule
 
-En début de partie, la production automatique est quasi nulle : le clic *est*
-le jeu. Ensuite les deux progressent ensemble, sans qu'aucun n'écrase l'autre.
+```
+minage          = Σ(mineurs   × valeur × palier) × (1 + 0,02·chips) × staking × céleste
+puissance clic  = (1 + Σ(cliqueurs × valeur × palier)) × (1 + 0,02·chips) × staking × céleste
+par clic        = (puissance clic + minage × 3 %) × combo
+```
+
+Les deux sommes sont **linéaires et sans plafond** : le millionième Cliqueur
+ajoute exactement autant que le premier. Il n'existe aucune asymptote, aucun
+softcap, aucun ×13.
+
+### Valeurs propres et additives
+
+| Cliqueurs | | Mineurs | |
+| --- | --- | --- | --- |
+| Curseur | +0,25 /clic | Four | +2 /s |
+| Mamie | +1 | Boulangerie | +10 |
+| Gant de frappe | +5 | Ferme | +50 |
+| Bras robotisé | +25 | Usine | +250 |
+| Exosquelette | +100 | Banque | +1 000 |
+| IA de frappe | +500 | Temple | +5 000 |
+| Machine à Temps | +2 500 | Laboratoire | +25 000 |
+| Singularité tactile | +10 000 | Portail | +100 000 |
+
+L'addition est exacte : puissance 1 + un Curseur = **exactement 1,25**. Les
+multiplicateurs nets (×2, ×3, ×5) sont réservés aux paliers de possession
+(10, 25, 50, 100, 200, 400, puis ×1,7).
+
+### Comment le rapport reste tenu sans plafond
+
+Un Mineur vaut dix fois son Cliqueur de même rang, et coûte 1,5 fois moins.
+C'est cette échelle de valeurs — pas un amortissement — qui fixe le rapport
+entre jeu actif et jeu passif. Mesuré en simulation sur 7 jours et 21
+prestiges, à 7 clics/s et combo moyen ×2,2 :
+
+| Temps de jeu | 1 min | 10 min | 1 j | 3 j | 7 j |
+| --- | --- | --- | --- | --- | --- |
+| Actif / passif | 3,77× | 2,78× | **2,98×** | **2,98×** | **2,98×** |
+
+Le rapport suit l'effort réel : 3 clics/s → 1,83× · 5 → 2,40× · 7 → 2,98× ·
+12 → 4,43×. Il est visible dans **Profil → Statistiques**, pas au centre de
+l'écran.
+
+### Combo
+
+Cliquer sans interruption fait monter un multiplicateur jusqu'à ×3 en trente
+clics ; s'arrêter le fait retomber en quelques secondes.
 
 ## Le jeu
 
-- **15 bâtiments** répartis en deux familles : production automatique (CPS) et
-  puissance de clic, avec des synergies croisées et un renchérissement par
-  paliers de possession.
+- **16 bâtiments** : 8 Cliqueurs et 8 Mineurs, aux prix géométriques (×1,15 par
+  exemplaire), sans mur de progression.
 - **Améliorations infinies** : générées à la demande. Chaque bâtiment débloque
-  un nouveau palier ×2 à 10, 25, 50, 100, 200 exemplaires, puis tous les ×1,6.
-  Il n'y a pas de dernière amélioration.
+  un palier à 10, 25, 50, 100, 200, 400 exemplaires puis tous les ×1,7 — ×2,
+  puis ×3, puis ×5. Il n'y a pas de dernière amélioration.
 - **26 quêtes** réparties en 8 catégories (clic, banque, achat, production,
   crypto, événement, style, quotidien). Trois quêtes actives, trois
   quotidiennes, une série de jours consécutifs, et un bouton pour passer une
@@ -67,8 +102,12 @@ le jeu. Ensuite les deux progressent ensemble, sans qu'aucun n'écrase l'autre.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
 
-Six onglets : Boutique (clic et auto, avec filtre), Améliorations, Quêtes,
+Six onglets : Boutique (filtres Tout / Clic / Minage), Améliorations, Quêtes,
 CRMB, Prestige, Profil (statistiques, succès, apparences).
+
+Chaque achat affiche l'avant → après (`1 → 1,25 /clic`) et un objectif permanent
+reste visible sous le cookie : « Prochain palier : 24/25 Exosquelette ×2 » ou
+« Prochain achat dans ~18 s ».
 
 Raccourcis : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet, `Maj` + clic pour
 acheter ×10, `Ctrl` + clic pour ×100.

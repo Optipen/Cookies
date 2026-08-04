@@ -22,10 +22,10 @@ export const PRESTIGE_UPGRADES = [
     id: "golden_fingers",
     name: "Doigts d'or",
     emoji: "🖐️",
-    desc: "+8 % de puissance de clic par niveau.",
+    desc: "+5 % de puissance de clic par niveau.",
     maxLevel: Infinity,
     cost: (lvl) => Math.ceil(1 + lvl * 2 + Math.pow(lvl, 1.7) * 0.4),
-    effect: { type: "cpc_mult", perLevel: 0.08 },
+    effect: { type: "cpc_mult", perLevel: 0.05 },
   },
   {
     id: "cheap_bricks",
@@ -127,8 +127,14 @@ export function prestigeEffects(state) {
   };
 }
 
-/** Chips que rapporterait un prestige immédiat. */
-export const chipsFor = (lifetime) => Math.floor(Math.sqrt(Math.max(0, lifetime) / 1_000_000));
+/**
+ * Chips que rapporterait un prestige immédiat.
+ *
+ * Racine cubique et non carrée: les chips multiplient la production, qui nourrit
+ * la production totale, qui redonne des chips. En racine carrée cette boucle
+ * divergeait — soixante prestiges et 6,5e13 chips en une semaine simulée.
+ */
+export const chipsFor = (lifetime) => Math.floor(Math.cbrt(Math.max(0, lifetime) / 1_000));
 
 /** Seuil minimal pour que le prestige soit proposé. */
 export const PRESTIGE_MIN_LIFETIME = 1_000_000;
