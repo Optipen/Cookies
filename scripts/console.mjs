@@ -2,8 +2,9 @@
 // mémoire après un long moment de jeu.
 // Usage: npx vite-node scripts/console.mjs [url]
 //
-// Playwright n'est pas une dépendance du projet: outil lancé à la main.
-import { chromium } from "/tmp/pw/node_modules/playwright/index.mjs";
+// Playwright n'est pas une dépendance du projet — c'est un outil de mesure
+// lancé à la main. `npm i playwright && npx playwright install chromium`.
+import { chromium } from "playwright";
 
 const URL = process.argv[2] || "http://localhost:4173/";
 const SAUVEGARDE = {
@@ -24,8 +25,10 @@ const SAUVEGARDE = {
 // mesuré contient les déchets pas encore collectés, et toute session paraît
 // fuir. Mesuré ainsi, 1 600 clics faisaient passer le tas de 5 à 22 Mo — un
 // chiffre qui ne dit rien tant qu'on n'a pas nettoyé.
+// Le chemin du navigateur est facultatif: Playwright trouve le sien tout seul.
+// Il n'est forcé que si l'environnement en désigne un (image CI, conteneur).
 const navigateur = await chromium.launch({
-  executablePath: "/opt/pw-browsers/chromium",
+  executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ["--js-flags=--expose-gc"],
 });
 const page = await navigateur.newPage({ viewport: { width: 390, height: 844 } });

@@ -1,8 +1,8 @@
 // Inspection des gabarits: ce qui tient au-dessus de la ligne de flottaison,
 // les cibles trop petites, les textes trop petits, les débordements.
 // Usage: npx vite-node scripts/mobile.mjs [url]
-// Playwright n'est pas une dépendance du projet: ce script est un outil de
-// mesure lancé à la main. `npm i -g playwright` ou `npx playwright` suffit.
+// Playwright n'est pas une dépendance du projet — c'est un outil de mesure
+// lancé à la main. `npm i playwright && npx playwright install chromium`.
 import { chromium } from "playwright";
 
 const URL = process.argv[2] || "http://localhost:4173/";
@@ -84,7 +84,10 @@ const audit = async (page, largeur, hauteur) =>
     { largeur, hauteur }
   );
 
-const navigateur = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+// Le chemin du navigateur est facultatif: Playwright trouve le sien tout seul.
+// Il n'est forcé que si l'environnement en désigne un (image CI, conteneur).
+const NAVIGATEUR = process.env.CHROMIUM_PATH || undefined;
+const navigateur = await chromium.launch({ executablePath: NAVIGATEUR });
 let echecs = 0;
 
 for (const [nom, w, h] of GABARITS) {

@@ -617,6 +617,29 @@ niveaux d'Éclat : production finie, strictement croissante, multiplicateur
 toujours sur la grille, et affichage lisible — en notation scientifique une
 fois le dernier suffixe dépassé, plutôt qu'un nom d'unité inventé.
 
+### Reproduire les mesures
+
+Les trois outils de mesure ne sont pas des dépendances du projet : ils se
+lancent à la main. Playwright et son navigateur s'installent en une commande.
+
+```bash
+npm ci                        # installation reproductible
+npm test                      # 402 tests
+npm run lint                  # zéro avertissement, tout le dépôt
+npm run build && npm run preview
+
+npm run balance               # rapport actif/passif par cadence et par horizon
+npm run simulations           # deux familles de profils, onze horizons
+npm run simulations mecanique # une seule famille (plus rapide)
+
+npm i playwright && npx playwright install chromium
+npm run mobile                # six gabarits: cibles, textes, débordements
+npx vite-node scripts/console.mjs   # erreurs console et mémoire
+```
+
+`CHROMIUM_PATH` force un navigateur précis quand l'environnement en fournit un
+(image CI, conteneur) ; sinon Playwright utilise le sien.
+
 ## Ce qui reste imparfait
 
 Écrit ici plutôt que dans un coin, parce qu'un projet qui prétend n'avoir aucun
