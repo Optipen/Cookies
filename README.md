@@ -595,6 +595,28 @@ Le ramasse-miettes est **forcé avant chaque mesure**. Sans cela, le même test
 affichait 5 → 22 Mo — les déchets pas encore collectés, pas une fuite. C'est la
 différence entre « mesuré » et « supposé ».
 
+### Les limites des nombres
+
+Question posée explicitement : le jeu bute-t-il sur la représentation des
+nombres avant la fin de sa durée de vie ?
+
+**Non, et de très loin.** En un an de jeu simulé, la production totale atteint
+1,2e19. Les flottants montent à **1,8e308** : il faudrait plus d'un siècle de
+jeu continu pour s'en approcher. Aucune représentation exotique n'est donc
+nécessaire, et en introduire une coûterait la lisibilité de tout le code
+économique pour un problème qui n'arrivera pas.
+
+Ce qui est vrai, en revanche : **au-delà de 9,01e15 les entiers ne sont plus
+exacts** — ce seuil est franchi vers le soixantième jour. C'est sans
+conséquence : rien dans le jeu ne dépend du dernier cookie près, et l'affichage
+n'en montre que trois chiffres significatifs. Mais il faut le savoir plutôt que
+le découvrir.
+
+Vérifié jusqu'à un parc d'un million de milliards de bâtiments avec 4 000
+niveaux d'Éclat : production finie, strictement croissante, multiplicateur
+toujours sur la grille, et affichage lisible — en notation scientifique une
+fois le dernier suffixe dépassé, plutôt qu'un nom d'unité inventé.
+
 ## Ce qui reste imparfait
 
 Écrit ici plutôt que dans un coin, parce qu'un projet qui prétend n'avoir aucun

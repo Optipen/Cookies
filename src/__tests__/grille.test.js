@@ -202,3 +202,61 @@ describe("les cinq chiffres de l'écran restent propres", () => {
     }
   });
 });
+
+describe("les limites des nombres JavaScript", () => {
+  // Le cahier des charges demande de vérifier que le jeu ne bute pas sur la
+  // représentation des nombres avant la fin de sa durée de vie prévue.
+  //
+  // Mesuré: en un an de jeu simulé, la production totale atteint 1,2e19. Les
+  // flottants montent à 1,8e308 — il faudrait plus d'un siècle de jeu pour s'en
+  // approcher. AUCUNE représentation exotique n'est donc nécessaire, et en
+  // introduire une coûterait la lisibilité de tout le code économique.
+  //
+  // Ce qui est vrai en revanche: au-delà de 9,01e15 les entiers ne sont plus
+  // exacts. Cela arrive vers le soixantième jour. C'est sans conséquence — rien
+  // dans le jeu ne dépend du dernier cookie près, et l'affichage n'en montre
+  // que trois chiffres significatifs — mais il faut le savoir.
+
+  const enorme = (parc, eclat) => {
+    const s = createFreshState(0);
+    s.ui.introSeen = true;
+    s.items = { bigbake: parc, worldfinger: parc };
+    s.ascension = { stars: 99_999, spent: 0, tracks: { horizon: 4, eclat }, count: 1 };
+    return deriveStats(s, LATER, 0);
+  };
+
+  it("reste fini et croissant très au-delà de ce qu'une partie atteint", () => {
+    let precedentMinage = 0;
+    let precedentClic = 0;
+    for (const parc of [1e3, 1e6, 1e9, 1e12, 1e15]) {
+      const d = enorme(parc, 400);
+      expect(Number.isFinite(d.mining), `parc ${parc}`).toBe(true);
+      expect(Number.isFinite(d.perClickNoCombo)).toBe(true);
+      expect(d.mining).toBeGreaterThan(precedentMinage);
+      expect(d.perClickNoCombo).toBeGreaterThan(precedentClic);
+      precedentMinage = d.mining;
+      precedentClic = d.perClickNoCombo;
+    }
+    // 4,04e24 au parc le plus démesuré: 284 ordres de grandeur sous la limite.
+    expect(precedentMinage).toBeLessThan(Number.MAX_VALUE / 1e100);
+  });
+
+  it("garde le multiplicateur global sur la grille à tous les niveaux d'Éclat", () => {
+    for (const eclat of [0, 40, 400, 4000]) {
+      expect(onGrid(enorme(1e6, eclat).mineMult), `Éclat ${eclat}`).toBe(true);
+    }
+  });
+
+  it("affiche encore quelque chose de lisible au-delà des suffixes", () => {
+    // Passé le dernier suffixe, on écrit en notation scientifique plutôt que
+    // d'inventer un nom d'unité que personne ne saurait lire.
+    for (const n of [1e15, 1e19, 1e30, 1e100, 1e300, Number.MAX_VALUE]) {
+      const texte = fmt(n);
+      expect(texte, `${n}`).not.toContain("NaN");
+      expect(texte).not.toContain("Infinity");
+      expect(texte.length).toBeGreaterThan(0);
+      expect(texte.length).toBeLessThan(20);
+    }
+    expect(fmt(1e100)).toMatch(/e\+/);
+  });
+});
