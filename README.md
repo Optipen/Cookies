@@ -59,10 +59,11 @@ crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
            + contrats(Registre) + niveaux(Éclat)
 global     = 1 + 0,25 × crans                        ← un multiple de 0,25, toujours
 valeur(b)  = grille↓(valeur_base(b) × palier(b) × global)   ≥ valeur_base(b)
-minage     = Σ(mineurs   × valeur(b))
-puiss. clic= 1 + Σ(cliqueurs × valeur(b))
-par clic   = (puissance clic + minage × 6 %) × combo
+minage     = grille↓(Σ(mineurs × valeur(b)) × buff)
+puiss. clic= grille↓(1 + Σ(cliqueurs × valeur(b)) + grille↓(minage × 6 %))
+par clic   = grille↓(puissance clic × combo)  ≥ puissance clic
 combo      = 1 + 0,25 × niveau,  niveau de 0 à 3
+prix       = quart de 10^⌊log₁₀⌋ au-delà de 100 000, remises comprises
 ```
 
 La **quantification par exemplaire** (`grille↓`) est ce qui garantit que le
@@ -143,8 +144,9 @@ le compteur :
 
 La **cadence est mesurée**, pas supposée : moyenne glissante sur trois secondes,
 publiée à 5 Hz, éteinte après une seconde et demie sans clic. Elle s'affiche
-arrondie au quart et préfixée de « ≈ » — c'est une moyenne, la donner au
-millième serait faussement précis.
+**entière** et préfixée de « ≈ » — c'est la seule forme qui garde le produit
+« puissance × cadence » sur la grille, et la seule précision honnête pour une
+moyenne glissante.
 
 Elle ne compte que les **clics crédités**. Sinon l'écran afficherait « ≈50 /s »
 à côté de « 12 par clic » et le joueur multiplierait deux nombres qui ne se
@@ -187,20 +189,23 @@ Cinq formateurs, chacun pour un usage :
 | `fmtExact` | valeur de fiche, jamais abrégée | `80 000` |
 | `fmtInt` | le solde, en entier | `1 234` · `1,23M` |
 | `fmtMult` | multiplicateur de grille | `×1,50` · `×2` |
-| `fmtApprox` | valeur **mesurée** | `≈4,25` |
+| `fmtApprox` | valeur **mesurée** | `≈4` |
 
 Le préfixe `≈` n'est pas décoratif : il distingue une valeur calculée d'une
-valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,25 /s » tout
+valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,3 /s » tout
 court serait faussement précis.
 
-### L'achat groupé paie la somme des achats un par un
+### L'achat groupé ne paie jamais plus que les achats un par un
 
-`×10` n'est ni une remise cachée ni une pénalité cachée. Chaque exemplaire est
-remisé et arrondi **séparément**, puis les prix sont additionnés. Appliquer la
-remise à la somme puis arrondir une seule fois rendait le lot moins cher :
-mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la réduction du
-prestige (×0,95) et une remise générale (×0,75) se cumulaient. Trois cookies,
-mais c'est un écart que rien n'annonce et qui grandit avec le lot.
+`×10` n'est jamais une pénalité cachée. Chaque exemplaire est remisé, arrondi
+et **posé sur la grille des prix séparément**, puis les prix sont additionnés.
+Appliquer la remise à la somme puis arrondir une seule fois rendait le lot
+moins cher : mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la
+réduction du prestige (×0,95) et une remise générale (×0,75) se cumulaient.
+Trois cookies, mais c'est un écart que rien n'annonce et qui grandit avec le
+lot. Un seul cas fait dévier la somme : quand le lot traverse un ordre de
+grandeur, elle est repliée vers le **bas** sur la grille d'affichage — au pire
+un quart de cran de moins, jamais un de plus.
 
 ### Automatisation : ce qui est protégé, et ce qui ne peut pas l'être
 
