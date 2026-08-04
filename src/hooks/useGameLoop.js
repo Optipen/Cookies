@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLatestRef } from "./useLatestRef.js";
 import { deriveStats } from "../utils/selectors.js";
-import { stepMarket, roundCrmb, CRMB } from "../utils/crypto.js";
+import { stepMarket, addCrmb, CRMB } from "../utils/crypto.js";
 import tuning from "../data/tuning.json";
 
 /**
@@ -85,10 +85,12 @@ export function useGameLoop(state, setState, options = {}) {
         // robinet (0,001 tous les 20 000 cookies) en versait des centaines de
         // millions en fin de partie, et plus rien n'avait de valeur.
 
-        // Minage matériel + rendement de staking
+        // Minage matériel + rendement de staking. `addCrmb` rejette le seul
+        // delta fautif: un rendement mal calculé ne doit pas emporter le
+        // portefeuille avec lui.
         if (mined > 0) {
-          crypto.balance = roundCrmb((crypto.balance || 0) + mined);
-          crypto.totalMined = roundCrmb((crypto.totalMined || 0) + mined);
+          crypto.balance = addCrmb(crypto.balance, mined);
+          crypto.totalMined = addCrmb(crypto.totalMined, mined);
           cryptoTouched = true;
         }
 

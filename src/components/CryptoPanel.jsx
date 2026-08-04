@@ -11,8 +11,9 @@ import {
   stakedTotal,
   stakingBoost,
   isUnlocked,
+  ledgerCost,
 } from "../utils/crypto.js";
-import { fmt, fmtCrmb, fmtPct, fmtDuration } from "../utils/format.js";
+import { fmt, fmtCrmb, fmtMult, fmtPct, fmtDuration } from "../utils/format.js";
 import { useClock } from "../hooks/useClock.js";
 
 // --- Graphique de cours en SVG pur (aucune dépendance) ---------------------
@@ -82,7 +83,7 @@ const StakePosition = memo(function StakePosition({ position, onUnstake }) {
   );
 });
 
-function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMiner }) {
+function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMiner, onSignLedger }) {
   const crypto = state.crypto || {};
   const [tradeAmount, setTradeAmount] = useState(1);
   const [stakeAmount, setStakeAmount] = useState(1);
@@ -99,6 +100,9 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
   const canBuy = state.cookies >= buyCost && tradeAmount > 0;
   const canSell = (crypto.balance || 0) >= tradeAmount && tradeAmount > 0;
   const canStake = (crypto.balance || 0) >= stakeAmount && stakeAmount > 0;
+  const signes = crypto.ledger || 0;
+  const prixContrat = ledgerCost(signes);
+  const peutSigner = (crypto.balance || 0) >= prixContrat;
 
   const amounts = [1, 5, 10, 25];
 
@@ -253,6 +257,38 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
               <StakePosition key={p.id} position={p} onUnstake={onUnstake} />
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* --- Le Registre --- */}
+      <section className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-base font-bold text-amber-950">📜 Le Registre</h3>
+          <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-1 rounded-lg tabular-nums">
+            {signes} contrat{signes > 1 ? "s" : ""} · ×{fmtMult(1 + 0.25 * signes)}
+          </span>
+        </div>
+        <p className="text-[11px] text-amber-800/80 mt-0.5">
+          Un contrat ajoute <b>+0,25</b> à la puissance de clic <i>et</i> au minage.{" "}
+          <b>Définitivement</b> : il survit aux renaissances. Contrairement au staking, le CRMB dépensé
+          ne revient pas.
+        </p>
+        <button
+          type="button"
+          onClick={onSignLedger}
+          disabled={!peutSigner}
+          className={`mt-2 w-full min-h-[2.75rem] px-3 rounded-xl font-bold border transition-colors ${
+            peutSigner
+              ? "bg-gradient-to-r from-amber-500 to-orange-500 border-orange-600 text-white hover:from-amber-400 hover:to-orange-400"
+              : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
+          }`}
+        >
+          Signer un contrat — {fmtCrmb(prixContrat)} CRMB
+        </button>
+        {!peutSigner && (
+          <p className="mt-1 text-[11px] text-amber-700/80 text-center">
+            Il te manque {fmtCrmb(prixContrat - (crypto.balance || 0))} CRMB.
+          </p>
         )}
       </section>
 

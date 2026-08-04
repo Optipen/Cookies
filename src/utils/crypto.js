@@ -9,7 +9,7 @@
 // distribuait des centaines de millions en fin de partie; une monnaie qu'on
 // gagne sans effort ne récompense plus rien.
 
-import { tierState } from "./grid.js";
+import { tierState, niceIntAt } from "./grid.js";
 
 export const CRMB = {
   name: "CrumbCoin",
@@ -68,6 +68,8 @@ export const defaultCryptoState = (now = Date.now()) => ({
   // Minage
   miners: {},
   totalMined: 0,
+  // Contrats du Registre déjà signés: achat définitif, +0,25 par contrat
+  ledger: 0,
   // Staking: liste de positions { id, amount, tierId, startedAt, unlockAt }
   positions: [],
   lastYieldTs: now,
@@ -177,3 +179,67 @@ export const isUnlocked = (position, now = Date.now()) => now >= (position.unloc
 // Un montant non fini est ramené à 0 plutôt que propagé: un seul NaN dans une
 // balance la contamine définitivement, et le joueur perd tout sans rien voir.
 export const roundCrmb = (n) => (isFinite(n) ? Math.round((n + Number.EPSILON) * 1e6) / 1e6 : 0);
+
+/**
+ * Ajoute un montant à un solde, sans jamais faire confiance ni à l'un ni à
+ * l'autre.
+ *
+ * **Un delta invalide est rejeté SEUL.** C'est toute la règle. Écrire
+ * `roundCrmb(solde + delta)` paraît équivalent, mais ne l'est pas: si `delta`
+ * vaut NaN, la somme vaut NaN, `roundCrmb` rend 0 — et le joueur perd
+ * l'intégralité de son portefeuille parce qu'un rendement s'est mal calculé
+ * pendant un tic. C'est exactement ce qui s'était produit au retour hors-ligne:
+ * le solde affichait « ∞ », puis zéro au rechargement.
+ *
+ * Un solde déjà corrompu n'a plus de « dernière valeur valide » à conserver: on
+ * repart de zéro, mais on ne propage jamais la corruption plus loin.
+ */
+export function addCrmb(solde, delta) {
+  const base = typeof solde === "number" && isFinite(solde) && solde > 0 ? solde : 0;
+  if (typeof delta !== "number" || !isFinite(delta)) return roundCrmb(base);
+  const somme = base + delta;
+  if (!isFinite(somme)) return roundCrmb(base);
+  return Math.max(0, roundCrmb(somme));
+}
+
+// === Le Registre ===
+//
+// Un puits à CRMB qui ne se tarit jamais.
+//
+// Les deux apparences payables en CRMB coûtent trente-cinq pièces en tout.
+// Passé cet achat, une monnaie de récompense n'avait plus rien à acheter: on
+// continuait d'en gagner sans jamais la dépenser, ce qui revient à ne plus en
+// gagner du tout.
+//
+// Un contrat du Registre est un achat DÉFINITIF: il ajoute un cran de grille
+// (+0,25) aux deux axes, pour toujours, et survit aux renaissances. C'est le
+// contraire du staking, qui prête le même bonus tant que le CRMB reste bloqué
+// et le reprend au retrait. Le choix est réel: garder sa mise liquide, ou la
+// convertir une fois pour toutes.
+//
+// Le bonus porte sur les DEUX axes du même cran: un puits qui ne pousserait que
+// le minage déplacerait l'équilibre actif/passif à chaque achat.
+
+/**
+ * Position du premier contrat sur l'échelle 1 · 2,5 · 5 · 10 · 25 …
+ *
+ * Dix CRMB, comme la première apparence payable en CRMB: c'est cinq à six
+ * quêtes récompensées, soit deux ou trois sessions. Placé à cinquante, le
+ * premier contrat coûtait à lui seul l'intégralité du CRMB que rapportent les
+ * cinquante-cinq succès du jeu réunis — un puits qu'on ne remplit jamais n'est
+ * pas un puits, c'est un mur.
+ *
+ * Les prix suivants: 25, 50, 100, 250, 500, 1 000, 2 500 … Huit contrats
+ * coûtent 4 435 CRMB en tout, ce qui reste atteignable sur plusieurs semaines
+ * sans jamais devenir gratuit.
+ */
+export const LEDGER_FIRST = 3; // → 10 CRMB
+
+/** Prix du n-ième contrat, en CRMB. Toujours un entier de l'échelle. */
+export const ledgerCost = (owned = 0) => niceIntAt(LEDGER_FIRST + Math.max(0, Math.floor(owned || 0)));
+
+/** Crans de grille apportés par les contrats déjà signés. */
+export const ledgerSteps = (owned = 0) => {
+  const n = Number(owned);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+};

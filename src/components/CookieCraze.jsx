@@ -47,7 +47,7 @@ import {
   LEGACY_KEYS,
   PENDING_RESET_KEY,
 } from "../utils/state.js";
-import { buyPrice, sellPrice, minerCost, roundCrmb, getTier, MINERS } from "../utils/crypto.js";
+import { buyPrice, sellPrice, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
 
 import { useAudio } from "../hooks/useAudio.js";
@@ -578,7 +578,7 @@ export default function CookieCraze() {
       ...prev,
       cookies: prev.cookies + cookies,
       lifetime: prev.lifetime + cookies,
-      crypto: { ...prev.crypto, balance: roundCrmb((prev.crypto.balance || 0) + crmb) },
+      crypto: { ...prev.crypto, balance: addCrmb(prev.crypto.balance, crmb) },
       flags: { ...prev.flags, offlineCollected: true },
     }));
     setOfflineReport({ durationMs: away, cookies, crmb });
@@ -850,8 +850,8 @@ export default function CookieCraze() {
         cookies: prev.cookies - cost,
         crypto: {
           ...prev.crypto,
-          balance: roundCrmb(prev.crypto.balance + amount),
-          totalBought: roundCrmb((prev.crypto.totalBought || 0) + amount),
+          balance: addCrmb(prev.crypto.balance, amount),
+          totalBought: addCrmb(prev.crypto.totalBought, amount),
           realizedPnl: (prev.crypto.realizedPnl || 0) - cost,
         },
       }));
@@ -874,8 +874,8 @@ export default function CookieCraze() {
         lifetime: prev.lifetime + gain,
         crypto: {
           ...prev.crypto,
-          balance: roundCrmb(prev.crypto.balance - amount),
-          totalSold: roundCrmb((prev.crypto.totalSold || 0) + amount),
+          balance: addCrmb(prev.crypto.balance, -amount),
+          totalSold: addCrmb(prev.crypto.totalSold, amount),
           realizedPnl: (prev.crypto.realizedPnl || 0) + gain,
         },
       }));
@@ -897,7 +897,7 @@ export default function CookieCraze() {
         ...prev,
         crypto: {
           ...prev.crypto,
-          balance: roundCrmb(prev.crypto.balance - amount),
+          balance: addCrmb(prev.crypto.balance, -amount),
           positions: [
             ...prev.crypto.positions,
             {
@@ -929,7 +929,7 @@ export default function CookieCraze() {
         ...prev,
         crypto: {
           ...prev.crypto,
-          balance: roundCrmb(prev.crypto.balance + position.amount),
+          balance: addCrmb(prev.crypto.balance, position.amount),
           positions: prev.crypto.positions.filter((p) => p.id !== positionId),
         },
       }));
@@ -960,6 +960,32 @@ export default function CookieCraze() {
   );
 
   // --- Prestige ------------------------------------------------------------
+
+  /**
+   * Signer un contrat du Registre.
+   *
+   * Achat définitif: le CRMB part, le cran reste. On ne touche à rien d'autre —
+   * pas de remise à zéro, pas d'effet de bord sur le portefeuille.
+   */
+  const signLedger = useCallback(() => {
+    const s = stateRef.current;
+    const signes = s.crypto?.ledger || 0;
+    const prix = ledgerCost(signes);
+    if ((s.crypto?.balance || 0) < prix) {
+      refuse();
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      crypto: {
+        ...prev.crypto,
+        balance: addCrmb(prev.crypto.balance, -prix),
+        ledger: (prev.crypto.ledger || 0) + 1,
+      },
+    }));
+    audio.play("buy", 0.5);
+    notify.event(`📜 Contrat signé — +0,25 sur les deux axes, pour toujours`, "success");
+  }, [audio, notify, refuse, stateRef]);
 
   const doPrestige = useCallback(() => {
     const s = stateRef.current;
@@ -993,8 +1019,8 @@ export default function CookieCraze() {
         // mais aucune ligne de code ne le faisait.
         crypto: {
           ...prev.crypto,
-          balance: roundCrmb((prev.crypto?.balance || 0) + CRMB_PAR_PRESTIGE),
-          totalEarned: roundCrmb((prev.crypto?.totalEarned || 0) + CRMB_PAR_PRESTIGE),
+          balance: addCrmb(prev.crypto?.balance, CRMB_PAR_PRESTIGE),
+          totalEarned: addCrmb(prev.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
           lastMarketTs: Date.now(),
           lastYieldTs: Date.now(),
         },
@@ -1459,6 +1485,7 @@ export default function CookieCraze() {
                     onStake={cryptoStake}
                     onUnstake={cryptoUnstake}
                     onBuyMiner={buyMiner}
+                    onSignLedger={signLedger}
                   />
                 )}
                 {tab === "prestige" && (

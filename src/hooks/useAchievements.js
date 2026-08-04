@@ -4,6 +4,7 @@ import { ACHIEVEMENTS, achievementReward, achievementCrmb } from "../data/achiev
 import { deriveStats } from "../utils/selectors.js";
 import { fmt } from "../utils/format.js";
 import { isFeatureEnabled } from "../utils/state.js";
+import { addCrmb } from "../utils/crypto.js";
 
 const CHECK_MS = 1500;
 
@@ -55,8 +56,8 @@ export function useAchievements(state, setState, notify, onUnlock) {
         if (totalCrmb > 0) {
           next.crypto = {
             ...prev.crypto,
-            balance: (prev.crypto?.balance || 0) + totalCrmb,
-            totalEarned: (prev.crypto?.totalEarned || 0) + totalCrmb,
+            balance: addCrmb(prev.crypto?.balance, totalCrmb),
+            totalEarned: addCrmb(prev.crypto?.totalEarned, totalCrmb),
           };
         }
         return next;

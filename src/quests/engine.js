@@ -7,7 +7,7 @@ import { QUESTS, QUEST_BY_ID, questTitle, questDesc } from "./catalog.js";
 import { ITEMS } from "../data/items.js";
 import { cpsFrom } from "../utils/calc.js";
 import { deriveStats } from "../utils/selectors.js";
-import { stakedTotal, stakingBoost } from "../utils/crypto.js";
+import { stakedTotal, stakingBoost, addCrmb } from "../utils/crypto.js";
 import { prestigeEffects } from "../data/prestige.js";
 
 export const ACTIVE_SLOTS = 3;
@@ -205,8 +205,8 @@ export function applyReward(state, reward, now = Date.now()) {
   if (reward.crmb > 0) {
     next.crypto = {
       ...state.crypto,
-      balance: (state.crypto?.balance || 0) + reward.crmb,
-      totalEarned: (state.crypto?.totalEarned || 0) + reward.crmb,
+      balance: addCrmb(state.crypto?.balance, reward.crmb),
+      totalEarned: addCrmb(state.crypto?.totalEarned, reward.crmb),
     };
   }
 

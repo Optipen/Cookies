@@ -8,7 +8,7 @@ import { ITEMS, ITEM_BY_ID, BALANCE } from "../data/items.js";
 import { getUpgrade, SHARE_BASE } from "../data/upgrades.js";
 import { miningFrom, clickPowerFrom, computePerItemMult, globalBonus } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
-import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
+import { stakingTier, miningRate, stakingYieldPerSecond, ledgerSteps } from "./crypto.js";
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
 import { creditedRate } from "./rate.js";
@@ -97,10 +97,16 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const items = state.items || {};
   const upgrades = state.upgrades || {};
 
-  const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, prestige.mineSteps);
+  // Les contrats du Registre apportent des crans permanents aux deux axes: ils
+  // s'additionnent à ceux de l'arbre céleste, comme toutes les autres sources.
+  const registre = ledgerSteps(state.crypto?.ledger);
+  const mineSteps = prestige.mineSteps + registre;
+  const clickSteps = prestige.clickSteps + registre;
+
+  const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, mineSteps);
   const mining = baseMining * buffMine;
 
-  const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, prestige.clickSteps);
+  const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, clickSteps);
   const ownPower = (state.cpcBase || 1) + buildingsPower;
   const flatClick = ownPower * clickUpgradeMult(upgrades);
 
@@ -136,8 +142,9 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     chipTier: chipTierState,
     stakeTier,
     // Multiplicateur global effectif de chaque axe, tel qu'on peut l'annoncer.
-    mineMult: globalBonus(chips, stakeTier.steps, prestige.mineSteps),
-    clickMult: globalBonus(chips, stakeTier.steps, prestige.clickSteps),
+    mineMult: globalBonus(chips, stakeTier.steps, mineSteps),
+    clickMult: globalBonus(chips, stakeTier.steps, clickSteps),
+    ledger: registre,
     prestige,
     buffActive,
     buffCps: buffMine,

@@ -252,6 +252,43 @@ innocents.
 Une vérification **n'apparaît jamais parce que le joueur est inactif**. Ne pas
 cliquer est une façon légitime de jouer — le minage tourne tout seul.
 
+### CRMB : rare, et jamais détruit par erreur
+
+Le CRMB est une monnaie de **récompense**. On en gagne en terminant des quêtes
+(dix des vingt-six en donnent, 1 à 5 pièces), en décrochant les succès qui
+comptent (0 · 0 · 1 · 2 · 5 selon le palier, 53 pièces pour les cinquante-cinq
+succès réunis), en renaissant (+5), et par le matériel d'extraction — jamais en
+cuisant des cookies. Le faucet historique versait 0,001 CRMB tous les 20 000
+cookies, soit des centaines de millions en fin de partie.
+
+**Un solde valide n'est jamais détruit par un calcul invalide.** `addCrmb`
+rejette le seul delta fautif et conserve le solde. Écrire
+`roundCrmb(solde + delta)` paraît équivalent, mais si `delta` vaut `NaN` la
+somme vaut `NaN`, l'arrondi rend 0, et le joueur perd son portefeuille entier
+parce qu'un rendement s'est mal calculé pendant un tic. C'est exactement ce qui
+s'était produit au retour hors-ligne : le solde affichait « ∞ », puis zéro au
+rechargement. Toutes les écritures de solde passent désormais par là.
+
+### Le Registre : un puits qui ne se tarit pas
+
+Les deux apparences payables en CRMB coûtent trente-cinq pièces en tout. Passé
+cet achat, la monnaie n'avait plus rien à acheter — on continuait d'en gagner
+sans jamais la dépenser, ce qui revient à ne plus en gagner du tout.
+
+Un **contrat du Registre** est un achat définitif : +0,25 à la puissance de clic
+**et** au minage, pour toujours, et il survit aux renaissances. C'est le
+contraire du staking, qui prête le même bonus tant que le CRMB reste bloqué et
+le reprend au retrait. Le choix est réel : garder sa mise liquide, ou la
+convertir une fois pour toutes.
+
+| Contrat | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Prix (CRMB) | 10 | 25 | 50 | 100 | 250 | 500 | 1 000 | 2 500 |
+| Cumul | 10 | 35 | 85 | 185 | 435 | 935 | 1 935 | 4 435 |
+
+Le bonus porte sur les **deux axes du même cran** : un puits qui ne pousserait
+que le minage déplacerait l'équilibre actif/passif à chaque achat.
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs

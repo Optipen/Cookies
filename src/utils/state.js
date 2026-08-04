@@ -1,4 +1,4 @@
-import { defaultCryptoState, CRMB } from "./crypto.js";
+import { defaultCryptoState, CRMB, addCrmb } from "./crypto.js";
 import { clampBestCombo } from "./combo.js";
 import { getUpgrade } from "../data/upgrades.js";
 import { ITEM_BY_ID } from "../data/items.js";
@@ -211,13 +211,17 @@ export function migrate(savedState, now = Date.now()) {
       ...oldCrypto,
       name: CRMB.name,
       symbol: CRMB.symbol,
-      balance: Math.max(0, num(oldCrypto.balance)),
+      balance: addCrmb(num(oldCrypto.balance), 0),
+      // Contrats du Registre: un entier positif, quoi qu'il y ait eu dans la
+      // sauvegarde. Un compteur bricolé donnerait un multiplicateur global
+      // négatif, donc une production négative sur les deux axes à la fois.
+      ledger: Math.max(0, Math.floor(num(oldCrypto.ledger))),
       // `mintedUnits`, `perCookies` et `perAmount` pilotaient le faucet, qui
       // n'existe plus: les garder ferait croire à une source de CRMB disparue.
       mintedUnits: undefined,
       perCookies: undefined,
       perAmount: undefined,
-      totalEarned: Math.max(0, num(oldCrypto.totalEarned)),
+      totalEarned: addCrmb(num(oldCrypto.totalEarned), 0),
       price: num(oldCrypto.price, CRMB.basePrice),
       priceHistory: Array.isArray(oldCrypto.priceHistory) && oldCrypto.priceHistory.length
         ? oldCrypto.priceHistory.filter((p) => isFinite(p)).slice(-CRMB.historyLength)
