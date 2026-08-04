@@ -1,29 +1,50 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatestRef } from "./useLatestRef.js";
 import tuning from "../data/tuning.json";
 
-export function useAutosave(state, saveFn) {
-  const lastSaveRef = useRef(0);
+/**
+ * Sauvegarde périodique + sauvegarde de sortie.
+ *
+ * L'écriture passe par un timer plutôt que par un effet dépendant de l'état:
+ * la boucle de jeu modifie l'état 2 fois par seconde, ce qui déclenchait
+ * autant de `JSON.stringify` sur l'objet complet.
+ */
+export function useAutosave(state, saveFn, { enabled = true } = {}) {
+  const stateRef = useLatestRef(state);
+  const saveRef = useLatestRef(saveFn);
 
   useEffect(() => {
-    const now = Date.now();
-    const mode = (tuning && tuning.mode) || 'standard';
-    const autosaveMs = (tuning && tuning[mode] && tuning[mode].loops && tuning[mode].loops.autosave_ms) || 3000;
-    if (now - (lastSaveRef.current || 0) > autosaveMs) {
-      lastSaveRef.current = now;
-      try { saveFn(state); } catch {}
-    }
-  }, [state, saveFn]);
+    if (!enabled) return;
+    const cfg = tuning?.[tuning?.mode || "standard"]?.loops || {};
+    const autosaveMs = cfg.autosave_ms || 5000;
 
-  useEffect(() => {
-    const onVis = () => { if (document.visibilityState !== 'visible') { try { saveFn(state); } catch {} } };
-    const onUnload = () => { try { saveFn(state); } catch {} };
-    window.addEventListener('visibilitychange', onVis);
-    window.addEventListener('beforeunload', onUnload);
-    return () => {
-      window.removeEventListener('visibilitychange', onVis);
-      window.removeEventListener('beforeunload', onUnload);
+    const persist = () => {
+      const s = stateRef.current;
+      if (!s) return;
+      // On ne sérialise jamais la notification ni les effets visuels en cours
+      const { notice, fx, ...persistable } = s;
+      saveRef.current({ ...persistable, notice: null, fx: { banner: null, shakeUntil: 0, tag: null }, lastTs: Date.now() });
     };
-  }, [state, saveFn]);
+
+    const iv = setInterval(persist, autosaveMs);
+
+    // `pagehide` est le seul événement fiable sur iOS Safari; `beforeunload`
+    // n'y est pas déclenché quand l'utilisateur ferme l'onglet.
+    const onHide = () => persist();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") persist();
+    };
+
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+      persist();
+    };
+  }, [enabled, stateRef, saveRef]);
 }
-
-

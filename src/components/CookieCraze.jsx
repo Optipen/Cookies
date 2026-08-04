@@ -1,1593 +1,1741 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Tooltip from "./Tooltip.jsx";
-import CookieBiteMask from "./CookieBiteMask.jsx";
+
 import Shop from "./Shop.jsx";
 import Upgrades from "./Upgrades.jsx";
-import Skins from "./Skins.jsx";
+import QuestBoard from "./QuestBoard.jsx";
+import ParticleLayer from "./ParticleLayer.jsx";
+
+// Panneaux rarement ouverts en début de partie: chargés à la demande pour
+// alléger le premier rendu (utile sur mobile et connexion lente).
+const Skins = lazy(() => import("./Skins.jsx"));
+const CryptoPanel = lazy(() => import("./CryptoPanel.jsx"));
+const PrestigePanel = lazy(() => import("./PrestigePanel.jsx"));
+const StatsPanel = lazy(() => import("./StatsPanel.jsx"));
+import CookieBiteMask from "./CookieBiteMask.jsx";
+import Intro from "./Intro.jsx";
+
 import { ITEMS } from "../data/items.js";
-import { UPGRADES } from "../data/upgrades.js";
-import { cpsFrom, computePerItemMult, clickMultiplierFrom } from "../utils/calc.js";
-import tuning from "../data/tuning.json";
-import { ACHIEVEMENTS } from "../data/achievements.js";
-import { MISSIONS, getInitialMission, nextMissionId, MICRO_MISSIONS } from "../data/missions.js";
-import { useSound } from "../hooks/useSound.js";
-import { useMicroMissions } from "../hooks/useMicroMissions.js";
-import { useAutosave } from "../hooks/useAutosave.js";
-import { useGameLoop } from "../hooks/useGameLoop.js";
-import { useCrypto } from "../hooks/useCrypto.js";
-import { useToast } from "../hooks/useToast.js";
-import { useFlyingCookie } from "../hooks/useFlyingCookie.js";
-import { useCookieRain } from "../hooks/useCookieRain.js";
-import { useGoldenEvents } from "../hooks/useGoldenEvents.js";
-import { useParticles } from "../hooks/useParticles.js";
-import { useCountdown } from "../hooks/useCountdown.js";
-import { buildPlayerContext } from "../missions/context.js";
-import { selectMainMission, evaluateMainProgress, rewardFromMain } from "../missions/selector.js";
-import { applyRewards } from "../utils/rewardAdapter.js";
-import { fmt, fmtInt, clamp } from "../utils/format.js";
-import { 
-  FEATURES, 
-  loadState, 
-  migrate, 
-  saveState, 
-  isFeatureEnabled, 
-  withFeatureFlag,
+import { nextMilestone, tierThreshold } from "../data/upgrades.js";
+import { SKINS } from "../data/skins.js";
+import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
+import {
+  ascensionEffects,
+  availableStars,
+  canAscend,
+  starsFor,
+  trackCost,
+  trackLevel,
+  TRACK_BY_ID,
+} from "../data/ascension.js";
+
+import {
+  deriveStats,
+  productionStats,
+  costOf,
+  isEarlyWindow,
+  timeToAfford,
+  maxAffordable,
+  COMBO,
+  comboStep,
+  comboProgress,
+} from "../utils/selectors.js";
+import { CREDIT_MAX_CPS } from "../utils/rate.js";
+import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
+import { offlineGains } from "../utils/offline.js";
+import { STEP, snap } from "../utils/grid.js";
+import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
+import {
+  loadState,
+  saveState,
   createResetState,
-  createIncompleteSave,
-  createCorruptedSave,
+  isFeatureEnabled,
+  exportSave as serializeSave,
+  importSave as parseSave,
   SAVE_KEY,
-  PENDING_RESET_KEY
+  LEGACY_KEYS,
+  PENDING_RESET_KEY,
 } from "../utils/state.js";
-// Import des tests en mode DEV uniquement
-if (import.meta?.env?.DEV || new URLSearchParams(window.location.search).get('dev') === '1') {
-  import("../utils/test-scenarios.js");
-  import("../utils/timer-test.js");
-  import("../utils/test-rewards.js");
-  import("../utils/test-tooltips.js");
-  import("../utils/test-mission-exclusivity.js");
-  import("../utils/juicy-demo.js");
-  import("../utils/skin-test.js");
-  import("../utils/tabs-test.js");
-  import("../utils/golden-test.js");
-}
+import { buyPrice, sellPrice, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
+import { buildContext } from "../quests/engine.js";
 
-// Helpers calcul déportés dans utils/calc.js
+import { useAudio } from "../hooks/useAudio.js";
+import { useNotify } from "../hooks/useNotify.js";
+import { useGameLoop } from "../hooks/useGameLoop.js";
+import { useAutosave } from "../hooks/useAutosave.js";
+import { useQuests } from "../hooks/useQuests.js";
+import { useEvents } from "../hooks/useEvents.js";
+import { useAchievements } from "../hooks/useAchievements.js";
+import { useCombo } from "../hooks/useCombo.js";
+import { useClickRate } from "../hooks/useClickRate.js";
+import { useClock, useTimeLeft } from "../hooks/useClock.js";
+import { useLatestRef } from "../hooks/useLatestRef.js";
 
-// === Skins ===
-const SKINS = {
-  default: { id: "default", name: "Choco",   price: 0,       src: "/cookie.png" },
-  starter: { id: "starter", name: "Starter", price: 1_000,   src: "/cookie-caramel.png", className: "saturate-110 hue-rotate-[12deg] brightness-110", description: "Ton premier skin personnalisé !" },
-  early:   { id: "early",   name: "Early",   price: 10_000,  src: "/cookie-noir.png", className: "brightness-[0.95] contrast-115 sepia-[0.1]", description: "Pour les joueurs ambitieux" },
-  caramel: { id: "caramel", name: "Caramel", price: 50_000,  src: "/cookie-caramel.png", className: "saturate-125 hue-rotate-[18deg]", description: "Douceur caramélisée" },
-  noir:    { id: "noir",    name: "Noir",    price: 200_000, src: "/cookie-noir.png", className: "brightness-[0.92] contrast-125", description: "Élégance sombre" },
-  ice:     { id: "ice",     name: "Ice",     price: 500_000, src: "/cookie-ice.png", description: "Fraîcheur glaciale" },
-  fire:    { id: "fire",    name: "Lava",    price: 2_000_000, src: "/cookie-fire.png", description: "Puissance volcanique" },
-};
+// Six onglets: production et clic partagent la boutique, et le profil regroupe
+// statistiques, succès et apparences. Huit entrées débordaient de la barre.
+// `court` est ce qui s'affiche sous l'icône en barre basse: à six onglets sur
+// 390 px, « Améliorations » collait à ses voisins. `label` reste le nom complet,
+// annoncé aux lecteurs d'écran et affiché sur grand écran.
+const TABS = [
+  { id: "shop", label: "Boutique", court: "Boutique", icon: "🛍️" },
+  { id: "upgrades", label: "Améliorations", court: "Amélior.", icon: "⬆️" },
+  { id: "quests", label: "Quêtes", court: "Quêtes", icon: "📜" },
+  { id: "crypto", label: "CRMB", court: "CRMB", icon: "🪙", feature: "ENABLE_CRYPTO" },
+  { id: "prestige", label: "Prestige", court: "Prestige", icon: "✨", feature: "ENABLE_PRESTIGE" },
+  { id: "profile", label: "Profil", court: "Profil", icon: "👤" },
+];
 
-// === Game Data ===
-// DEFAULT_STATE et constantes déplacées vers src/utils/state.js
+// ============================================================================
+// Petits composants isolés — ils consomment l'horloge sans re-rendre le jeu
+// ============================================================================
 
-const useAudio = (enabled) => {
-  const ctxRef = useRef(null);
-  const buffersRef = useRef({});
-  const ping = (freq = 520, time = 0.05) => {
-    if (!enabled) return;
-    try {
-      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = ctxRef.current; if (ctx.state === "suspended") { try { ctx.resume(); } catch {} }
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type = "triangle"; o.frequency.value = freq; g.gain.value = 0.07;
-      o.connect(g); g.connect(ctx.destination); o.start();
-      setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + time); o.stop(ctx.currentTime + time); }, time * 800);
-    } catch {}
-  };
-  const loadBuffer = async (url) => {
-    if (!enabled) return null;
-    try {
-      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = ctxRef.current;
-      if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
-      if (buffersRef.current[url]) return buffersRef.current[url];
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const arr = await res.arrayBuffer();
-      const buf = await new Promise((resolve, reject) => {
-        try { ctx.decodeAudioData(arr, (b) => resolve(b), (e) => reject(e)); } catch (e) { reject(e); }
-      });
-      buffersRef.current[url] = buf;
-      return buf;
-    } catch {
-      return null;
-    }
-  };
-  const crunch = async () => {
-    if (!enabled) return;
-    try {
-      if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      const ctx = ctxRef.current;
-      if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
-      const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) ? (import.meta.env.BASE_URL || '/') : '/';
-      const ensureSlash = (s) => s.endsWith('/') ? s : (s + '/');
-      const b = ensureSlash(base);
-      const candidates = [
-        `${b}crunch.mp3`, `${b}crunch-1.mp3`, `${b}crunch-2.mp3`,
-        "/crunch.mp3", "/crunch-1.mp3", "/crunch-2.mp3",
-        "crunch.mp3", "crunch-1.mp3", "crunch-2.mp3"
-      ];
-      const start = Math.floor(Math.random() * candidates.length);
-      let played = false;
-      for (let i = 0; i < candidates.length; i++) {
-        const url = candidates[(start + i) % candidates.length];
-        const buf = await loadBuffer(url);
-        if (buf) {
-          const src = ctx.createBufferSource();
-          const g = ctx.createGain();
-          g.gain.value = 0.4;
-          src.buffer = buf;
-          src.connect(g); g.connect(ctx.destination);
-          src.start(0);
-          played = true;
-          break;
-        }
-      }
-      if (!played) {
-        // Fallback HTMLAudioElement (débloque certains navigateurs / iframes)
-        try {
-          const htmlCandidates = [
-            `${b}crunch.mp3`, `${b}crunch-1.mp3`, `${b}crunch-2.mp3`,
-            "/crunch.mp3", "/crunch-1.mp3", "/crunch-2.mp3",
-            "crunch.mp3", "crunch-1.mp3", "crunch-2.mp3"
-          ];
-          let ok = false;
-          for (const u of htmlCandidates) {
-            try {
-              const a = new Audio(u);
-              a.volume = 0.4;
-              await a.play();
-              ok = true;
-              break;
-            } catch {}
-          }
-          if (!ok) ping(520, 0.05);
-        } catch {
-          ping(520, 0.05);
-        }
-      }
-    } catch {
-      ping(520, 0.05);
-    }
-  };
-  const dispose = () => {
-    try {
-      if (ctxRef.current) ctxRef.current.close();
-    } catch {}
-    ctxRef.current = null;
-    buffersRef.current = {};
-  };
-  return { ping, crunch, dispose };
-};
+/**
+ * Jauge de combo.
+ *
+ * Toujours visible dès le premier clic et toujours en train de redescendre:
+ * c'est le rappel permanent que s'arrêter de cliquer coûte quelque chose.
+ */
+const ComboMeter = memo(function ComboMeter({ display }) {
+  const { streak, mult } = display;
+  if (streak <= 0) return null;
+  const niveau = comboStep(streak);
+  const plein = niveau >= COMBO.steps;
+  // La barre montre l'avancée vers le NIVEAU suivant, pas vers le maximum: le
+  // multiplicateur ne bouge qu'en franchissant un niveau, autant montrer lequel.
+  const pct = comboProgress(streak) * 100;
 
-// === Timer Announcer pour l'accessibilité ===
-function TimerAnnouncer() {
   return (
-    <div 
-      id="timer-announcer"
-      aria-live="polite"
-      aria-atomic="true"
-      className="sr-only"
-    />
-  );
-}
-
-// === Timer Component pour Micro-missions ===
-function MicroMissionTimer({ endTimestamp }) {
-  const { remainingMs, percentage, isActive, timeText } = useCountdown(endTimestamp);
-  
-  if (!isActive) return null;
-  
-  return (
-    <div className="mt-1.5 space-y-1">
-      {/* Compteur de temps */}
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] text-yellow-300 font-mono">⏱️ Temps restant</span>
-        <span className="text-xs font-bold text-yellow-200 font-mono" aria-live="polite">
-          {timeText}
+    <div className="mt-2 mx-auto w-full max-w-[15rem]">
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="font-semibold text-amber-800">
+          🔥 Combo{" "}
+          <span className="font-normal text-amber-700/70 tabular-nums">
+            niv. {niveau}/{COMBO.steps}
+          </span>
+        </span>
+        {/* Multiplicateur atteint, et celui qu'on vise. Au maximum, on le dit
+            plutôt que d'annoncer un palier qui n'existe pas. */}
+        <span className={`font-black tabular-nums ${plein ? "text-orange-600" : "text-amber-700"}`}>
+          ×{fmtMult(mult)}
+          {plein ? (
+            <span className="ml-1 text-[11px] font-bold uppercase tracking-wide">max</span>
+          ) : (
+            <span className="ml-1 font-medium text-amber-600/70">→ ×{fmtMult(mult + STEP)}</span>
+          )}
         </span>
       </div>
-      
-      {/* Barre de timer qui se vide */}
-      <div className="h-1 rounded-full bg-zinc-800 overflow-hidden" 
-           aria-label={`Timer: ${timeText} restant`} 
-           role="progressbar" 
-           aria-valuemin={0} 
-           aria-valuemax={100} 
-           aria-valuenow={Math.round(100 - percentage)}>
-        <div 
-          className="h-full bg-gradient-to-r from-yellow-400 to-red-500 transition-all duration-200 ease-linear" 
-          style={{ width: Math.max(0, 100 - percentage) + '%' }}
-        />
+      {/* Un segment par niveau: on voit d'un coup d'œil combien il en reste. */}
+      <div className="flex gap-0.5" aria-hidden="true">
+        {Array.from({ length: COMBO.steps }, (_, i) => (
+          <div key={i} className="h-1.5 flex-1 rounded-full bg-amber-100 overflow-hidden">
+            <div
+              className={`h-full transition-[width] duration-100 ease-linear ${
+                plein ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gradient-to-r from-amber-300 to-orange-400"
+              }`}
+              style={{ width: i < niveau ? "100%" : i === niveau ? `${pct}%` : "0%" }}
+            />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={COMBO.steps} aria-valuenow={niveau}>
+        Combo, niveau {niveau} sur {COMBO.steps}, multiplicateur ×{fmtMult(mult)}
+      </span>
+    </div>
+  );
+});
+
+/**
+ * Les cinq chiffres qui décrivent la partie, côte à côte.
+ *
+ * Le jeu n'en affichait qu'un seul en /s — le minage. Impossible, donc, de
+ * répondre à la seule question qui compte: « est-ce que cliquer vaut le coup ? »
+ * Les trois colonnes se lisent comme une phrase:
+ *
+ *      puissance × cadence  =  production des clics
+ *                    + minage
+ *                    ─────────
+ *                    = total
+ *
+ * La cadence est une moyenne glissante, donc préfixée de « ≈ » et arrondie au
+ * quart: prétendre à « 4,3333 clics/s » serait faussement précis. Elle s'éteint
+ * quand on arrête de cliquer, et la colonne du milieu avec elle — c'est
+ * exactement ce qu'on veut montrer: sans les doigts, il ne reste que le minage.
+ */
+const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
+  const c = productionStats(stats, cadence);
+
+  return (
+    <div className="mt-2 mx-auto w-full max-w-sm rounded-2xl bg-white/60 border border-amber-200/80 px-2 py-1.5">
+      <div className="grid grid-cols-3 gap-1 text-center">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Par clic</div>
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-par-clic">
+            {fmt(c.parClic)}
+          </div>
+        </div>
+        <div className={c.actif ? "" : "opacity-40"}>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Cadence</div>
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-cadence">
+            {/* Arrondie au quart: annoncer « 4,3333 clics/s » sur une moyenne
+                glissante serait faussement précis. Le « ≈ » le dit. */}
+            {c.actif ? fmtApprox(snap(c.creditee)) : "—"}
+            <span className="text-[11px] font-semibold opacity-70"> /s</span>
+          </div>
+        </div>
+        <div className={c.actif ? "" : "opacity-40"}>
+          <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
+          <div className="text-sm font-black text-amber-700 tabular-nums leading-tight" data-testid="stat-clics">
+            {fmt(c.prodClics)}
+            <span className="text-[11px] font-semibold opacity-70"> /s</span>
+          </div>
+        </div>
+      </div>
+      {/* La cadence créditée est bornée. On le dit quand on y touche, plutôt
+          que de laisser croire qu'accélérer rapporte encore. */}
+      {c.bornee && (
+        <p className="mt-1 text-center text-[11px] font-semibold text-orange-700">
+          Cadence créditée limitée à {CREDIT_MAX_CPS} clics/s
+        </p>
+      )}
+      <div className="mt-1 pt-1 border-t border-amber-200/70 flex items-baseline justify-center gap-1.5 text-[11px] tabular-nums">
+        <span className="text-emerald-700 font-semibold">
+          <span aria-hidden="true">⛏️ </span>
+          <span className="sr-only">Minage </span>
+          <span data-testid="stat-minage">{fmt(c.minage)}</span>/s
+        </span>
+        <span className="text-amber-400" aria-hidden="true">+</span>
+        <span className="text-amber-700 font-semibold">
+          <span aria-hidden="true">👆 </span>
+          <span className="sr-only">Clics </span>
+          {fmt(c.prodClics)}/s
+        </span>
+        <span className="text-amber-400" aria-hidden="true">=</span>
+        <span className="font-black text-amber-950">
+          <span className="sr-only">Total </span>
+          <span data-testid="stat-total">{fmt(c.total)}</span>/s
+        </span>
       </div>
     </div>
   );
-}
+});
 
-// === Component ===
-export default function CookieCraze() {
-  const [state, setState] = useState(() => loadState());
-  const soundsEnabled = isFeatureEnabled('ENABLE_SOUNDS') && state.ui.sounds;
-  const { ping, crunch, dispose } = useAudio(soundsEnabled);
-  const { play } = useSound(soundsEnabled);
-  const { toast } = useToast(setState);
-  const [previewSkin, setPreviewSkin] = useState(null);
-  const [viewKey, setViewKey] = useState(0); // force remount on reset
-  
-  // Listen for skin preview events from Skins component
-  useEffect(() => {
-    const handleSkinPreview = (event) => {
-      setPreviewSkin(event.detail);
-    };
-    
-    window.addEventListener('skinPreview', handleSkinPreview);
-    return () => window.removeEventListener('skinPreview', handleSkinPreview);
-  }, []);
-  const [tab, setTab] = useState('shop');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
-  const [tutorialInteract, setTutorialInteract] = useState(false);
-  const tutorialClicksBase = useRef(0);
-  const tutorialManualBuyBase = useRef(0);
-  const tutorialVisitedSkins = useRef(false);
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      // Escape pour fermer le menu
-      if (e.key === 'Escape') {
-        setShowMenu(false);
-        return;
-      }
-      
-      // Raccourcis clavier pour les onglets (Ctrl/Cmd + 1-4)
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-        switch(e.key) {
-          case '1':
-            e.preventDefault();
-            setTab('shop');
-            break;
-          case '2':
-            e.preventDefault();
-            setTab('auto');
-            break;
-          case '3':
-            e.preventDefault();
-            setTab('upgrades');
-            break;
-          case '4':
-            if (isFeatureEnabled('ENABLE_SKINS')) {
-              e.preventDefault();
-              setTab('skins');
-            }
-            break;
-        }
-      }
-    };
-    
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  const cookieField = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => ({
-        id: i,
-        top: Math.random() * 100,
-        left: Math.random() * 100,
-        size: Math.random() * 32 + 24,
-        delay: Math.random() * 5,
-        duration: Math.random() * 10 + 10,
-      })),
-    []
-  );
-
-  // Dispose uniquement au démontage pour éviter de couper l'audio entre les rendus
-  useEffect(() => () => dispose(), []);
-
-  // Advanced gate: visible UNIQUEMENT si ?advanced=1 (ou via menu)
-  useEffect(() => {
-    try {
-      const url = new URL(window.location.href);
-      const q = url.searchParams.get('advanced');
-      if (q === '1') setShowAdvanced(true);
-    } catch {}
-  }, []);
-
-  // --- Multipliers (memo for live view) ---
-  const prestigeMulti = useMemo(() => 1 + state.prestige.chips * 0.02, [state.prestige.chips]);
-  const stakeMulti = useMemo(() => 1 + (state.crypto.staked || 0) * 0.5, [state.crypto.staked]);
-  const perItemMult = useMemo(() => computePerItemMult(state.items, state.upgrades), [state.upgrades, state.items]);
-  const cpcMultFromUpgrades = useMemo(() => { let m = 1; for (const id in state.upgrades) { const up = UPGRADES.find((u) => u.id === id); if (up && state.upgrades[id] && up.target === "cpc" && up.type === "mult") m *= up.value; } return m; }, [state.upgrades]);
-  const baseCpsNoBuff = useMemo(() => cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeMulti), [state.items, state.upgrades, state.prestige.chips, stakeMulti]);
-
-  const cpsWithBuff = useMemo(() => {
-    const buffMult = (Date.now() < state.buffs.until && state.buffs.cpsMulti) ? state.buffs.cpsMulti : 1;
-    return baseCpsNoBuff * buffMult;
-  }, [baseCpsNoBuff, state.buffs.until, state.buffs.cpsMulti]);
-  const clickMult = useMemo(() => clickMultiplierFrom(state.items, state.upgrades), [state.items, state.upgrades]);
-  // Base CPC: dépend UNIQUEMENT du cpcBase initial × multiplicateurs de clic (indépendant du CPS auto)
-  const cpcBase = useMemo(() => {
-    const mode = (tuning && tuning.mode) || 'standard';
-    const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
-    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < (ecfg.window_s || 0);
-    const earlyMult = earlyActive ? (ecfg.cpc_base_mult || 1) : 1;
-    return (state.cpcBase || 1) * earlyMult * clickMult * (Date.now() < state.buffs.until ? state.buffs.cpcMulti : 1) * cpcMultFromUpgrades;
-  }, [state.cpcBase, clickMult, state.buffs, cpcMultFromUpgrades, state.createdAt]);
-  // CPC courant utilisé pour les gains (sans combo)
-  const cpc = useMemo(() => cpcBase, [cpcBase]);
-
-  // Skin preview helpers
-  const skinKey = previewSkin || state.skin;
-  const skinClass = (SKINS[skinKey] && SKINS[skinKey].className) ? SKINS[skinKey].className : "";
-  const skinSrc = (SKINS[skinKey] && SKINS[skinKey].src) ? SKINS[skinKey].src : SKINS.default.src;
-
-  // Autosave via hook
-  useAutosave(state, saveState);
-
-  // Main loop via hook avec accumulation/commit
-  useGameLoop(state, setState, { tickMs: 300, commitEveryMs: 600 });
-
-  // Intro gate + offline progress + schedulers
-  useEffect(() => {
-    // Applique un reset différé (si rechargé après reset)
-    try {
-      const raw = sessionStorage.getItem(PENDING_RESET_KEY);
-      if (raw) {
-        const { preserve, prestige, sounds } = JSON.parse(raw);
-        sessionStorage.removeItem(PENDING_RESET_KEY);
-        setState(() => createResetState(preserve, !!sounds, preserve ? (prestige || 0) : 0));
-        setViewKey((k) => k + 1);
-      }
-    } catch {}
-
-    const now = Date.now();
-    const dt = Math.max(0, (now - state.lastTs) / 1000);
-    if (dt > 3 && !state.flags.offlineCollected) {
-      const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-      const mode = (tuning && tuning.mode) || 'standard';
-      const ocfg = (tuning && tuning[mode] && tuning[mode].offline) || {};
-      const maxSeconds = ocfg.max_seconds ?? 7200;
-      const cappedDt = Math.min(dt, maxSeconds);
-      const r0 = ocfg.ratio_0_10min ?? 0.10;
-      const r1 = ocfg.ratio_2h ?? 0.03;
-      const t0 = 600, t1 = maxSeconds;
-      const ratio = cappedDt <= t0 ? r0 : r0 - (r0 - r1) * ((cappedDt - t0) / (t1 - t0));
-      const offlineGain = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM) * cappedDt * ratio;
-      if (offlineGain > 0) {
-        toast(`+${fmt(offlineGain)} cookies gagnés hors-ligne`, "success", { ms: 3000 });
-        setState((s) => ({ ...s, cookies: s.cookies + offlineGain, lifetime: s.lifetime + offlineGain, flags: { ...s.flags, offlineCollected: true } }));
-      }
+/**
+ * Objectif permanent.
+ *
+ * Toujours quelque chose à viser: soit le prochain palier de bâtiment, soit le
+ * temps restant avant le prochain achat. Le joueur n'est jamais devant un écran
+ * sans horizon.
+ */
+const NextGoal = memo(function NextGoal({ state, stats }) {
+  const goal = useMemo(() => nextMilestone(state), [state]);
+  const cheapest = useMemo(() => {
+    let best = null;
+    for (const item of ITEMS) {
+      const price = costOf(state, item.id, 1);
+      if (price <= state.cookies) return null; // quelque chose est déjà achetable
+      if (!best || price < best.price) best = { item, price };
     }
-    if (isFeatureEnabled('ENABLE_EVENTS')) {
-    scheduleGolden();
-      if (isFeatureEnabled('ENABLE_RAIN')) scheduleRain();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return best;
+  }, [state]);
 
-  useEffect(() => {
-    const onKey = (e) => { if (!state.ui.introSeen && (e.key === 'Enter' || e.key === ' ')) skipIntro(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [state.ui.introSeen]);
+  if (!goal && !cheapest) return null;
 
-  // Skin preview events (from Skins.jsx)
-  useEffect(() => {
-    const handler = (e) => setPreviewSkin(e.detail || null);
-    window.addEventListener('skin-preview', handler);
-    return () => window.removeEventListener('skin-preview', handler);
-  }, []);
-
-  // Tutorial step baselines
-  useEffect(() => {
-    if (state.ui.introSeen) return;
-    if (tutorialStep === 1) {
-      tutorialClicksBase.current = state.stats.clicks || 0;
-    } else if (tutorialStep === 2) {
-      // total des items manuels (mode: 'mult')
-      let total = 0; for (const it of ITEMS) if (it.mode === 'mult') total += (state.items[it.id] || 0);
-      tutorialManualBuyBase.current = total;
-    }
-  }, [tutorialStep, state.ui.introSeen]);
-
-  // Step 1: avance après 5 clics
-  useEffect(() => {
-    if (state.ui.introSeen) return;
-    if (tutorialStep !== 1) return;
-    const diff = (state.stats.clicks || 0) - (tutorialClicksBase.current || 0);
-    if (diff >= 5) { setTutorialInteract(false); setTutorialStep(2); }
-  }, [state.stats.clicks, tutorialStep, state.ui.introSeen]);
-
-  // Step 2: avance après un achat manuel
-  useEffect(() => {
-    if (state.ui.introSeen) return;
-    if (tutorialStep !== 2) return;
-    let total = 0; for (const it of ITEMS) if (it.mode === 'mult') total += (state.items[it.id] || 0);
-    if (total > tutorialManualBuyBase.current) { setTutorialInteract(false); setTutorialStep(3); }
-  }, [state.items, tutorialStep, state.ui.introSeen]);
-
-  // Step 3: avance quand l'onglet skins est vu
-  useEffect(() => {
-    if (state.ui.introSeen) return;
-    if (tutorialStep !== 3) return;
-    if (tab === 'skins' && !tutorialVisitedSkins.current) {
-      tutorialVisitedSkins.current = true;
-      // Message central de bienvenue: image au centre, durée totale ~3s
-      setState((s) => ({
-        ...s,
-        fx: {
-          ...s.fx,
-          tag: { image: '/welcome.png', text: '', until: Date.now() + 3000, anim: { inMs: 300, outMs: 300 }, x: '25vw', y: '10vh' },
-        },
-      }));
-      setTimeout(() => setTutorialStep(4), 3000);
-    }
-  }, [tab, tutorialStep, state.ui.introSeen]);
-
-  // Track timestamp for offline Save
-  useEffect(() => {
-    const h = () => setState((s) => ({ ...s, lastTs: Date.now() }));
-    window.addEventListener("beforeunload", h);
-    const iv = setInterval(h, 5000);
-    return () => { window.removeEventListener("beforeunload", h); clearInterval(iv); };
-  }, []);
-
-  // Flash Sale scheduler (early-game boost configurable)
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setState((s) => {
-        const now = Date.now();
-        const mode = (tuning && tuning.mode) || 'standard';
-        const ecfg = (tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.flash) || {};
-        const earlyActive = s.createdAt && (now - s.createdAt) / 1000 < ((tuning && tuning[mode] && tuning[mode].early && tuning[mode].early.window_s) || 0);
-        const thresholdMs = earlyActive ? (ecfg.no_purchase_threshold_s || 30) * 1000 : 60000;
-        const noSale = !s.flags.flash || now >= s.flags.flash.until;
-        if (now - (s.stats.lastPurchaseTs || s.lastTs) > thresholdMs && noSale) {
-          const pick = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-          const discount = earlyActive ? (ecfg.discount || 0.3) : 0.25;
-          return { ...s, flags: { ...s.flags, flash: { itemId: pick.id, discount, until: now + 20000 } } };
-        }
-        return s;
-      });
-    }, 2000);
-    return () => clearInterval(iv);
-  }, []);
-
-  // Achievements checker
-  useEffect(() => {
-    setState((s) => {
-      const newly = {};
-      for (const a of ACHIEVEMENTS) { if (!s.unlocked[a.id] && a.cond(s)) newly[a.id] = true; }
-      if (Object.keys(newly).length) {
-        const id = Object.keys(newly)[0]; const ach = ACHIEVEMENTS.find((x) => x.id === id);
-        if (ach) toast(`Succès: ${ach.name}`, "success");
-        return { ...s, unlocked: { ...s.unlocked, ...newly } };
-      }
-      return s;
-    });
-  }, [state.cookies, state.items, state.stats.clicks, state.flags.offlineCollected]);
-
-  // Mission engine unifié (version sécurisée)
-  useEffect(() => {
-    if (!isFeatureEnabled('ENABLE_ADAPTIVE_MISSIONS')) return;
-    
-    let timeoutId;
-    const runEngine = async () => {
-      try {
-        const { MissionEngine } = await import("../missions/engine.js");
-        const engine = new MissionEngine(state, setState, toast);
-        engine.update();
-      } catch (e) {
-        console.warn('[MISSIONS] Erreur engine:', e);
-      }
-    };
-    
-    // Débounce pour éviter les boucles
-    timeoutId = setTimeout(runEngine, 100);
-    
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [state.cookies, state.items, state.stats.clicks]);
-
-  // Micro missions gérées par le moteur unifié
-
-  // Toast via hook
-  
-  // Particules/FX via hook (doit être initialisé avant les événements golden qui l'utilisent)
-  const { particles, setParticles, crumbs, setCrumbs, cookieWrapRef, burstParticles, burstCrumbs } = useParticles(cpc, fmt);
-
-  // Helper commun pour appliquer un buff (utilisé par divers hooks)
-  const applyBuff = ({ cpsMulti = 1, cpcMulti = 1, seconds = 10, label = "" }) => {
-    const until = Date.now() + seconds * 1000;
-    setState((s) => ({ ...s, buffs: { cpsMulti, cpcMulti, until, label } }));
-  };
-
-  // Golden events via hook (utilise burstParticles)
-  const { showGolden, setShowGolden, goldenRef, onGoldenClick, scheduleGolden } = useGoldenEvents(state, setState, { isFeatureEnabled, toast, burstParticles, ping, play, cpc });
-
-  // Cookie Rain & Flying Cookie via hooks
-  const { rainCrumbs, rainUntil, scheduleRain, startRain, onCrumbClick } = useCookieRain(cpc, ping, setState);
-  const { flyingCookie, setFlyingCookie, onFlyingCookieClick } = useFlyingCookie(play, applyBuff, toast, setState);
-  const [speedChallenge, setSpeedChallenge] = useState({ idleSince: Date.now(), visible: false, active: false, clicks: 0, until: 0 });
-
-  // Idle detection + speed challenge
-  useEffect(() => {
-    const onAny = () => setSpeedChallenge((s) => ({ ...s, idleSince: Date.now(), visible: false }));
-    window.addEventListener('mousemove', onAny); window.addEventListener('keydown', onAny); window.addEventListener('click', onAny);
-    const iv = setInterval(() => {
-      setSpeedChallenge((s) => {
-        if (s.active) return s;
-        const idle = Date.now() - (s.idleSince || 0);
-        if (idle > 10000) return { ...s, visible: true };
-        return s;
-      });
-    }, 1000);
-    return () => { window.removeEventListener('mousemove', onAny); window.removeEventListener('keydown', onAny); window.removeEventListener('click', onAny); clearInterval(iv); };
-  }, []);
-  const startSpeedChallenge = () => {
-    setSpeedChallenge({ idleSince: Date.now(), visible: false, active: true, clicks: 0, until: Date.now() + 20000 });
-    toast('Défi de vitesse: 25 clics en 20s !', 'info');
-  };
-  useEffect(() => {
-    if (!speedChallenge.active) return;
-    const t = setInterval(() => {
-      setSpeedChallenge((s) => {
-        if (!s.active) return s;
-        if (Date.now() >= s.until) {
-          const ok = s.clicks >= 25;
-          if (ok) { applyBuff({ cpcMulti: 1.2, seconds: 20, label: 'DÉFI +20% CPC' }); toast('Défi réussi ! CPC +20% (20s)', 'success'); }
-          else { toast(`Défi raté (${s.clicks}/25)`, 'warn'); }
-          return { idleSince: Date.now(), visible: false, active: false, clicks: 0, until: 0 };
-        }
-        return s;
-      });
-    }, 250);
-    return () => clearInterval(t);
-  }, [speedChallenge.active]);
-  useEffect(() => {
-    if (!speedChallenge.active) return;
-    const inc = () => setSpeedChallenge((s) => ({ ...s, clicks: s.clicks + 1 }));
-    window.addEventListener('click', inc);
-    return () => window.removeEventListener('click', inc);
-  }, [speedChallenge.active]);
-
-  // --- Pricing: Bulk + Milestone steepening ---
-  const milestoneFactor = (owned) => {
-    const mode = (tuning && tuning.mode) || 'standard';
-    const mcfg = (tuning && tuning[mode] && tuning[mode].milestones) || {};
-    const th = mcfg.thresholds || [10, 25, 50, 100, 200];
-    const mults = mcfg.multipliers || [1.15, 1.4, 2.0, 3.5, 5.0];
-    let m = 1;
-    for (let i = 0; i < th.length; i++) {
-      if (owned >= th[i]) m *= mults[i] || 1;
-    }
-    return m;
-  };
-  const bulkCost = (it, owned, count) => {
-    const g = it.growth; const base = it.base;
-    const series = (Math.pow(g, count) - 1) / (g - 1);
-    let total = base * Math.pow(g, owned) * series;
-    total *= milestoneFactor(owned); // price steepener for wow-feel
-    return total;
-  };
-
-  // Purchase logic + Flash sale + Qty modifiers + Wow FX
-  const costOf = (id, count) => {
-    const it = ITEMS.find((x) => x.id === id); const owned = state.items[id] || 0; let price = bulkCost(it, owned, count);
-    const mode = (tuning && tuning.mode) || 'standard';
-    const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
-    const earlyActive = state.createdAt && (Date.now() - state.createdAt) / 1000 < (ecfg.window_s || 0);
-    if (earlyActive && it && it.mode === 'cps') {
-      const totalCpsOwned = ITEMS.filter(x => x.mode === 'cps').reduce((acc, x) => acc + (state.items[x.id] || 0), 0);
-      const candidateId = state.flags.freeFirstAutoItemId || (ITEMS.find(x => x.mode === 'cps')?.id);
-      if (
-        ecfg.free_first_auto &&
-        totalCpsOwned === 0 &&
-        state.ui.introSeen &&
-        !state.flags.freeFirstAutoGiven &&
-        id === candidateId &&
-        count === 1
-      ) {
-        price = 0;
-      } else {
-        price *= (1 - (ecfg.cps_discount || 0));
-      }
-    }
-    // Discount global temporaire (micro‑missions)
-    if (state.flags.discountAll && Date.now() < state.flags.discountAll.until) {
-      price *= (1 - (state.flags.discountAll.value || 0));
-    }
-    // Tutoriel: premier achat de Curseur gratuit à la toute première partie (une seule fois)
-    if (!state.ui.introSeen && id === 'cursor' && owned === 0 && count === 1) price = 0;
-    // Flash discount applies on total (mais jamais en dessous de 1 si pas explicitement gratuit)
-    if (state.flags.flash && state.flags.flash.itemId === id && Date.now() < state.flags.flash.until) price *= (1 - state.flags.flash.discount);
-    if (price > 0) price = Math.max(1, Math.floor(price));
-    return Math.ceil(price);
-  };
-  // Purchase flash animation state
-  const [purchaseFlash, setPurchaseFlash] = useState({});
-  
-  const buy = (id, count = 1) => {
-    const it = ITEMS.find((x) => x.id === id);
-    const price = costOf(id, count);
-    if (state.cookies < price) {
-      // Failed purchase sound
-      try { play('/crunch.mp3', 0.15); } catch {}
-      return toast("Pas assez de cookies…", "warn");
-    }
-
-    // Purchase success sound
-    try { play('/crunch-1.mp3', 0.4); } catch {}
-    
-    // Purchase flash animation
-    setPurchaseFlash(prev => ({ ...prev, [id]: Date.now() }));
-    setTimeout(() => {
-      setPurchaseFlash(prev => {
-        const newFlash = { ...prev };
-        delete newFlash[id];
-        return newFlash;
-      });
-    }, 300);
-
-    // Wow-moment detection
-    const ownedBefore = state.items[id] || 0;
-    const willCross = [10, 25, 50, 100, 200].some((m) => ownedBefore < m && ownedBefore + count >= m);
-    const stakeM = 1 + (state.crypto?.staked || 0) * 0.5;
-    const cpsBefore = cpsFrom(state.items, state.upgrades, state.prestige.chips, stakeM);
-    const newItems = { ...state.items, [id]: ownedBefore + count };
-    const cpsAfter = cpsFrom(newItems, state.upgrades, state.prestige.chips, stakeM);
-    const deltaCps = cpsAfter - cpsBefore;
-    const spentRatio = price / Math.max(1, state.cookies);
-    const big = spentRatio >= 0.4 || willCross || deltaCps >= cpsBefore * 0.35;
-    
-    // Big purchase extra sound
-    if (big) {
-      try { play('/crunch-2.mp3', 0.6); } catch {}
-    }
-
-    // Tirage EUPHORIA sur achat (divisé par 4): 7.5%x2.5, 5%x3, 2.5%x5, 0.5%x10
-    const r = Math.random();
-    let euphoriaMult = 0;
-    if (r < 0.075) euphoriaMult = 2.5;           // 7.5%
-    else if (r < 0.125) euphoriaMult = 3;        // +5% = 12.5%
-    else if (r < 0.150) euphoriaMult = 5;        // +2.5% = 15%
-    else if (r < 0.155) euphoriaMult = 10;       // +0.5% = 15.5%
-
-    // Prépare sous-texte bannière: CPS si achat auto, CPC si achat clic
-    const isManualClickItem = it && it.mode === 'mult';
-    let bannerSub = `+${fmt(deltaCps)} CPS (${((deltaCps/Math.max(1,cpsBefore))*100).toFixed(0)}%)`;
-    if (isManualClickItem) {
-      const beforeClickMult = clickMultiplierFrom(state.items, state.upgrades);
-      const afterClickMult = clickMultiplierFrom(newItems, state.upgrades);
-      // Recalcule CPC avant/après avec la même formule que l'UI (sans dépendre du CPS auto)
-      let cpcUpgradesMult = 1;
-      for (const upId in state.upgrades) {
-        if (!state.upgrades[upId]) continue;
-        const up = UPGRADES.find((u) => u.id === upId);
-        if (up && up.target === 'cpc' && up.type === 'mult') cpcUpgradesMult *= up.value;
-      }
-      const cpcBuffNow = (Date.now() < state.buffs.until) ? state.buffs.cpcMulti : 1;
-      const cpcBefore = (state.cpcBase || 1) * beforeClickMult * cpcUpgradesMult * cpcBuffNow;
-      const cpcAfter = (state.cpcBase || 1) * afterClickMult * cpcUpgradesMult * cpcBuffNow;
-      const deltaCpc = cpcAfter - cpcBefore;
-      bannerSub = `+${fmt(deltaCpc)} CPC`;
-    }
-
-    // Apply purchase
-    ping(big ? 900 : 660, big ? 0.12 : 0.07);
-    setState((s) => {
-      const now = Date.now();
-      let buffs = s.buffs;
-      // Marque l'utilisation du gratuit premier auto si applicable et pas encore utilisé
-      try {
-        const mode = (tuning && tuning.mode) || 'standard';
-        const ecfg = (tuning && tuning[mode] && tuning[mode].early) || {};
-        if (price === 0 && it && it.mode === 'cps' && ecfg.free_first_auto && !s.flags.freeFirstAutoGiven) {
-          s = { ...s, flags: { ...s.flags, freeFirstAutoGiven: true, freeFirstAutoItemId: it.id } };
-        }
-      } catch {}
-      if (euphoriaMult > 0) {
-        buffs = { ...buffs, cpcMulti: euphoriaMult, until: now + 8000, label: `EUPHORIA x${euphoriaMult} CPC` };
-      }
-      // Si le tutoriel étape 2 est actif, l'achat manuel valide l'étape (géré aussi par effet), rien à faire ici
-      return {
-        ...s,
-        cookies: s.cookies - price,
-        items: newItems,
-        stats: { ...s.stats, lastPurchaseTs: Date.now() },
-        flags: { ...s.flags, flash: null },
-        fx: big ? { banner: { title: "MEGA ACHAT", sub: bannerSub, until: Date.now() + 2400 }, shakeUntil: Date.now() + 900 } : s.fx,
-        buffs,
-      };
-    });
-    if (euphoriaMult > 0) toast(`EUPHORIA: CPC x${euphoriaMult} pendant 8s`, "success");
-    if (big) burstParticles(40);
-  };
-
-  // Crypto stake/unstake via hook
-  const { stake, unstake } = useCrypto(setState);
-
-  // Upgrades
-  const canBuyUpgrade = (u) => !state.upgrades[u.id] && u.unlock(state);
-  const buyUpgrade = (u) => {
-    if (state.cookies < u.cost) return toast("Pas assez de cookies…", "warn");
-    ping(700, 0.07);
-    setState((s) => ({ ...s, cookies: s.cookies - u.cost, upgrades: { ...s.upgrades, [u.id]: true }, fx: { ...s.fx, banner: { title: "UPGRADE", sub: u.name, until: Date.now() + 2000 } } }));
-    toast(`Upgrade: ${u.name}`, "success");
-  };
-
-  // --- Skins Shop (logic) ---
-  const buySkin = (skinId) => {
-    const skin = SKINS[skinId];
-    if (!skin) return;
-    if (state.skinsOwned[skinId]) return toast("Skin déjà acheté", "warn");
-    if (state.cookies < skin.price) {
-      try { play('/crunch.mp3', 0.15); } catch {}
-      return toast("Pas assez de cookies…", "warn");
-    }
-
-    // Purchase success effects
-    try { play('/crunch-1.mp3', 0.5); } catch {}
-    ping(1000, 0.1);
-    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
-      burstParticles(20);
-    }
-
-    setState((s) => ({
-      ...s,
-      cookies: s.cookies - skin.price,
-      skinsOwned: { ...s.skinsOwned, [skinId]: true },
-    }));
-    toast(`Nouveau skin débloqué: ${skin.name}`, "success");
-  };
-
-  const selectSkin = (skinId) => {
-    if (!state.skinsOwned[skinId]) return toast("Skin non débloqué", "warn");
-    
-    // Skin equip sound
-    try { play('/sounds/golden_appear.mp3', 0.3); } catch {}
-    ping(800, 0.08);
-    
-    setState((s) => ({ ...s, skin: skinId }));
-    toast(`Skin équipé: ${SKINS[skinId]?.name}`, "success");
-  };
-
-  // Particules/FX via hook (déjà initialisé plus haut)
-
-  // Big cookie click with enhanced feedback
-  const [cookieScale, setCookieScale] = useState(1);
-  const [cookieRotation, setCookieRotation] = useState(0);
-  const cookieClickAnimRef = useRef(null);
-  const clickFxCounterRef = useRef(0);
-  
-  const onCookieClick = () => {
-    // Audio feedback
-    crunch();
-    try { play('/crunch.mp3', 0.3); } catch {}
-    
-    // Visual feedback - cookie animation
-    if (cookieClickAnimRef.current) {
-      clearTimeout(cookieClickAnimRef.current);
-    }
-    
-    // Animation: scale + rotation temporaire, puis retour à l'état de base
-    setCookieScale(1.1);
-    const randomRotation = Math.random() > 0.5 ? 15 : -15;
-    setCookieRotation(randomRotation);
-    
-    cookieClickAnimRef.current = setTimeout(() => {
-      setCookieScale(1);
-      setCookieRotation(0); // Retour à la position de base (0°)
-    }, 150);
-    
-    setState((s) => {
-      const gain = cpc;
-      return { ...s, cookies: s.cookies + gain, lifetime: s.lifetime + gain, stats: { ...s.stats, clicks: s.stats.clicks + 1 } };
-    });
-    if (isFeatureEnabled('ENABLE_RAF_PARTICLES')) {
-      clickFxCounterRef.current = (clickFxCounterRef.current + 1) % 5;
-      if (clickFxCounterRef.current === 0) {
-        burstParticles(1, null, `+${cpc.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
-      }
-      burstCrumbs(2);
-    }
-  };
-
-  // --- Cookie eaten handler + progress tracking ---
-  const onCookieEaten = () => {
-    let shouldSpawnGolden = false;
-    setState((s) => {
-      const count = (s.cookieEatenCount || 0) + 1;
-      let bonus = 0;
-      if (count === 1) bonus = cpc * 50;
-      else if (count % 5 === 0) bonus = cpc * 100;
-      else bonus = cpc * 10;
-      const cookies = s.cookies + bonus;
-      if (isFeatureEnabled('ENABLE_EVENTS') && (count % 2 === 0)) shouldSpawnGolden = true;
-      toast(`🍪 Cookie mangé ! +${fmt(bonus)}`, "success");
-      return { ...s, cookies, lifetime: s.lifetime + bonus, cookieEatenCount: count, cookieBites: [] };
-    });
-    if (shouldSpawnGolden) {
-      try { play('/sounds/golden_appear.mp3', 0.25); } catch {}
-      setState((s) => ({
-        ...s,
-        fx: {
-          ...s.fx,
-          banner: { title: 'Cookie doré !', sub: 'Clique vite ✨', until: Date.now() + 1400, anim: { style: 'slide', inMs: 160, outMs: 160 } },
-        },
-      }));
-      setShowGolden(true);
-    }
-  };
-
-  const prevClickForBites = useRef(state.stats.clicks);
-  useEffect(() => {
-    if (!state.cookieEatEnabled) { prevClickForBites.current = state.stats.clicks; return; }
-    const prev = prevClickForBites.current;
-    const curr = state.stats.clicks;
-    if (curr > prev) {
-      let toAdd = 0;
-      for (let c = prev + 1; c <= curr; c++) {
-        if (c % 2 === 0 && (state.cookieBites.length + toAdd) < 80) toAdd++;
-      }
-      if (toAdd > 0) {
-        setState((s) => {
-          const baseLen = s.cookieBites.length;
-          const add = Array.from({ length: toAdd }).map((_, i) => baseLen + i);
-          return { ...s, cookieBites: [...s.cookieBites, ...add] };
-        });
-      }
-      prevClickForBites.current = curr;
-    }
-  }, [state.stats.clicks, state.cookieEatEnabled, state.cookieBites.length]);
-
-  // Prestige
-  const potentialChips = Math.floor(Math.sqrt(state.lifetime / 1_000_000));
-  const canPrestige = potentialChips > state.prestige.chips && state.cookies >= 100_000;
-  const doPrestige = () => {
-    if (!canPrestige) return;
-    if (!confirm(`Prestige ? Tu gagneras ${potentialChips - state.prestige.chips} chips célestes (+2% prod/chip) et ta progression sera réinitialisée.`)) return;
-    setState((s) => ({ ...DEFAULT_STATE, prestige: { chips: potentialChips }, ui: s.ui, toasts: [] }));
-    toast("Re-naissance céleste ✨", "success");
-  };
-
-  // Export / Import / Reset
-  const exportSave = () => {
-      const blob = new Blob([JSON.stringify(state)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "cookiecraze_save.json"; a.click();
-      URL.revokeObjectURL(url);
-  };
-  const importSave = (file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        // tentative JSON direct
-        const data = migrate(JSON.parse(String(reader.result)));
-        setState(data);
-        toast("Sauvegarde importée.", "success");
-      } catch {
-        try {
-          // fallback ancien format base64 .txt
-          const txt = decodeURIComponent(escape(atob(String(reader.result))));
-          const data = migrate(JSON.parse(txt));
-          setState(data);
-          toast("Ancienne sauvegarde importée.", "success");
-        } catch {
-          toast("Import invalide.", "warn");
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-  const hardReset = (e) => {
-    const full = e && (e.altKey || e.metaKey);
-    const preserve = !full;
-    const chips = state.prestige?.chips || 0;
-    const sounds = !!state.ui?.sounds;
-    const msg = full
-      ? "Réinitialisation TOTALE ? (prestige remis à zéro)"
-      : "Réinitialiser la partie ? (prestige conservé)";
-
-    const ok = typeof confirm === "function" ? confirm(msg) : true;
-    if (!ok) return;
-
-    try {
-      localStorage.removeItem(SAVE_KEY);
-      localStorage.removeItem("cookieCrazeSaveV3");
-      localStorage.removeItem("cookieCrazeSaveV2");
-      localStorage.removeItem("cookieCrazeSaveV1");
-      sessionStorage.setItem(PENDING_RESET_KEY, JSON.stringify({ preserve, prestige: chips, sounds }));
-    } catch {}
-
-    // Nettoie les états visuels immédiats
-    setShowGolden(false);
-    setRainCrumbs([]);
-    setRainUntil(0);
-    setParticles([]);
-
-    // Applique localement
-    setState(() => createResetState(preserve, sounds, preserve ? chips : 0));
-
-    toast(preserve ? "Partie réinitialisée." : "Tout remis à zéro.", "success");
-
-    // Force remount + reload safe
-    setViewKey((k) => k + 1);
-    try { setTimeout(() => window.location.reload(), 50); } catch {}
-  };
-
-  const buffTimeLeft = Math.max(0, state.buffs.until - Date.now());
-
-  // Intro overlay controls
-  const skipIntro = () => setState((s) => ({ ...s, ui: { ...s.ui, introSeen: true } }));
-
-  // --- Render ---
-  const shaking = Date.now() < state.fx.shakeUntil;
-  const cryptoFlash = Date.now() < state.flags.cryptoFlashUntil;
   return (
-    <div key={viewKey} id="game-area" className={(state.ui.highContrast ? "high-contrast " : "") + "min-h-screen w-full bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 text-amber-950 select-none overflow-hidden"}>
-      {/* Composant d'accessibilité pour les annonces de timer */}
-      <TimerAnnouncer />
-      <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="text-3xl">🍪</div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cookie Craze</h1>
-          </div>
-          <div className="relative flex items-center gap-4 text-sm flex-wrap pr-12 md:pr-16">
-            <span className="px-2 py-1 rounded-full badge-warm">Clic: <b>{cpc.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</b></span>
-            <span className="px-2 py-1 rounded-full badge-warm">Auto: <b>{fmt(cpsWithBuff)}</b> CPS{cpsWithBuff === 0 ? ' ⚠️' : ''}</span>
-            <Tooltip
-              className="inline-block"
-              position="bottom"
-              panel={(
-                <div className="space-y-1">
-                  <div className="font-semibold">Prestige</div>
-                  <div className="text-zinc-300">Gagne des « chips célestes » en prestige. Chaque chip = +2% production permanente. Débloqué quand tu as assez en banque.</div>
-                </div>
-              )}
-            >
-              <span className="px-2 py-1 rounded-full badge-warm cursor-help">Prestige: <b>{state.prestige.chips}</b></span>
-            </Tooltip>
-            <Tooltip
-              className="inline-block"
-              position="bottom"
-              panel={(
-                <div className="space-y-1">
-                  <div className="font-semibold">CRMB (CrumbCoin)</div>
-                  <div className="text-zinc-300">Le faucet crédite des CRMB selon les cookies cuits (0.001 / 20k). Stake des CRMB pour +50% d’effet par unité stakée sur toute la production.</div>
-                </div>
-              )}
-            >
-              <span className={`${cryptoFlash ? "bg-emerald-600/30 border-emerald-400/60 badge-glow" : "badge-warm"} px-2 py-1 rounded-full border cursor-help`}>CRMB: <b>{(state.crypto.balance || 0).toFixed(3)}</b></span>
-            </Tooltip>
-            <button
-              onClick={() => setShowMenu(v => !v)}
-              aria-haspopup="menu"
-              aria-expanded={showMenu}
-              className="absolute right-0 -top-1 md:top-0 rounded-lg px-3 py-2 bg-white/90 backdrop-blur border border-amber-300/50 text-sm shadow-lg hover:shadow-xl hover:bg-white transition-all"
-            >⚙️</button>
-            {showMenu && (
-              <div
-                role="menu"
-                className="absolute right-0 mt-2 w-44 rounded-xl bg-white/95 backdrop-blur-md border border-amber-200/50 shadow-2xl z-50"
-                onMouseLeave={() => setShowMenu(false)}
-              >
-                <button
-                  role="menuitem"
-                  onClick={() => setState(s => ({ ...s, ui:{...s.ui, sounds: !s.ui.sounds} }))}
-                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors first:rounded-t-xl"
-                >
-                  {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => setState(s => ({ ...s, ui:{...s.ui, highContrast: !s.ui.highContrast} }))}
-                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors"
-                >
-                  {state.ui.highContrast ? "🟨 Contraste élevé ON" : "⬜ Contraste élevé OFF"}
-                </button>
-
-                <button
-                  role="menuitem"
-                  onClick={() => { setShowAdvanced(v => !v); setShowMenu(false); }}
-                  className="w-full text-left px-4 py-3 hover:bg-amber-100 text-amber-900 transition-colors"
-                >
-                  🛠️ Avancé
-                </button>
-
-                <button
-                  role="menuitem"
-                  onClick={hardReset}
-                  className="w-full text-left px-4 py-3 text-red-600 hover:bg-red-100 transition-colors last:rounded-b-xl"
-                >
-                  ♻️ Reset
-                </button>
-              </div>
-            )}
-          </div>
+    <div className="mt-2 sm:mt-3 mx-auto max-w-sm rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-1.5 sm:py-2" data-testid="objectif">
+      {goal && (
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-amber-800 truncate">
+            <span aria-hidden="true">{goal.item.emoji}</span> Prochain palier :{" "}
+            <b className="tabular-nums">
+              {goal.owned}/{goal.upgrade.threshold}
+            </b>{" "}
+            {goal.item.name}
+          </span>
+          <span className="shrink-0 font-bold text-emerald-700">{goal.upgrade.badge}</span>
         </div>
-
-        {/* Top Stats */}
-        <div className={"mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 " + (shaking ? "animate-[wiggle_0.7s_ease]" : "")}>
-          <div className="md:col-span-2 rounded-2xl p-5 md:p-6 glass-warm shadow-xl">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-base md:text-xl text-amber-900 font-medium">Cookies en banque</div>
-              <div className="text-5xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-500 value-highlight">{fmtInt(state.cookies)}</div>
-              <div className="text-sm text-amber-800/80 flex items-center gap-1">Cuits au total: <span className="font-semibold text-amber-900">{fmtInt(state.lifetime)}</span>{cpsWithBuff > 0 ? (<span className="text-amber-700"> · {fmt(cpsWithBuff)} CPS</span>) : ''}
-                <span
-                  className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-800/70 border border-zinc-700 text-[10px] cursor-help group relative"
-                  aria-label="Cookies mangés — aide"
-                  tabIndex={0}
-                >
-                  ?
-                  <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 mt-2 translate-y-full opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-64">
-                    Les "cookies mangés" proviennent des cookies dorés. Ils servent à débloquer des petites surprises et ne sont pas dépensés.
-                  </span>
-                </span>
-              </div>
-
-              {Date.now() < state.buffs.until && (
-                <div className="mt-3 text-xs px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
-                  Boost <b>{state.buffs.label}</b> · {(buffTimeLeft/1000).toFixed(0)}s
-                </div>
-              )}
-              {canPrestige && (
-                <button onClick={doPrestige} className="mt-2 text-xs px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 transition border border-purple-400/50 shadow">Prestige +{potentialChips - state.prestige.chips}</button>
-              )}
-
-              {showAdvanced && (
-                <div className="mt-2 flex items-center gap-2 justify-center text-xs flex-wrap">
-                  <button onClick={exportSave} className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700">💾 Export</button>
-                  <label className="px-2 py-1 rounded-lg bg-zinc-800 border border-zinc-700 cursor-pointer">📥 Import
-                    <input type="file" accept=".json,.txt" className="hidden" onChange={(e) => e.target.files && importSave(e.target.files[0])} />
-                  </label>
-                  
-                  {/* Dev Tools */}
-                  {(import.meta?.env?.DEV || new URLSearchParams(window.location.search).get('dev') === '1') && (
-                    <>
-                      <button 
-                        onClick={() => {
-                          try {
-                            localStorage.removeItem(SAVE_KEY);
-                            window.location.reload();
-                          } catch {}
-                        }}
-                        className="px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 border border-red-400 text-red-100"
-                        title="Supprime la sauvegarde et recharge la page"
-                      >
-                        🔄 Reset Save
-                      </button>
-                      <button 
-                        onClick={() => {
-                          try {
-                            const incompleteSave = createIncompleteSave();
-                            localStorage.setItem(SAVE_KEY, JSON.stringify(incompleteSave));
-                            window.location.reload();
-                          } catch {}
-                        }}
-                        className="px-2 py-1 rounded-lg bg-yellow-600 hover:bg-yellow-500 border border-yellow-400 text-yellow-100"
-                        title="Charge une sauvegarde incomplète pour tester la migration"
-                      >
-                        📝 Test Migration
-                      </button>
-                      <button 
-                        onClick={() => {
-                          try {
-                            const corruptedSave = createCorruptedSave();
-                            localStorage.setItem(SAVE_KEY, corruptedSave);
-                            window.location.reload();
-                          } catch {}
-                        }}
-                        className="px-2 py-1 rounded-lg bg-red-800 hover:bg-red-700 border border-red-600 text-red-100"
-                        title="Charge une sauvegarde corrompue pour tester le fallback"
-                      >
-                        💥 Test Corrupted
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Compteur de cookies mangés */}
-            <div className="mt-4 mb-1 w-full max-w-md mx-auto text-left">
-              <div className="text-xs md:text-sm text-zinc-400">
-                {/* Intentionnellement discret en haut; une version plus visible est en bas-gauche */}
-              </div>
-            </div>
-
-
-
-            {/* Big Cookie */}
-            <div ref={cookieWrapRef} className="-mt-9 relative flex items-center justify-center">
-              {/* Wrapper carré aux dimensions du cookie */}
-              <div className="relative h-96 w-96 md:h-[32rem] md:w-[32rem] float-animation">
-                {/* Glow ambiant */}
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-400/20 via-orange-500/10 to-transparent rounded-full blur-3xl cookie-glow pulse-animation"></div>
-                {/* welcome.png au-dessus du cookie quand fx.tag est actif */}
-                {state.fx.tag && Date.now() < state.fx.tag.until && state.fx.tag.image && (
-                  <img
-                    src={state.fx.tag.image}
-                    alt="Bienvenue"
-                    className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] md:w-[200%] max-w-[960px] drop-shadow-2xl z-10"
-                  />
-                )}
-
-                <motion.div
-                  ref={cookieWrapRef}
-                  animate={{ 
-                    scale: cookieScale,
-                    rotate: cookieRotation
-                  }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 500, 
-                    damping: 30 
-                  }}
-                  whileTap={{ scale: 0.92, rotate: -2 }}
-                  className="h-full w-full"
-                >
-                  {state.cookieEatEnabled ? (
-                    <CookieBiteMask
-                      skinSrc={skinSrc}
-                      clicks={state.stats.clicks}
-                      bitesTotal={80}
-                      enabled={state.cookieEatEnabled}
-                      onFinished={onCookieEaten}
-                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl " + skinClass}
-                      onClick={onCookieClick}
-                    />
-                  ) : (
-                    <motion.img
-                      src={skinSrc}
-                      alt="Cookie"
-                      className={"h-full w-full cursor-pointer select-none drop-shadow-xl cookie-hover " + skinClass}
-                      whileTap={{ scale: 0.92, rotate: -2 }}
-                      onClick={onCookieClick}
-                      draggable="false"
-                    />
-                  )}
-                </motion.div>
-              </div>
-              {/* Particles (confinées à la zone du cookie) */}
-              <div className="pointer-events-none absolute inset-0">
-                <AnimatePresence>
-                  {crumbs.map((p) => (
-                    <motion.div
-                      key={p.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute rounded-full drop-shadow"
-                      style={{ left: p.x, top: p.y, width: p.size, height: p.size, backgroundColor: p.color, rotate: p.rot }}
-                    />
-                  ))}
-                  {particles.map((p) => (
-                    <motion.div key={p.id} initial={{ opacity: 0, y: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute text-amber-300 text-xs font-bold drop-shadow" style={{ left: p.x, top: p.y }}>{p.text}</motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-              {/* Compteur en bas à gauche + aide */}
-              <div className="absolute bottom-2 left-2 text-sm md:text-base text-zinc-300 flex items-center gap-2">
-                <span>Cookies mangés: <b>{state.cookieEatenCount || 0}</b></span>
-                <div className="relative group">
-                  <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-zinc-800 border border-zinc-700 text-[11px] cursor-default">?</span>
-                  <div className="absolute bottom-full mb-2 left-0 w-64 opacity-0 group-hover:opacity-100 transition pointer-events-none">
-                    <div className="rounded-lg px-3 py-2 text-xs bg-zinc-900/90 border border-zinc-700 shadow-xl">
-                      Clique le gros cookie et les bonus pour grignoter le biscuit. Chaque cookie mangé octroie un bonus immédiat et peut débloquer des surprises.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Combo supprimé */}
-            </div>
-
-            {/* Golden Cookie déplacé hors du conteneur animé pour éviter les problèmes de stacking/fixed */}
-
-            {/* Flying Cookie (mini-jeu) */}
-            <AnimatePresence>
-              {!!flyingCookie && (
-                <motion.button
-                  initial={{ scale: 0.6, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={onFlyingCookieClick}
-                  className="fixed z-20 h-14 w-14 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 border-2 border-amber-100 shadow-xl"
-                  style={{ left: flyingCookie.left, top: flyingCookie.top }}
-                >🍪</motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Cookie Rain */}
-            <AnimatePresence>
-              {Date.now() < rainUntil && rainCrumbs.map((c) => (
-                <motion.button key={c.id} onClick={() => onCrumbClick(c.id)} initial={{ scale: 0.6, opacity: 0.6 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="fixed z-10 h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 border-2 border-amber-200 shadow" style={{ left: c.x, top: c.y }}>🍪</motion.button>
-              ))}
-            </AnimatePresence>
-
-            {/* Cinematic Banner */}
-            <AnimatePresence>
-              {state.fx.banner && Date.now() < state.fx.banner.until && (
-                <motion.div
-                  initial={{ scale: 0.96, opacity: 0, y: (state.fx.banner.anim && state.fx.banner.anim.style === 'slide') ? -10 : 0 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  transition={{ duration: (state.fx.banner.anim && state.fx.banner.anim.inMs ? state.fx.banner.anim.inMs / 1000 : 0.25), ease: 'easeInOut' }}
-                  exit={{ opacity: 0, y: (state.fx.banner.anim && state.fx.banner.anim.style === 'slide') ? -20 : 0, transition: { duration: (state.fx.banner.anim && state.fx.banner.anim.outMs ? state.fx.banner.anim.outMs / 1000 : 0.25), ease: 'easeInOut' } }}
-                  className="fixed left-1/2 top-24 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-amber-500/20 border border-amber-300/50 backdrop-blur text-amber-200 shadow-xl">
-                  <div className="text-xs tracking-widest">{state.fx.banner.title}</div>
-                  <div className="text-lg font-extrabold">{state.fx.banner.sub}</div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Micro‑mission floating badge (visibility) */}
-            {isFeatureEnabled('ENABLE_MICRO_MISSIONS') && state.activeMicroMission && (
-              <div className="fixed top-24 right-4 z-30 px-3 py-2 rounded-xl bg-emerald-600/20 border border-emerald-400/50 text-xs text-emerald-100 shadow">
-                {(() => {
-                  const cur = MICRO_MISSIONS.find(m => m.id === state.activeMicroMission?.id);
-                  const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
-                  const title = state.activeMicroMission?.title || cur?.title || 'Micro‑mission';
-                  return (
-                    <>
-                      <div className="font-bold">🎯 {title}</div>
-                      <div className="mt-1 h-1.5 rounded-full bg-emerald-900/40 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: pct + '%' }} />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Golden Cookie (overlay fixed) */}
-            <AnimatePresence>
-              {showGolden && (
-                <motion.button
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  onClick={onGoldenClick}
-                  className="fixed z-30 h-16 w-16 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-4 border-yellow-200 shadow-xl"
-                  style={{ left: goldenRef.current.left, top: goldenRef.current.top }}
-                >
-                  <div className="absolute inset-0 rounded-full" style={{ backgroundImage: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), transparent 40%)" }} />⭐
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Speed Challenge CTA and progress */}
-            {!speedChallenge.active && speedChallenge.visible && (
-              <div className="fixed bottom-24 right-4 z-30">
-                <button onClick={startSpeedChallenge} className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm border border-cyan-300/50 shadow relative group" title="Objectif: 25 clics en 20s. Récompense: +20% CPC (20s)">
-                  ⚡ Défi: 25 clics en 20s
-                  <span className="pointer-events-none absolute right-0 top-full mt-2 opacity-0 group-hover:opacity-100 transition px-3 py-2 rounded-md bg-zinc-900/90 border border-zinc-700 text-xs w-60 text-left">Récompense: +20% CPC pendant 20s</span>
-                </button>
-              </div>
-            )}
-            {speedChallenge.active && (
-              <div className="fixed bottom-24 right-4 z-30 px-3 py-2 rounded-xl bg-zinc-900/90 border border-zinc-700 text-xs text-zinc-200 shadow">
-                <div className="font-bold">Défi: {speedChallenge.clicks}/25</div>
-                <div className="mt-1 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: Math.max(0, Math.min(100, Math.floor(((speedChallenge.until - Date.now())/20000)*100))) + '%' }} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right panel with tabs */}
-          <div className="rounded-2xl p-0 glass-warm shadow-xl flex flex-col max-h-[520px] md:max-h-[620px] overflow-hidden">
-            
-            {/* Missions en haut du panneau de droite */}
-            <div className="px-4 py-3 border-b border-amber-200/30 space-y-2 bg-gradient-to-b from-amber-50/50 to-transparent">
-              {/* Mission en cours */}
-              {isFeatureEnabled('ENABLE_MISSIONS') && (
-                <div className="rounded-lg border border-amber-300/50 bg-white/80 backdrop-blur p-3 shadow-sm">
-                  <div className="text-xs text-amber-700 font-semibold">Mission</div>
-                  {state.activeMission ? (
-                    <>
-                      <div className="text-sm font-bold text-amber-950">{state.activeMission.title || 'Mission'}</div>
-                      {!!state.activeMission.desc && <div className="text-xs text-amber-800/80 leading-tight">{state.activeMission.desc}</div>}
-                      <div className="mt-2 h-2 rounded-full bg-amber-200/50 overflow-hidden shadow-inner">
-                        <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style={{ width: (Math.min(100, Math.floor(((state.activeMission?.progress||0) / Math.max(1,(state.activeMission?.target||1))) * 100))) + '%' }} />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-sm text-amber-800">Chargement...</div>
-                  )}
-                </div>
-              )}
-
-              {/* Micro‑mission (prioritaire à l'affichage si présente) */}
-              {isFeatureEnabled('ENABLE_MICRO_MISSIONS') && state.activeMicroMission && (
-                <div className="rounded-lg border border-emerald-300/50 bg-emerald-50/80 backdrop-blur p-3 shadow-sm">
-                  <div className="text-xs text-emerald-700 font-semibold">Micro‑mission</div>
-                  {(() => {
-                    const pct = Math.min(100, Math.floor(((state.activeMicroMission?.progress||0) / Math.max(1,(state.activeMicroMission?.target||1))) * 100));
-                    
-                    // Timer pour missions chronométrées avec timeLeft
-                    const hasTimer = state.activeMicroMission?.meta?.timed && state.activeMicroMission?.meta?.until;
-                    const timerEndTimestamp = hasTimer ? state.activeMicroMission.meta.until : null;
-                    
-                    return (
-                      <>
-                        <div className="text-sm font-bold text-emerald-950">{state.activeMicroMission?.title || "Micro‑mission"}</div>
-                        {state.activeMicroMission?.desc && <div className="text-xs text-emerald-800/80 leading-tight">{state.activeMicroMission.desc}</div>}
-                        
-                        {/* Barre de progression normale */}
-                        <div className="mt-2 h-2 rounded-full bg-emerald-200/50 overflow-hidden shadow-inner" aria-label="Progression micro‑mission" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} role="progressbar">
-                          <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-500" style={{ width: pct + '%' }} />
-                        </div>
-                        
-                        {/* Timer pour missions chronométrées */}
-                        {hasTimer && <MicroMissionTimer endTimestamp={timerEndTimestamp} />}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Fixed tabs bar - Mobile responsive with horizontal scroll */}
-            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-amber-200/30 shadow-sm" role="tablist" aria-label="Navigation boutique">
-              <div className="flex gap-1 px-3 py-2 text-xs overflow-x-auto scrollbar-hide snap-x snap-mandatory">
-                <button 
-                  role="tab" 
-                  aria-selected={tab==='shop'} 
-                  onClick={() => setTab('shop')} 
-                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
-                    tab==='shop' 
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
-                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
-                  }`}
-                >
-                  🛍️ Boutique
-                </button>
-                <button 
-                  role="tab" 
-                  aria-selected={tab==='auto'} 
-                  onClick={() => setTab('auto')} 
-                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
-                    tab==='auto' 
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
-                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
-                  }`}
-                >
-                  ⚙️ Auto
-                </button>
-                <button 
-                  role="tab" 
-                  aria-selected={tab==='upgrades'} 
-                  onClick={() => setTab('upgrades')} 
-                  className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
-                    tab==='upgrades' 
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
-                      : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
-                  }`}
-                >
-                  ⬆️ Améliorations
-                </button>
-                {isFeatureEnabled('ENABLE_SKINS') && (
-                  <button 
-                    role="tab" 
-                    aria-selected={tab==='skins'} 
-                    onClick={() => setTab('skins')} 
-                    className={`flex-shrink-0 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all duration-200 snap-start font-medium ${
-                      tab==='skins' 
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' 
-                        : 'bg-amber-100/50 text-amber-800 hover:bg-amber-200/70 hover:text-amber-900'
-                    }`}
-                  >
-                    👔 Skins
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="p-4 flex-1 overflow-auto">
-
-            {(tab === 'shop' || tab === 'auto') && (
-              <Shop
-                state={state}
-                ITEMS={ITEMS}
-                buy={buy}
-                costOf={costOf}
-                perItemMult={perItemMult}
-                fmt={fmt}
-                clamp={clamp}
-                tutorialStep={tutorialStep}
-                modeFilter={tab}
-                purchaseFlash={purchaseFlash}
-              />
-            )}
-
-            {tab === 'upgrades' && (
-              <Upgrades
-                state={state}
-                UPGRADES={UPGRADES}
-                buyUpgrade={buyUpgrade}
-                canBuyUpgrade={canBuyUpgrade}
-                ITEMS={ITEMS}
-                fmt={fmt}
-                stake={stake}
-                unstake={unstake}
-                cryptoFlash={cryptoFlash}
-              />
-            )}
-
-            {tab === 'skins' && isFeatureEnabled('ENABLE_SKINS') && (
-              <Skins
-                state={state}
-                SKINS={SKINS}
-                selectSkin={selectSkin}
-                buySkin={buySkin}
-                fmt={fmt}
-              />
-            )}
-            </div>
-          </div>
+      )}
+      {cheapest && (
+        <div className="text-[11px] text-amber-700/90 mt-0.5">
+          Prochain achat dans ~
+          <b className="tabular-nums">{fmtDuration(timeToAfford(state, cheapest.price, stats, 5))}</b>
         </div>
+      )}
+    </div>
+  );
+});
 
-        {/* Bottom: achievements & tips */}
-        <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
-          <div className="lg:col-span-2 rounded-2xl p-5 md:p-6 glass-warm">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-bold text-amber-900">Succès</div>
-              <div className="text-sm text-amber-700 font-medium">{Object.keys(state.unlocked).length}/{ACHIEVEMENTS.length}</div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-              {ACHIEVEMENTS.map((a) => (
-                <div
-                  key={a.id}
-                  className={(state.unlocked[a.id]
-                    ? "p-3 rounded-lg border-2 text-center text-xs bg-gradient-to-br from-emerald-100 to-emerald-50 border-emerald-400 text-emerald-900 font-medium shadow-md"
-                    : "p-3 rounded-lg border text-center text-xs bg-amber-50/50 border-amber-200/50 text-amber-400")}
-                >
-                  {a.name}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-2xl p-5 md:p-6 glass-warm">
-            <div className="text-lg font-bold text-amber-900">Infos & astuces</div>
-            <ul className="mt-3 text-sm text-amber-800 space-y-2 list-disc list-inside">
-              <li>Les <b>cookies dorés</b> apparaissent au hasard. Clique vite !</li>
-              {/* Rush combo supprimé */}
-              <li>Les <b>soldes flash</b> arrivent si tu stagne trop longtemps.</li>
-              <li>Les <b>améliorations</b> et les <b>synergies</b> gardent utiles les vieux bâtiments.</li>
-              <li>Faucet <b>CRMB</b> : 0.001 / 20 000 cookies. Stake tes CRMB pour booster tout !</li>
-              <li>Hors-ligne : 10% sur 10 min, décroissance vers 3% (cap 2h).</li>
-              <li><b>Cookies mangés</b> : chaque portion croquée offre un bonus immédiat (parfois massif) et progresse vers des surprises visuelles. Clique souvent et vise les bonus pour accélérer.</li>
-            </ul>
-          </div>
-        </div>
+const BuffBadge = memo(function BuffBadge({ buffs }) {
+  const left = useTimeLeft(buffs?.until, 250);
+  if (!buffs?.until || left <= 0) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className="mt-2 inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg"
+    >
+      <span className="animate-pulse">⚡</span>
+      {buffs.label}
+      <span className="tabular-nums opacity-90">{Math.ceil(left / 1000)}s</span>
+    </motion.div>
+  );
+});
 
-        {/* Toasts */}
-        <div className="fixed right-4 bottom-4 z-50 space-y-2">
-          <AnimatePresence>
-            {state.toasts.map((t) => {
-              const clsBase = "px-4 py-3 rounded-xl text-sm font-medium shadow-lg border-2 backdrop-blur-sm ";
-              const clsTone = t.tone === 'success'
-                ? "bg-emerald-600/95 border-emerald-400 text-white shadow-emerald-500/50"
-                : (t.tone === 'warn' ? "bg-red-600/95 border-red-400 text-white shadow-red-500/50" : "bg-zinc-800/95 border-zinc-600 text-white shadow-zinc-500/50");
-              return (
-              <motion.div key={t.id} initial={{ opacity: 0, x: 20, scale: 0.9 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 20, scale: 0.9 }}
-                  className={clsBase + clsTone}>
-                {t.msg}
-              </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Intro Overlay */}
+/**
+ * L'unique notification du jeu.
+ *
+ * En haut, jamais en bas: la boutique et la navigation vivent sous le pouce et
+ * rien ne doit les recouvrir. Un seul emplacement, donc pas de pile qui grandit.
+ * Le niveau `major` a droit à une entrée plus franche — c'est ce qui distingue
+ * une renaissance d'une sauvegarde exportée.
+ */
+const Notice = memo(function Notice({ notice, reducedMotion }) {
+  const grand = notice?.level === "major";
+  const tons = {
+    success: "from-emerald-500 to-teal-500",
+    warn: "from-rose-500 to-red-500",
+    gold: "from-amber-400 to-orange-500",
+    info: "from-stone-700 to-stone-800",
+  };
+  return (
+    // Le centrage vit sur le conteneur, pas sur l'élément animé: Framer Motion
+    // écrit `transform` en style inline et écrasait le `-translate-x-1/2` de la
+    // classe, ce qui décalait la notification hors de l'écran à droite.
+    <div className="fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center px-3 pointer-events-none">
       <AnimatePresence>
-        {!state.ui.introSeen && !tutorialInteract && (
+        {notice && (
           <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="intro-title"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 overflow-hidden bg-gradient-to-br from-amber-900 via-zinc-950 to-black"
+            key={notice.id}
+            role="status"
+            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: grand ? 0.8 : 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }}
+            transition={
+              reducedMotion
+                ? { duration: 0.15 }
+                : { type: "spring", stiffness: grand ? 260 : 420, damping: grand ? 16 : 30 }
+            }
+            className={`max-w-md text-white text-center rounded-2xl shadow-2xl bg-gradient-to-r ${
+              tons[notice.tone] || tons.info
+            } ${grand ? "px-5 py-3.5 text-base font-black" : "px-4 py-2.5 text-sm font-semibold"}`}
           >
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 20% 30%,rgba(255,200,100,0.12), transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08), transparent 45%)",
-              }}
-            />
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {cookieField.map((c) => (
-                <motion.div
-                  key={c.id}
-                  className="absolute select-none"
-                  style={{ top: (c.top) + '%', left: (c.left) + '%', fontSize: c.size }}
-                  initial={{ y: 0, opacity: 0 }}
-                  animate={{ y: ["0%", "-20%", "0%"], opacity: [0.1, 0.6, 0.1] }}
-                  transition={{ duration: c.duration, delay: c.delay, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
-                >
-                  🍪
-                </motion.div>
-              ))}
-            </div>
-            <div className="relative h-full w-full flex flex-col items-center justify-center text-center px-6">
-              {tutorialStep === 0 && (
-                <>
-                  <motion.h1 id="intro-title" initial={{ scale: 0.8, rotateX: 25, opacity: 0 }} animate={{ scale: 1, rotateX: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 120, damping: 14 }} className="text-6xl md:text-7xl font-extrabold tracking-tight text-amber-300 drop-shadow">COOKIE CRAZE</motion.h1>
-                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="mt-3 text-zinc-300 max-w-xl">Bienvenue ! Fais cuire des cookies et améliore‑toi pour aller à l'infini.</motion.div>
-                  <div className="mt-6 flex gap-3">
-                    <button onClick={() => setTutorialStep(1)} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Commencer</button>
-                    <button onClick={skipIntro} className="px-4 py-3 rounded-2xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100 border border-zinc-700">Ignorer</button>
-                  </div>
-                </>
-              )}
-              {tutorialStep === 1 && (
-                <>
-                  <div className="text-3xl font-extrabold text-amber-300">1) Tape sur le gros cookie</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Clique le cookie central <b>5 fois</b> pour passer à l'étape suivante.</div>
-                  <div className="mt-3 text-xs text-zinc-400">Astuce: essaie maintenant, la progression se mettra à jour.</div>
-                  <button onClick={() => setTutorialInteract(true)} className="mt-6 px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Cliquer le cookie</button>
-                </>
-              )}
-              {tutorialStep === 2 && (
-                <>
-                  <div className="text-3xl font-extrabold text-amber-300">2) Achète des multiplicateurs</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Ouvre la Boutique et achète un item de <b>clic</b> (p.ex. Curseur). L'étape avançera après l'achat.</div>
-                  <div className="mt-5 flex gap-3">
-                    <button onClick={() => { setTutorialInteract(true); setTab('shop'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Ouvrir la Boutique</button>
-                  </div>
-                </>
-              )}
-              {tutorialStep === 3 && (
-                <>
-                  <div className="text-3xl font-extrabold text-amber-300">3) Découvre les skins ✨</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Personnalise ton cookie : couleurs, styles, et plus. Ouvre l'onglet <b>Skins</b> pour voir.</div>
-                  <div className="mt-5 flex gap-3">
-                    <button onClick={() => { setTutorialInteract(true); setTab('skins'); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Voir Skins</button>
-                  </div>
-                </>
-              )}
-              {tutorialStep === 4 && (
-                <>
-                  <div className="text-3xl font-extrabold text-amber-300">Bonne chance !</div>
-                  <div className="mt-2 text-zinc-300 max-w-xl">Tu es prêt. Clique, achète, progresse et vise l'infini ✨</div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 24, scale: 0.96, rotateX: 20 }}
-                    animate={{ opacity: 1, y: [18, -6, 0], scale: [0.96, 1.05, 1], rotateX: [20, 6, 0] }}
-                    transition={{ duration: 1.2, ease: "easeInOut" }}
-                    className="mt-4 px-6 py-3 rounded-3xl bg-amber-500/20 border border-amber-300/50 text-amber-300 font-extrabold text-2xl shadow-xl backdrop-blur-sm drop-shadow"
-                  >
-                    Bon jeu et bon appétit 🍪
-                  </motion.div>
-                  <div className="mt-5 flex gap-3">
-                    <button onClick={() => { setTab('shop'); setTutorialInteract(true); }} className="px-6 py-3 rounded-2xl bg-amber-500/90 hover:bg-amber-400 text-zinc-900 font-bold border border-amber-200 shadow-xl">Aller à la Boutique</button>
-                    <button onClick={skipIntro} className="px-6 py-3 rounded-2xl bg-emerald-500/90 hover:bg-emerald-400 text-zinc-900 font-bold border border-emerald-200 shadow-xl">Jouer</button>
-                  </div>
-                </>
-              )}
-              <button aria-pressed={state.ui.sounds} onClick={() => setState(s => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))} className="mt-6 text-xs px-3 py-1 rounded-xl bg-zinc-800/70 border border-zinc-700">
-                {state.ui.sounds ? "🔊 Sons ON" : "🔈 Sons OFF"}
-              </button>
-            </div>
+            {notice.msg}
+            {/* Regroupement: dix succès simultanés font une ligne, avec le
+                nombre. Dix lignes recouvraient la moitié de l'écran. */}
+            {notice.count > 1 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/25 text-[11px] font-bold tabular-nums">
+                ×{notice.count}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
+});
+
+const Banner = memo(function Banner({ banner }) {
+  const left = useTimeLeft(banner?.until, 200);
+  return (
+    <AnimatePresence>
+      {banner && left > 0 && (
+        <motion.div
+          key={banner.until}
+          initial={{ scale: 0.9, opacity: 0, y: -16 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -14, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 300, damping: 22 }}
+          className="fixed left-1/2 top-20 -translate-x-1/2 z-40 px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-2xl text-center pointer-events-none"
+        >
+          <div className="text-[11px] uppercase tracking-[0.2em] opacity-90">{banner.title}</div>
+          <div className="text-lg font-black leading-tight">{banner.sub}</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+});
+
+const OfflineModal = memo(function OfflineModal({ report, onClose }) {
+  if (!report) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="offline-title"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="w-full max-w-sm rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-6 shadow-2xl text-center"
+      >
+        <div className="text-5xl mb-2">🌙</div>
+        <h2 id="offline-title" className="text-xl font-black text-amber-950">
+          Bon retour !
+        </h2>
+        <p className="text-sm text-amber-800/80 mt-1">
+          Ton empire a tourné pendant <b>{fmtDuration(report.durationMs)}</b>.
+        </p>
+        <div className="my-4 py-3 rounded-2xl bg-white/70 border border-amber-200">
+          <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-500 tabular-nums">
+            +{fmtInt(report.cookies)}
+          </div>
+          <div className="text-xs text-amber-700">cookies produits</div>
+          {report.crmb > 0 && (
+            <div className="mt-1 text-xs text-cyan-700 font-semibold tabular-nums">
+              +{fmtCrmb(report.crmb)} CRMB minés
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          autoFocus
+          className="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold shadow-lg hover:from-amber-400 hover:to-orange-400 transition-colors"
+        >
+          Encaisser
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+});
+
+/**
+ * Vérification humaine.
+ *
+ * Elle n'apparaît JAMAIS parce que le joueur est inactif — ne pas cliquer est
+ * une façon légitime de jouer, le minage tourne tout seul. Elle n'apparaît
+ * qu'après un comportement réellement suspect, et elle ne retire rien: le
+ * minage continue, la sauvegarde est intacte, seuls les nouveaux gains
+ * manuels attendent la réponse.
+ *
+ * Un seul geste, trois cibles, du texte que lit un lecteur d'écran, et le
+ * clavier fonctionne: on demande une décision, pas une épreuve.
+ */
+const VerificationModal = memo(function VerificationModal({ defi, onReussite, onEchec }) {
+  if (!defi) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="verif-title"
+      data-testid="verification"
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-6 shadow-2xl text-center">
+        <div className="text-4xl mb-2" aria-hidden="true">
+          🤖
+        </div>
+        <h2 id="verif-title" className="text-lg font-black text-amber-950">
+          Une seconde
+        </h2>
+        <p className="text-sm text-amber-800/80 mt-1">{defi.question}</p>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {defi.options.map((valeur, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => (i === defi.reponse ? onReussite() : onEchec())}
+              className="min-h-[3rem] rounded-2xl bg-white border-2 border-amber-300 text-xl font-black text-amber-900 tabular-nums active:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              {valeur}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-[11px] text-amber-700/70">
+          Ton minage continue et ta partie est intacte. Rien n&apos;a été retiré.
+        </p>
+      </div>
+    </div>
+  );
+});
+
+const HeaderStat = memo(function HeaderStat({ label, value, tone = "amber", title }) {
+  const tones = {
+    amber: "bg-amber-100/80 text-amber-900 border-amber-200",
+    emerald: "bg-emerald-100/80 text-emerald-900 border-emerald-200",
+    cyan: "bg-cyan-100/80 text-cyan-900 border-cyan-200",
+    violet: "bg-violet-100/80 text-violet-900 border-violet-200",
+  };
+  return (
+    <span
+      title={title}
+      className={`px-2.5 py-1 rounded-full border text-xs font-medium whitespace-nowrap ${tones[tone]}`}
+    >
+      {label} <b className="tabular-nums">{value}</b>
+    </span>
+  );
+});
+
+// ============================================================================
+// Composant principal
+// ============================================================================
+
+export default function CookieCraze() {
+  const [state, setState] = useState(loadState);
+  const [tab, setTab] = useState("shop");
+  const [previewSkin, setPreviewSkin] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [offlineReport, setOfflineReport] = useState(null);
+  const [buyQty, setBuyQty] = useState(1);
+  const [shopFilter, setShopFilter] = useState("all");
+
+  const particlesRef = useRef(null);
+  const bootedRef = useRef(false);
+  // Dernier clic effectivement crédité: sert de garde-fou anti-automatisation.
+  // Le garde-fou anti-automatisation. Créé une seule fois: il a sa propre
+  // mémoire du geste et la reconstruire à chaque rendu l'effacerait.
+  const [guard] = useState(createGuard);
+  const [defi, setDefi] = useState(null);
+  // Les systèmes pilotés par minuterie lisent l'état ici plutôt que par
+  // fermeture: ça évite de reconstruire leurs intervalles à chaque rendu.
+  const stateRef = useLatestRef(state);
+
+  const soundsOn = isFeatureEnabled("ENABLE_SOUNDS") && state.ui.sounds;
+  const audio = useAudio(soundsOn, state.ui.volume ?? 0.6);
+  const notify = useNotify(setState);
+
+  const combo = useCombo();
+  const clickRate = useClickRate();
+  // Horloge partagée plutôt qu'un `Date.now()` au rendu: les buffs et la fenêtre
+  // de début de partie expirent d'eux-mêmes, à la cadence de la boucle de jeu.
+  const now = useClock(500);
+  const stats = useMemo(() => deriveStats(state, now, combo.display.streak), [state, now, combo.display.streak]);
+  const questCtx = useMemo(() => buildContext(state), [state]);
+  const effects = useMemo(() => prestigeEffects(state), [state]);
+
+  // --- Effets visuels: API stable partagée avec les hooks d'événements ------
+  const fx = useMemo(
+    () => ({
+      banner: ({ title, sub, ms = 2000 }) =>
+        setState((s) => ({ ...s, fx: { ...s.fx, banner: { title, sub, until: Date.now() + ms } } })),
+      shake: (ms = 800) => setState((s) => ({ ...s, fx: { ...s.fx, shakeUntil: Date.now() + ms } })),
+      burstGold: (n) => particlesRef.current?.burstGold(n),
+      burstText: (n, text) => particlesRef.current?.burstText(n, text),
+      burstCrumbs: (n) => particlesRef.current?.burstCrumbs(n),
+    }),
+    []
+  );
+
+  /**
+   * Achat refusé: une secousse courte, aucun texte.
+   *
+   * « Pas assez de cookies » s'affichait neuf fois dans ce fichier, et c'était
+   * la notification la plus fréquente du jeu — pour dire au joueur ce que le
+   * bouton grisé lui disait déjà. Le geste échoue, on le sent, on passe.
+   */
+  const refuse = useCallback(() => {
+    audio.play("error", 0.25);
+    fx.shake(220);
+  }, [audio, fx]);
+
+  // --- Systèmes ------------------------------------------------------------
+  useGameLoop(state, setState);
+  useAutosave(state, saveState);
+
+  const celebrate = useCallback(() => {
+    particlesRef.current?.burstGold(24);
+    audio.play("golden", 0.4);
+  }, [audio]);
+
+  const { reroll } = useQuests(state, setState, notify, celebrate);
+  useAchievements(state, setState, notify, celebrate);
+
+  const events = useEvents({ stateRef, setState, notify, fx, audio });
+
+  // --- Démarrage: reset différé + progression hors-ligne --------------------
+  // Cet effet fait exactement ce pour quoi les effets existent: se synchroniser
+  // au montage avec deux sources externes (le stockage de session et l'horloge
+  // murale). Il ne s'exécute qu'une fois, garde `bootedRef` comprise.
+  useEffect(() => {
+    if (bootedRef.current) return;
+    bootedRef.current = true;
+
+    // Un reset demandé avant rechargement s'applique ici
+    try {
+      const raw = sessionStorage.getItem(PENDING_RESET_KEY);
+      if (raw) {
+        sessionStorage.removeItem(PENDING_RESET_KEY);
+        const payload = JSON.parse(raw);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- application d'un reset demandé avant rechargement
+        setState(createResetState(payload));
+        return;
+      }
+    } catch {
+      // sessionStorage indisponible: aucun reset en attente à appliquer
+    }
+
+    const s = stateRef.current;
+    const now = Date.now();
+    // Le calcul vit dans `utils/offline.js`, en fonction pure: c'est ce qui
+    // permet de le tester avec une horloge fixée, y compris quand elle a
+    // reculé ou sauté de dix ans.
+    const away = now - (s.lastTs || now);
+    if (s.flags?.offlineCollected) return;
+
+    const gains = offlineGains(s, away, now);
+    if (!gains.vaut) return;
+
+    setState((prev) => ({
+      ...prev,
+      cookies: prev.cookies + gains.cookies,
+      lifetime: prev.lifetime + gains.cookies,
+      crypto: { ...prev.crypto, balance: addCrmb(prev.crypto.balance, gains.crmb) },
+      flags: { ...prev.flags, offlineCollected: true },
+    }));
+    setOfflineReport(gains);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Ventes flash --------------------------------------------------------
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setState((s) => {
+        const now = Date.now();
+        if (s.flags?.flash && now < s.flags.flash.until) return s;
+        const idleFor = now - (s.stats?.lastPurchaseTs || s.createdAt || now);
+        const early = isEarlyWindow(s, now);
+        const threshold = early ? 30_000 : 75_000;
+        if (idleFor < threshold) return s;
+
+        const pick = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+        return {
+          ...s,
+          flags: {
+            ...s.flags,
+            flash: { itemId: pick.id, discount: early ? 0.35 : 0.25, until: now + 25_000 },
+          },
+        };
+      });
+    }, 5_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // --- Raccourcis clavier --------------------------------------------------
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        return;
+      }
+      // Ne pas voler le clavier pendant la saisie d'un montant
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      if (e.ctrlKey || e.metaKey) {
+        const index = Number(e.key) - 1;
+        const enabled = TABS.filter((t) => !t.feature || isFeatureEnabled(t.feature));
+        if (index >= 0 && index < enabled.length) {
+          e.preventDefault();
+          setTab(enabled[index].id);
+        }
+        return;
+      }
+      if (e.code === "Space" && !state.ui.introSeen) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state.ui.introSeen]);
+
+  // --- Fermeture du menu au clic extérieur ---------------------------------
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (e) => {
+      if (!e.target.closest?.("[data-menu-root]")) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [menuOpen]);
+
+  // ==========================================================================
+  // Actions
+  // ==========================================================================
+
+  const onCookieClick = useCallback(
+    (event) => {
+      const maintenant = Date.now();
+
+      // Le garde-fou décide seul si le clic est crédité: seau à jetons pour la
+      // cadence, score de suspicion pour la forme du geste. Il ne retire jamais
+      // rien et ne bannit personne — voir `utils/anticheat.js` pour ce qu'il
+      // peut et ne peut pas faire.
+      const verdict = guard.enregistrer(maintenant, {
+        trusted: event?.isTrusted,
+        hidden: typeof document !== "undefined" && document.visibilityState === "hidden",
+        touches: event?.touches?.length,
+      });
+
+      if (verdict.verification && !defi) {
+        setDefi(fabriquerDefi(maintenant));
+        combo.reset();
+        clickRate.reset();
+        return;
+      }
+
+      audio.play("crunch", 0.3);
+      // Le combo est enregistré d'abord: le clic courant profite déjà du palier
+      // qu'il vient d'atteindre. Un clic non crédité ne le fait pas monter —
+      // sinon un autoclicker garderait le multiplicateur plein gratuitement.
+      if (!verdict.credite) {
+        if (isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstCrumbs(2);
+        return;
+      }
+
+      // La cadence affichée ne compte que les clics crédités: c'est ce que le
+      // joueur doit pouvoir multiplier par son « par clic ».
+      clickRate.register(maintenant);
+      combo.register();
+      const streak = combo.streakRef.current;
+      const derived = deriveStats(stateRef.current, maintenant, streak);
+      const gain = derived.cpc;
+
+      setState((s) => ({
+        ...s,
+        cookies: s.cookies + gain,
+        lifetime: s.lifetime + gain,
+        stats: {
+          ...s.stats,
+          clicks: (s.stats.clicks || 0) + 1,
+          handmade: (s.stats.handmade || 0) + gain,
+          bestCombo: Math.max(s.stats.bestCombo || 1, derived.combo),
+        },
+      }));
+
+      if (isFeatureEnabled("ENABLE_PARTICLES")) {
+        particlesRef.current?.burstText(1, `+${fmt(gain)}`);
+        particlesRef.current?.burstCrumbs(derived.combo >= COMBO.max ? 5 : 3);
+        // Gerbe dorée à chaque cran franchi, pour rendre la montée lisible. Calée
+        // sur les crans réels: un multiple de dix ne tombait sur aucun d'eux.
+        if (streak > 0 && streak <= COMBO.clicksToMax && streak % COMBO.clicksPerStep === 0) {
+          particlesRef.current?.burstGold(10);
+        }
+      }
+    },
+    [audio, combo, clickRate, stateRef, defi, guard]
+  );
+
+  const buy = useCallback(
+    (itemId, quantite = 1) => {
+      const s = stateRef.current;
+      // « Max » se résout au moment du clic, pas au rendu: le prix affiché a pu
+      // changer entre les deux si la production a tourné.
+      const count = quantite === "max" ? maxAffordable(s, itemId) : quantite;
+      if (count < 1) {
+        refuse();
+        return;
+      }
+      const price = costOf(s, itemId, count);
+      if (s.cookies < price) {
+        refuse();
+        return;
+      }
+
+      const item = ITEMS.find((x) => x.id === itemId);
+      const ownedBefore = s.items[itemId] || 0;
+      const before = deriveStats(s);
+      const after = deriveStats({ ...s, items: { ...s.items, [itemId]: ownedBefore + count } });
+
+      // Les seuils suivent la même échelle que les paliers d'améliorations:
+      // 10, 20, 40, 80 … Les coder en dur les avait déjà désynchronisés une fois.
+      const crossesMilestone = Array.from({ length: 12 }, (_, i) => tierThreshold(i)).some(
+        (m) => ownedBefore < m && ownedBefore + count >= m
+      );
+      const big = crossesMilestone || price / Math.max(1, s.cookies) >= 0.45;
+
+      audio.play(big ? "bigBuy" : "buy", big ? 0.55 : 0.35);
+
+      setState((prev) => {
+        const next = {
+          ...prev,
+          cookies: prev.cookies - price,
+          items: { ...prev.items, [itemId]: (prev.items[itemId] || 0) + count },
+          stats: {
+            ...prev.stats,
+            lastPurchaseTs: Date.now(),
+            totalSpent: (prev.stats.totalSpent || 0) + price,
+          },
+          flags: { ...prev.flags, flash: null },
+        };
+        // Le premier bâtiment automatique offert ne l'est qu'une fois
+        if (price === 0 && item?.mode === "cps" && !prev.flags.freeFirstAutoGiven) {
+          next.flags = { ...next.flags, freeFirstAutoGiven: true, freeFirstAutoItemId: itemId };
+        }
+        if (big) {
+          const delta =
+            item?.mode === "mine"
+              ? `${fmt(before.mining)} → ${fmt(after.mining)} /s`
+              : `${fmt(before.perClickNoCombo)} → ${fmt(after.perClickNoCombo)} /clic`;
+          next.fx = { ...prev.fx, banner: { title: "Palier franchi", sub: delta, until: Date.now() + 2200 }, shakeUntil: Date.now() + 700 };
+        }
+        return next;
+      });
+
+      if (big && isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstGold(30);
+    },
+    [audio, refuse, stateRef]
+  );
+
+  const buyUpgrade = useCallback(
+    (upgrade) => {
+      const s = stateRef.current;
+      if (s.upgrades[upgrade.id]) return;
+      if (s.cookies < upgrade.cost) {
+        refuse();
+        return;
+      }
+      audio.play("bigBuy", 0.5);
+      particlesRef.current?.burstGold(18);
+      setState((prev) => ({
+        ...prev,
+        cookies: prev.cookies - upgrade.cost,
+        upgrades: { ...prev.upgrades, [upgrade.id]: true },
+        stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + upgrade.cost },
+        fx: { ...prev.fx, banner: { title: "Amélioration", sub: upgrade.name, until: Date.now() + 2000 } },
+      }));
+      notify.event(`${upgrade.emoji} ${upgrade.name}`, "success", { group: "amelioration" });
+    },
+    [audio, notify, refuse, stateRef]
+  );
+
+  const buySkin = useCallback(
+    (skinId) => {
+      const s = stateRef.current;
+      const skin = SKINS[skinId];
+      if (!skin || s.skinsOwned[skinId]) return;
+      const enCrmb = (skin.crmb || 0) > 0;
+      if (enCrmb ? (s.crypto?.balance || 0) < skin.crmb : s.cookies < skin.price) {
+        refuse();
+        return;
+      }
+      audio.play("golden", 0.45);
+      particlesRef.current?.burstGold(24);
+      setState((prev) => ({
+        ...prev,
+        cookies: enCrmb ? prev.cookies : prev.cookies - skin.price,
+        crypto: enCrmb ? { ...prev.crypto, balance: (prev.crypto?.balance || 0) - skin.crmb } : prev.crypto,
+        skinsOwned: { ...prev.skinsOwned, [skinId]: true },
+        skin: skinId,
+        stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + (enCrmb ? 0 : skin.price) },
+      }));
+      notify.event(`Nouvelle apparence — ${skin.name}`, "success");
+    },
+    [audio, notify, refuse, stateRef]
+  );
+
+  // Référence stable: sinon `memo(Skins)` se re-rend à chaque tick du jeu
+  const stopPreview = useCallback(() => setPreviewSkin(null), []);
+
+  const equipSkin = useCallback(
+    (skinId) => {
+      if (!stateRef.current.skinsOwned[skinId]) return;
+      audio.play("buy", 0.3);
+      setState((prev) => ({ ...prev, skin: skinId }));
+    },
+    [audio, stateRef]
+  );
+
+  // --- Crypto --------------------------------------------------------------
+
+  const cryptoBuy = useCallback(
+    (amount) => {
+      const s = stateRef.current;
+      const cost = buyPrice(s.crypto.price) * amount;
+      if (amount <= 0 || s.cookies < cost) {
+        refuse();
+        return;
+      }
+      audio.play("buy", 0.35);
+      setState((prev) => ({
+        ...prev,
+        cookies: prev.cookies - cost,
+        crypto: {
+          ...prev.crypto,
+          balance: addCrmb(prev.crypto.balance, amount),
+          totalBought: addCrmb(prev.crypto.totalBought, amount),
+          realizedPnl: (prev.crypto.realizedPnl || 0) - cost,
+        },
+      }));
+    },
+    [audio, refuse, stateRef]
+  );
+
+  const cryptoSell = useCallback(
+    (amount) => {
+      const s = stateRef.current;
+      if (amount <= 0 || s.crypto.balance < amount) {
+        refuse();
+        return;
+      }
+      const gain = sellPrice(s.crypto.price) * amount;
+      audio.play("buy", 0.35);
+      setState((prev) => ({
+        ...prev,
+        cookies: prev.cookies + gain,
+        lifetime: prev.lifetime + gain,
+        crypto: {
+          ...prev.crypto,
+          balance: addCrmb(prev.crypto.balance, -amount),
+          totalSold: addCrmb(prev.crypto.totalSold, amount),
+          realizedPnl: (prev.crypto.realizedPnl || 0) + gain,
+        },
+      }));
+    },
+    [audio, refuse, stateRef]
+  );
+
+  const cryptoStake = useCallback(
+    (amount, tierId) => {
+      const s = stateRef.current;
+      if (amount <= 0 || s.crypto.balance < amount) {
+        refuse();
+        return;
+      }
+      const tier = getTier(tierId);
+      const now = Date.now();
+      audio.play("golden", 0.35);
+      setState((prev) => ({
+        ...prev,
+        crypto: {
+          ...prev.crypto,
+          balance: addCrmb(prev.crypto.balance, -amount),
+          positions: [
+            ...prev.crypto.positions,
+            {
+              id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+              amount: roundCrmb(amount),
+              tierId: tier.id,
+              startedAt: now,
+              unlockAt: now + tier.lockMs,
+            },
+          ],
+        },
+      }));
+    },
+    [audio, refuse, stateRef]
+  );
+
+  const cryptoUnstake = useCallback(
+    (positionId) => {
+      const now = Date.now();
+      const s = stateRef.current;
+      const position = s.crypto.positions.find((p) => p.id === positionId);
+      if (!position) return;
+      if (now < (position.unlockAt || 0)) {
+        refuse();
+        return;
+      }
+      audio.play("buy", 0.3);
+      setState((prev) => ({
+        ...prev,
+        crypto: {
+          ...prev.crypto,
+          balance: addCrmb(prev.crypto.balance, position.amount),
+          positions: prev.crypto.positions.filter((p) => p.id !== positionId),
+        },
+      }));
+    },
+    [audio, refuse, stateRef]
+  );
+
+  const buyMiner = useCallback(
+    (minerId) => {
+      const s = stateRef.current;
+      const owned = s.crypto.miners?.[minerId] || 0;
+      const cost = minerCost(minerId, owned);
+      if (s.cookies < cost) {
+        refuse();
+        return;
+      }
+      audio.play("bigBuy", 0.45);
+      particlesRef.current?.burstGold(14);
+      setState((prev) => ({
+        ...prev,
+        cookies: prev.cookies - cost,
+        stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + cost },
+        crypto: { ...prev.crypto, miners: { ...prev.crypto.miners, [minerId]: owned + 1 } },
+      }));
+      notify.event(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success", { group: "materiel" });
+    },
+    [audio, notify, refuse, stateRef]
+  );
+
+  // --- Prestige ------------------------------------------------------------
+
+  /**
+   * Signer un contrat du Registre.
+   *
+   * Achat définitif: le CRMB part, le cran reste. On ne touche à rien d'autre —
+   * pas de remise à zéro, pas d'effet de bord sur le portefeuille.
+   */
+  const signLedger = useCallback(() => {
+    const s = stateRef.current;
+    const signes = s.crypto?.ledger || 0;
+    const prix = ledgerCost(signes);
+    if ((s.crypto?.balance || 0) < prix) {
+      refuse();
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      crypto: {
+        ...prev.crypto,
+        balance: addCrmb(prev.crypto.balance, -prix),
+        ledger: (prev.crypto.ledger || 0) + 1,
+      },
+    }));
+    audio.play("buy", 0.5);
+    notify.event(`📜 Contrat signé — +0,25 sur les deux axes, pour toujours`, "success");
+  }, [audio, notify, refuse, stateRef]);
+
+  const doPrestige = useCallback(() => {
+    const s = stateRef.current;
+    const potential = chipsFor(s.lifetime, ascensionEffects(s).chipMult);
+    const gain = potential - (s.prestige?.chips || 0);
+    if (gain <= 0 || s.lifetime < PRESTIGE_MIN_LIFETIME) return;
+    if (!window.confirm(`Renaître et gagner ${gain} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`)) {
+      return;
+    }
+
+    audio.play("golden", 0.6);
+    particlesRef.current?.burstGold(60);
+
+    setState((prev) => {
+      const fresh = createResetState({
+        preservePrestige: true,
+        prestige: { chips: potential, spent: prev.prestige?.spent || 0, upgrades: prev.prestige?.upgrades || {} },
+        ascension: prev.ascension,
+        sounds: prev.ui.sounds,
+      });
+      const eff = prestigeEffects(fresh);
+      // « Départ lancé » rend une fraction de la production de la partie qui s'achève
+      const head = Math.floor((prev.lifetime || 0) * eff.startFraction);
+      return {
+        ...fresh,
+        cookies: head,
+        lifetime: head,
+        ui: { ...prev.ui, introSeen: true },
+        stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
+        // Le portefeuille CRMB et le matériel survivent au prestige, et la
+        // renaissance elle-même en rapporte: c'était annoncé dans le README
+        // mais aucune ligne de code ne le faisait.
+        crypto: {
+          ...prev.crypto,
+          balance: addCrmb(prev.crypto?.balance, CRMB_PAR_PRESTIGE),
+          totalEarned: addCrmb(prev.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
+          lastMarketTs: Date.now(),
+          lastYieldTs: Date.now(),
+        },
+        unlocked: prev.unlocked,
+      };
+    });
+    notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
+  }, [audio, notify, stateRef]);
+
+  /**
+   * Ascension.
+   *
+   * Une renaissance de renaissance: elle emporte la partie, les chips ET
+   * l'arbre céleste, et rend des étoiles. Ce qui survit: les étoiles déjà
+   * gagnées et la Voûte, le portefeuille CRMB et le Registre, les apparences,
+   * les succès.
+   */
+  const doAscend = useCallback(() => {
+    const s = stateRef.current;
+    if (!canAscend(s)) return;
+    const gagne = starsFor(s.prestige?.chips || 0);
+    if (
+      !window.confirm(
+        `Ascension : gagner ${gagne} étoile${gagne > 1 ? "s" : ""} ?\n\n` +
+          `Tu perds ta partie, tes chips célestes et ton arbre céleste.\n` +
+          `Tu gardes tes étoiles, la Voûte, ton CRMB, le Registre, tes apparences et tes succès.`
+      )
+    ) {
+      return;
+    }
+
+    audio.play("golden", 0.7);
+    particlesRef.current?.burstGold(90);
+
+    setState((prev) => {
+      const fresh = createResetState({
+        preservePrestige: false,
+        ascension: {
+          stars: (prev.ascension?.stars || 0) + gagne,
+          spent: prev.ascension?.spent || 0,
+          tracks: prev.ascension?.tracks || {},
+          count: (prev.ascension?.count || 0) + 1,
+        },
+        sounds: prev.ui.sounds,
+      });
+      return {
+        ...fresh,
+        ui: { ...prev.ui, introSeen: true },
+        stats: { ...fresh.stats, prestigeCount: prev.stats?.prestigeCount || 0 },
+        crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
+        unlocked: prev.unlocked,
+        skin: prev.skin,
+        skinsOwned: prev.skinsOwned,
+      };
+    });
+    notify.major(`Ascension — +${gagne} étoile${gagne > 1 ? "s" : ""}`, "gold");
+  }, [audio, notify, stateRef]);
+
+  const buyTrack = useCallback(
+    (trackId) => {
+      const s = stateRef.current;
+      const track = TRACK_BY_ID[trackId];
+      if (!track) return;
+      const niveau = trackLevel(s, trackId);
+      const prix = trackCost(trackId, niveau);
+      if (!isFinite(prix) || availableStars(s) < prix) {
+        refuse();
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        ascension: {
+          ...prev.ascension,
+          spent: (prev.ascension?.spent || 0) + prix,
+          tracks: { ...prev.ascension?.tracks, [trackId]: niveau + 1 },
+        },
+      }));
+      audio.play("buy", 0.5);
+      notify.event(`${track.emoji} ${track.name} niveau ${niveau + 1}`, "success", { group: "voute" });
+    },
+    [audio, notify, refuse, stateRef]
+  );
+
+  const buyPrestigeNode = useCallback(
+    (nodeId) => {
+      const s = stateRef.current;
+      const node = PRESTIGE_BY_ID[nodeId];
+      if (!node) return;
+      const level = s.prestige?.upgrades?.[nodeId] || 0;
+      if (level >= node.maxLevel) return;
+      const cost = upgradeCost(nodeId, level);
+      if (availableChips(s) < cost) {
+        refuse();
+        return;
+      }
+      audio.play("golden", 0.4);
+      particlesRef.current?.burstGold(16);
+      setState((prev) => ({
+        ...prev,
+        prestige: {
+          ...prev.prestige,
+          spent: (prev.prestige.spent || 0) + cost,
+          upgrades: { ...prev.prestige.upgrades, [nodeId]: level + 1 },
+        },
+      }));
+      notify.event(`${node.emoji} ${node.name} niveau ${level + 1}`, "success", { group: "arbre" });
+    },
+    [audio, notify, refuse, stateRef]
+  );
+
+  // --- Cookie croqué -------------------------------------------------------
+
+  const onCookieEaten = useCallback(() => {
+    const s = stateRef.current;
+    const derived = deriveStats(s);
+    const count = (s.cookieEatenCount || 0) + 1;
+    const bonus = Math.max(derived.perClick * (count % 5 === 0 ? 120 : 40), derived.mining * 45);
+
+    audio.play("golden", 0.5);
+    particlesRef.current?.burstGold(40);
+    particlesRef.current?.burstCrumbs(30);
+
+    setState((prev) => ({
+      ...prev,
+      cookies: prev.cookies + bonus,
+      lifetime: prev.lifetime + bonus,
+      cookieEatenCount: count,
+      cookieBites: [],
+      fx: { ...prev.fx, banner: { title: "Cookie croqué !", sub: `+${fmt(bonus)}`, until: Date.now() + 2200 } },
+    }));
+    notify.major(`Cookie croqué — +${fmt(bonus)}`, "gold");
+
+    // Un cookie sur deux fait apparaître un doré en récompense
+    if (count % 2 === 0) events.forceGolden();
+  }, [audio, events, notify, stateRef]);
+
+  // Les morsures sont suivies par CookieBiteMask à partir du compteur de clics:
+  // les dupliquer dans l'état global provoquait un second rendu par clic.
+
+  // --- Sauvegarde ----------------------------------------------------------
+
+  const exportSave = useCallback(() => {
+    try {
+      const blob = new Blob([serializeSave(stateRef.current)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cookiecraze-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify.banner("Sauvegarde exportée", "success");
+    } catch {
+      notify.banner("Export impossible", "warn");
+    }
+  }, [notify, stateRef]);
+
+  const importSave = useCallback(
+    (file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const parsed = parseSave(reader.result);
+        if (!parsed) {
+          notify.banner("Fichier de sauvegarde invalide", "warn");
+          return;
+        }
+        setState(parsed);
+        notify.banner("Sauvegarde importée", "success");
+      };
+      reader.onerror = () => notify.banner("Lecture du fichier impossible", "warn");
+      reader.readAsText(file);
+    },
+    [notify]
+  );
+
+  const hardReset = useCallback(
+    (event) => {
+      const full = event?.altKey || event?.shiftKey;
+      const message = full
+        ? "Tout effacer, y compris le prestige et l'arbre céleste ?"
+        : "Réinitialiser la partie ? (prestige et arbre céleste conservés)";
+      if (!window.confirm(message)) return;
+
+      const s = stateRef.current;
+      const payload = {
+        preservePrestige: !full,
+        prestige: full ? null : s.prestige,
+        sounds: !!s.ui.sounds,
+      };
+
+      try {
+        localStorage.removeItem(SAVE_KEY);
+        for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+      } catch {
+        // Stockage inaccessible: l'état en mémoire est réinitialisé quand même
+      }
+
+      particlesRef.current?.clear();
+      combo.reset();
+      clickRate.reset();
+      setMenuOpen(false);
+      setOfflineReport(null);
+      setTab("shop");
+      setState(createResetState(payload));
+      notify.banner(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
+    },
+    [notify, stateRef, combo, clickRate]
+  );
+
+  // ==========================================================================
+  // Rendu
+  // ==========================================================================
+
+  const skinKey = previewSkin || state.skin;
+  const skin = SKINS[skinKey] || SKINS.default;
+  const shaking = useShake(state.fx.shakeUntil);
+  const reducedMotion = !!state.ui.reducedMotion;
+
+  const visibleTabs = useMemo(() => TABS.filter((t) => !t.feature || isFeatureEnabled(t.feature)), []);
+
+  const questAlert = useMemo(() => {
+    const all = [...(state.quests?.active || []), ...(state.quests?.daily || [])];
+    return all.filter((q) => q.target > 0 && q.progress / q.target >= 0.85).length;
+  }, [state.quests]);
+
+  if (!state.ui.introSeen) {
+    return (
+      <Intro
+        soundsOn={state.ui.sounds}
+        onToggleSound={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
+        onStart={() => setState((s) => ({ ...s, ui: { ...s.ui, introSeen: true }, createdAt: Date.now(), lastTs: Date.now() }))}
+      />
+    );
+  }
+
+  return (
+    <div
+      id="game-area"
+      className={`${state.ui.highContrast ? "high-contrast " : ""}min-h-screen w-full bg-bakery text-amber-950 select-none`}
+    >
+      {/* La marge basse réserve la place de la navigation fixe: aucun bouton de
+          la boutique ne peut finir caché dessous. */}
+      <div className="mx-auto max-w-7xl px-3 py-2 sm:py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
+        {/* ---------- En-tête ---------- */}
+        {/* L'en-tête tenait sur TROIS lignes en 320 px de large — titre, puis
+            quatre pastilles, puis le bouton de réglages tout seul — et poussait
+            la boutique à 709 px sur un écran de 568. Il tient maintenant sur
+            une ligne: le titre rétrécit, et les deux chiffres que la barre de
+            production répète mot pour mot disparaissent sous `sm`. */}
+        <header className="flex items-center justify-between gap-2 flex-nowrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-2xl sm:text-3xl drop-shadow-sm shrink-0" aria-hidden="true">
+              🍪
+            </span>
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-700 to-orange-600 truncate">
+              Cookie Craze
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap justify-end" data-menu-root>
+            <span className="hidden sm:contents">
+              <HeaderStat
+                label="Par clic"
+                value={fmt(stats.perClick)}
+                title={`Gain réel d'un appui, combo ×${fmtMult(stats.combo)} compris`}
+              />
+              <HeaderStat label="Minage" value={`${fmt(stats.mining)}/s`} tone="emerald" title="Cookies générés automatiquement chaque seconde" />
+            </span>
+            {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
+              <HeaderStat label="Chips" value={availableChips(state)} tone="violet" title="Chips célestes disponibles" />
+            )}
+            {isFeatureEnabled("ENABLE_CRYPTO") && (
+              <HeaderStat
+                label="CRMB"
+                value={fmtCrmb(state.crypto.balance)}
+                tone="cyan"
+                title={`Cours : ${fmt(state.crypto.price)} cookies`}
+              />
+            )}
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label="Réglages"
+                className="rounded-xl min-h-11 min-w-11 px-3 bg-white/85 border border-amber-200 shadow-sm hover:bg-white hover:shadow transition-all"
+              >
+                ⚙️
+              </button>
+
+              <AnimatePresence>
+                {menuOpen && (
+                  <motion.div
+                    role="menu"
+                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute right-0 mt-2 w-60 origin-top-right rounded-2xl bg-white/97 backdrop-blur-md border border-amber-200 shadow-2xl z-50 overflow-hidden"
+                  >
+                    <MenuToggle
+                      label={state.ui.sounds ? "🔊 Sons activés" : "🔈 Sons coupés"}
+                      onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, sounds: !s.ui.sounds } }))}
+                    />
+                    {state.ui.sounds && (
+                      <div className="px-4 py-2 border-b border-amber-100">
+                        <label className="block text-[11px] text-amber-700 mb-1" htmlFor="volume">
+                          Volume · {Math.round((state.ui.volume ?? 0.6) * 100)} %
+                        </label>
+                        <input
+                          id="volume"
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={state.ui.volume ?? 0.6}
+                          onChange={(e) =>
+                            setState((s) => ({ ...s, ui: { ...s.ui, volume: Number(e.target.value) } }))
+                          }
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                    )}
+                    <MenuToggle
+                      label={state.ui.highContrast ? "🟨 Contraste élevé" : "⬜ Contraste normal"}
+                      onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, highContrast: !s.ui.highContrast } }))}
+                    />
+                    <MenuToggle
+                      label={state.ui.reducedMotion ? "🐢 Animations réduites" : "✨ Animations complètes"}
+                      onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, reducedMotion: !s.ui.reducedMotion } }))}
+                    />
+                    <MenuToggle label="💾 Exporter la sauvegarde" onClick={exportSave} />
+                    <label className="block w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 cursor-pointer transition-colors border-b border-amber-100">
+                      📥 Importer une sauvegarde
+                      <input
+                        type="file"
+                        accept=".json,.txt,application/json"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && importSave(e.target.files[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={hardReset}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      ♻️ Réinitialiser
+                      <span className="block text-[11px] text-red-400">Maj + clic : effacer aussi le prestige</span>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </header>
+
+        {/* ---------- Corps ---------- */}
+        <div className="mt-2 sm:mt-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-3 sm:gap-4 md:gap-6 items-start">
+          {/* --- Scène du cookie --- */}
+          <section className={`rounded-3xl glass-warm shadow-xl p-2 sm:p-3 md:p-6 ${shaking ? "animate-shake" : ""}`}>
+            <div className="text-center">
+              <div className="text-[11px] sm:text-sm md:text-base text-amber-800 font-medium">Cookies en banque</div>
+              <div
+                className="text-3xl sm:text-4xl md:text-7xl font-black tracking-tight tabular-nums text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600"
+                aria-live="polite"
+                aria-atomic="true"
+                data-testid="solde"
+              >
+                {fmtInt(state.cookies)}
+              </div>
+              {/* Le total cuit ne sert à aucune décision immédiate: il coûtait une
+                  ligne au-dessus de la boutique sur un écran de 568 px. Il reste
+                  visible dès `xs`, et dans Profil → Statistiques partout. */}
+              <div className="hidden xs:block text-xs md:text-sm text-amber-800/80">
+                {fmtInt(state.lifetime)} cuits au total
+              </div>
+              <ProductionBar stats={stats} cadence={clickRate.rate} />
+              <ComboMeter display={combo.display} />
+              <BuffBadge buffs={state.buffs} />
+              {state.flags?.discountAll && <DiscountBadge discount={state.flags.discountAll} />}
+            </div>
+
+            {/* Le grand cookie */}
+            <div className="relative mt-1 sm:mt-2 md:mt-4 flex items-center justify-center">
+              <div className="relative w-36 h-36 xs:w-48 xs:h-48 sm:w-72 sm:h-72 md:w-[24rem] md:h-[24rem]">
+                <div
+                  className={`absolute inset-0 rounded-full bg-gradient-to-br from-amber-300/30 via-orange-400/20 to-transparent blur-3xl ${
+                    reducedMotion ? "" : "animate-pulse-slow"
+                  }`}
+                  aria-hidden="true"
+                />
+                <motion.button
+                  type="button"
+                  onClick={onCookieClick}
+                  aria-label={`Cliquer le cookie pour gagner ${fmt(stats.perClick)} cookies`}
+                  whileTap={reducedMotion ? undefined : { scale: 0.93 }}
+                  whileHover={reducedMotion ? undefined : { scale: 1.03 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  className={`relative h-full w-full rounded-full focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-400/60 ${
+                    reducedMotion ? "" : "animate-float"
+                  }`}
+                >
+                  {state.cookieEatEnabled && isFeatureEnabled("ENABLE_COOKIE_EAT") ? (
+                    <CookieBiteMask
+                      skinSrc={skin.src}
+                      clicks={state.stats.clicks}
+                      bitesTotal={80}
+                      enabled
+                      onFinished={onCookieEaten}
+                      className={`h-full w-full drop-shadow-2xl ${skin.className || ""}`}
+                    />
+                  ) : (
+                    <img
+                      src={skin.src}
+                      alt=""
+                      draggable="false"
+                      className={`h-full w-full drop-shadow-2xl ${skin.className || ""}`}
+                    />
+                  )}
+                </motion.button>
+
+                <ParticleLayer ref={particlesRef} reducedMotion={reducedMotion} />
+              </div>
+            </div>
+
+            <NextGoal state={state} stats={stats} />
+
+            {/* Décoratifs: ils ne servent à aucune décision et coûtaient une
+                ligne au-dessus de la boutique. Ils restent visibles à partir de
+                la tablette, et dans Profil → Statistiques sur mobile. */}
+            <div className="mt-2 hidden sm:flex items-center justify-center gap-3 text-xs text-amber-700">
+              <span>🍪 Croqués : <b className="tabular-nums">{state.cookieEatenCount || 0}</b></span>
+              <span aria-hidden="true">·</span>
+              <span>👆 Clics : <b className="tabular-nums">{fmtInt(state.stats.clicks || 0)}</b></span>
+            </div>
+          </section>
+
+          {/* --- Panneau latéral ---
+              Sur mobile il n'y a pas de « côté »: le panneau suit le cookie et
+              la navigation descend sous le pouce, en barre fixe. Le lecteur
+              d'écran, lui, ne voit qu'un seul jeu d'onglets — celui d'en bas. */}
+          <section className="rounded-3xl glass-warm shadow-xl overflow-hidden flex flex-col lg:max-h-[80vh]">
+            {/* Une seule barre d'onglets, deux positions.
+                Sous `lg` elle se détache en bas de l'écran, sous le pouce, avec
+                la marge de sécurité iOS; au-dessus, elle reprend sa place en
+                tête du panneau. En dupliquer une par format donnerait deux
+                `tablist` à un lecteur d'écran — et deux onglets « Prestige ». */}
+            <nav
+              className="fixed inset-x-0 bottom-0 z-40 flex border-t border-amber-200 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]
+                         lg:static lg:z-auto lg:shrink-0 lg:flex-wrap lg:gap-1 lg:p-2 lg:border-t-0 lg:border-b lg:border-amber-200/60 lg:bg-white/50 lg:pb-2 lg:backdrop-blur-none"
+              role="tablist"
+              aria-label="Sections du jeu"
+            >
+              {visibleTabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  aria-label={t.label}
+                  onClick={() => setTab(t.id)}
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[3rem] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
+                    lg:flex-none lg:flex-row lg:gap-1 lg:px-2.5 lg:py-1.5 lg:rounded-xl lg:text-xs lg:font-semibold ${
+                      tab === t.id
+                        ? "text-orange-600 lg:text-white lg:bg-gradient-to-r lg:from-amber-500 lg:to-orange-500 lg:shadow-md"
+                        : "text-amber-700/70 lg:text-amber-800 lg:bg-amber-100/60 lg:hover:bg-amber-200/70"
+                    }`}
+                >
+                  <span className="text-xl leading-none lg:text-sm" aria-hidden="true">
+                    {t.icon}
+                  </span>
+                  <span className="text-[11px] font-semibold leading-none xl:inline lg:hidden">{t.court}</span>
+                  {tab === t.id && (
+                    <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-orange-500 lg:hidden" aria-hidden="true" />
+                  )}
+                  {t.id === "quests" && questAlert > 0 && tab !== "quests" && (
+                    <span className="absolute top-1 right-1/4 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[11px] font-bold grid place-items-center lg:-top-1 lg:-right-1">
+                      {questAlert}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            <div className="flex-1 lg:overflow-y-auto overscroll-contain p-3 md:p-4 scrollbar-thin">
+              {tab === "shop" && (
+                <>
+                  {/* Filtres et quantité restent collés en haut du panneau: sur
+                      mobile la liste défile sous eux, ils ne disparaissent jamais. */}
+                  {/* Six boutons ne tiennent ni sur une ligne de 320 px ni dans
+                      le panneau latéral de 400 px: le « ×10 » sortait de
+                      l'écran sur mobile et « Max » était coupé sur ordinateur.
+                      Ils sont donc TOUJOURS sur deux rangées, quelle que soit
+                      la largeur: un point de rupture par taille d'écran ne sait
+                      rien de la largeur du panneau, qui reste à 400 px même sur
+                      un écran de 1 440. Chaque groupe prend toute la ligne, les
+                      libellés restent lisibles, et la cible de 44 px est tenue
+                      partout. */}
+                  <div className="sticky top-0 z-10 -mx-3 md:-mx-4 px-3 md:px-4 pb-2 pt-0.5 bg-gradient-to-b from-amber-50 via-amber-50/95 to-transparent flex flex-col gap-1.5">
+                    <div className="flex gap-1 w-full" role="group" aria-label="Filtrer les bâtiments">
+                      {[
+                        ["all", "Tout"],
+                        ["click", "👆 Clic"],
+                        ["mine", "⛏️ Minage"],
+                      ].map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setShopFilter(id)}
+                          aria-pressed={shopFilter === id}
+                          className={`flex-1 px-1.5 sm:px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
+                            shopFilter === id
+                              ? "bg-amber-500 text-white shadow"
+                              : "bg-white/80 text-amber-800 border border-amber-200"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-1 w-full" role="group" aria-label="Quantité d'achat">
+                      {[1, 10, "max"].map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setBuyQty(q)}
+                          aria-pressed={buyQty === q}
+                          className={`flex-1 px-1.5 sm:px-3 min-h-11 min-w-11 rounded-xl text-xs font-bold transition-colors ${
+                            buyQty === q
+                              ? "bg-orange-500 text-white shadow"
+                              : "bg-white/80 text-amber-800 border border-amber-200"
+                          }`}
+                        >
+                          {q === "max" ? "Max" : `×${q}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Shop
+                    state={state}
+                    filter={shopFilter}
+                    onBuy={buy}
+                    perItemMult={stats.perItemMult}
+                    qty={buyQty}
+                    stats={stats}
+                  />
+                </>
+              )}
+              {tab === "upgrades" && <Upgrades state={state} stats={stats} onBuy={buyUpgrade} />}
+              {tab === "quests" && <QuestBoard state={state} ctx={questCtx} onReroll={reroll} />}
+
+              <Suspense fallback={<PanelSkeleton />}>
+                {tab === "crypto" && (
+                  <CryptoPanel
+                    state={state}
+                    stats={stats}
+                    onBuy={cryptoBuy}
+                    onSell={cryptoSell}
+                    onStake={cryptoStake}
+                    onUnstake={cryptoUnstake}
+                    onBuyMiner={buyMiner}
+                    onSignLedger={signLedger}
+                  />
+                )}
+                {tab === "prestige" && (
+                  <PrestigePanel state={state} effects={effects} onPrestige={doPrestige}
+                    onAscend={doAscend}
+                    onBuyTrack={buyTrack} onBuyNode={buyPrestigeNode} />
+                )}
+                {tab === "profile" && (
+                  <>
+                    <StatsPanel state={state} stats={stats} />
+                    {isFeatureEnabled("ENABLE_SKINS") && (
+                      <div className="mt-4 pt-4 border-t border-amber-200/60">
+                        <Skins
+                          state={state}
+                          skins={SKINS}
+                          onBuy={buySkin}
+                          onEquip={equipSkin}
+                          onPreview={setPreviewSkin}
+                          onStopPreview={stopPreview}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </Suspense>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* ---------- Superpositions ---------- */}
+      <Banner banner={state.fx.banner} />
+
+      <AnimatePresence>
+        {events.golden && (
+          <motion.button
+            type="button"
+            key={events.golden.id}
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 16 }}
+            onClick={events.clickGolden}
+            aria-label="Attraper le cookie doré"
+            className="fixed z-40 h-16 w-16 rounded-full bg-gradient-to-br from-yellow-200 via-yellow-400 to-amber-500 border-4 border-yellow-100 shadow-[0_0_30px_rgba(250,204,21,0.75)] text-2xl grid place-items-center animate-golden"
+            style={{ left: events.golden.left, top: events.golden.top }}
+          >
+            ⭐
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {events.flying && (
+          <motion.button
+            type="button"
+            key={events.flying.id}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            onClick={events.clickFlying}
+            aria-label="Attraper le cookie volant"
+            className="fixed z-40 h-14 w-14 rounded-full bg-gradient-to-br from-amber-200 to-amber-500 border-2 border-amber-100 shadow-xl text-2xl grid place-items-center animate-drift"
+            style={{ left: events.flying.left, top: events.flying.top }}
+          >
+            🍪
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {events.rain.map((crumb) => (
+        <button
+          type="button"
+          key={crumb.id}
+          onClick={() => events.clickCrumb(crumb.id)}
+          aria-label="Attraper une miette"
+          className="fixed z-30 h-9 w-9 rounded-full bg-gradient-to-br from-amber-300 to-amber-600 border-2 border-amber-100 shadow-lg text-lg grid place-items-center animate-rain"
+          style={{
+            left: crumb.x,
+            top: -50,
+            animationDelay: `${crumb.delay}s`,
+            animationDuration: `${crumb.duration}s`,
+          }}
+        >
+          🍪
+        </button>
+      ))}
+
+      <Notice notice={state.notice} reducedMotion={reducedMotion} />
+
+      <AnimatePresence>
+        {offlineReport && <OfflineModal report={offlineReport} onClose={() => setOfflineReport(null)} />}
+        <VerificationModal
+          defi={defi}
+          onReussite={() => {
+            guard.resoudre();
+            setDefi(null);
+          }}
+          // Mauvaise réponse: on repose la question, on ne punit pas. Un joueur
+          // qui se trompe de bouton n'est pas un tricheur.
+          onEchec={() => setDefi(fabriquerDefi(Date.now() + 7))}
+        />
+      </AnimatePresence>
+    </div>
+  );
 }
 
-// === Migration helper déplacée vers src/utils/state.js ===
+// ============================================================================
+// Utilitaires locaux
+// ============================================================================
+
+const PanelSkeleton = memo(function PanelSkeleton() {
+  return (
+    <div className="space-y-2 animate-pulse" aria-busy="true" aria-label="Chargement">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-20 rounded-2xl bg-amber-100/60" />
+      ))}
+    </div>
+  );
+});
+
+const MenuToggle = memo(function MenuToggle({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 transition-colors border-b border-amber-100"
+    >
+      {label}
+    </button>
+  );
+});
+
+const DiscountBadge = memo(function DiscountBadge({ discount }) {
+  const left = useTimeLeft(discount?.until, 250);
+  if (!discount || left <= 0) return null;
+  return (
+    <div className="mt-2 inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full bg-violet-500 text-white shadow-lg">
+      🏷️ -{Math.round(discount.value * 100)} % sur les achats
+      <span className="tabular-nums opacity-90">{Math.ceil(left / 1000)}s</span>
+    </div>
+  );
+});
+
+/** Vrai tant que la secousse d'écran est en cours. */
+function useShake(shakeUntil) {
+  return useTimeLeft(shakeUntil, 100) > 0;
+}

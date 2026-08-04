@@ -1,0 +1,320 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import React from "react";
+import { render, screen, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
+import CookieCraze from "../components/CookieCraze.jsx";
+import { SAVE_KEY, createFreshState } from "../utils/state.js";
+import { COMBO } from "../utils/combo.js";
+import { PRESTIGE_MIN_LIFETIME, chipsFor } from "../data/prestige.js";
+
+// Le jeu s'appuie sur des API absentes de jsdom
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+  window.confirm = vi.fn(() => true);
+  window.AudioContext = undefined;
+  window.webkitAudioContext = undefined;
+  global.fetch = vi.fn(() => Promise.resolve({ ok: false }));
+  if (!window.requestAnimationFrame) {
+    window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+    window.cancelAnimationFrame = (id) => clearTimeout(id);
+  }
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+/** Démarre le jeu en sautant l'écran d'accueil. */
+const startGame = async (mutate = () => {}) => {
+  const save = createFreshState();
+  save.ui.introSeen = true;
+  save.ui.sounds = false;
+  mutate(save);
+  localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  const utils = render(<CookieCraze />);
+  await act(async () => {});
+  return utils;
+};
+
+/** Ouvre un onglet et attend le chargement du panneau (certains sont lazy). */
+const openTab = async (name) => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole("tab", { name }));
+  });
+  await waitFor(() => expect(screen.queryByLabelText("Chargement")).toBeNull());
+};
+
+const clickCookie = async () => {
+  const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
+  await act(async () => {
+    fireEvent.click(cookie);
+  });
+};
+
+describe("démarrage", () => {
+  it("affiche l'écran d'accueil sur une partie neuve", async () => {
+    render(<CookieCraze />);
+    await act(async () => {});
+    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Commencer à cuire/i })).toBeTruthy();
+  });
+
+  it("lance la partie après « Commencer »", async () => {
+    render(<CookieCraze />);
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Commencer à cuire/i }));
+    });
+    expect(screen.getByRole("heading", { name: "Cookie Craze" })).toBeTruthy();
+  });
+
+  it("charge une partie existante sans repasser par l'accueil", async () => {
+    await startGame((s) => (s.cookies = 4242));
+    expect(screen.queryByText("COOKIE CRAZE")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Cookie Craze" })).toBeTruthy();
+  });
+});
+
+describe("boucle de jeu", () => {
+  it("crédite des cookies au clic", async () => {
+    await startGame();
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+    await clickCookie();
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("1");
+  });
+
+  it("achète un bâtiment et met à jour la production", async () => {
+    await startGame((s) => (s.cookies = 100_000));
+    expect(screen.getByLabelText("Détail de Four").textContent).toContain("+2");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Acheter Four/i }));
+    });
+    expect(screen.getByLabelText("Détail de Four").textContent).toContain("×1");
+  });
+
+  it("refuse un achat trop cher", async () => {
+    await startGame((s) => {
+      s.cookies = 0;
+      // Le premier bâtiment automatique est offert en début de partie:
+      // on marque le cadeau comme déjà utilisé pour tester le vrai blocage.
+      s.flags.freeFirstAutoGiven = true;
+      s.items = { oven: 1 };
+    });
+    expect(screen.getByRole("button", { name: /^Acheter Four/i }).disabled).toBe(true);
+  });
+
+  it("offre le premier bâtiment automatique en début de partie", async () => {
+    await startGame((s) => (s.cookies = 0));
+    const ovenButton = screen.getByRole("button", { name: /^Acheter Four/i });
+    expect(ovenButton.disabled).toBe(false);
+    expect(ovenButton.textContent).toContain("Offert");
+  });
+});
+
+describe("combo", () => {
+  it("affiche la jauge dès le premier clic", async () => {
+    await startGame();
+    expect(screen.queryByText(/🔥 Combo/)).toBeNull();
+    await clickCookie();
+    expect(screen.getByText(/🔥 Combo/)).toBeTruthy();
+  });
+
+  it("rapporte davantage sur une rafale que sur des clics isolés", async () => {
+    const setup = (s) => {
+      s.items = { oven: 200, bakery: 100, cursor: 60, grandma: 40 };
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
+      s.cookies = 0;
+    };
+    const banque = () => {
+      const raw = localStorage.getItem(SAVE_KEY);
+      return raw ? JSON.parse(raw).cookies : 0;
+    };
+
+    // Un seul clic: aucun combo
+    const solo = await startGame(setup);
+    await clickCookie();
+    await act(async () => solo.unmount());
+    const gainSolo = banque();
+
+    // Vingt-cinq clics enchaînés. L'horloge avance entre chaque clic — un
+    // humain met cinq secondes à en faire vingt-cinq, et le jeu borne la
+    // cadence créditée pour écarter les autoclickers.
+    const rafale = await startGame(setup);
+    const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
+    let horloge = Date.now();
+    const vraiNow = Date.now;
+    vi.spyOn(Date, "now").mockImplementation(() => horloge);
+    await act(async () => {
+      for (let i = 0; i < 25; i++) {
+        fireEvent.click(cookie);
+        horloge += 200; // 5 clics/seconde
+      }
+    });
+    Date.now = vraiNow;
+    await act(async () => rafale.unmount());
+    const gainRafale = banque();
+
+    // Sans combo la rafale vaudrait exactement 25 clics isolés. Avec, elle vaut
+    // plus — et jamais plus que 25 clics au multiplicateur maximum. Les deux
+    // bornes comptent: la première prouve que le combo sert à quelque chose, la
+    // seconde qu'il ne peut pas dépasser ×1,75.
+    expect(gainRafale).toBeGreaterThan(gainSolo * 25);
+    expect(gainRafale).toBeLessThanOrEqual(gainSolo * 25 * COMBO.max);
+  });
+});
+
+describe("navigation", () => {
+  it("ouvre chaque onglet sans erreur", async () => {
+    await startGame((s) => {
+      s.cookies = PRESTIGE_MIN_LIFETIME * 2;
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
+      s.prestige = { chips: 12, spent: 0, upgrades: {} };
+    });
+
+    for (const name of [/Améliorations/i, /Quêtes/i, /CRMB/i, /Prestige/i, /Profil/i, /Boutique/i]) {
+      await openTab(name);
+    }
+    // Le dernier onglet ouvert doit être rendu
+    expect(screen.getByRole("tab", { name: /Boutique/i }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("prestige", () => {
+  // Régression: `DEFAULT_STATE` n'était pas importé, le bouton Prestige
+  // levait un ReferenceError et ne faisait rien.
+  it("réinitialise la partie et crédite les chips", async () => {
+    // Le nombre de chips se LIT dans la formule au lieu d'être recopié: sinon
+    // chaque recalibration du seuil casse un test qui n'a rien à voir.
+    const vie = PRESTIGE_MIN_LIFETIME * 40;
+    const chipsAttendus = chipsFor(vie);
+    await startGame((s) => {
+      s.cookies = vie;
+      s.lifetime = vie;
+      s.items = { oven: 20 };
+    });
+
+    await openTab(/Prestige/i);
+
+    const prestigeButton = screen.getByRole("button", { name: /Renaître/i });
+    expect(prestigeButton.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(prestigeButton);
+    });
+
+    expect(window.confirm).toHaveBeenCalled();
+    // La partie repart de zéro et les chips sont crédités
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+    expect(chipsAttendus).toBeGreaterThan(0);
+    expect(screen.getAllByText(String(chipsAttendus), { selector: ".text-lg" }).length).toBeGreaterThan(0);
+  });
+
+  it("achète un nœud de l'arbre céleste", async () => {
+    await startGame((s) => {
+      s.lifetime = PRESTIGE_MIN_LIFETIME * 2;
+      s.prestige = { chips: 20, spent: 0, upgrades: {} };
+    });
+    await openTab(/Prestige/i);
+    const buttons = screen.getAllByRole("button", { name: /Améliorer/i });
+    await act(async () => {
+      fireEvent.click(buttons[0]);
+    });
+    // Les nœuds sans plafond s'affichent « niv. N »
+    expect(screen.getAllByText(/niv\. 1/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("réinitialisation", () => {
+  // Régression: `setRainCrumbs`/`setRainUntil` n'existaient pas; le handler
+  // levait un ReferenceError après avoir effacé le localStorage, laissant le
+  // jeu dans un état incohérent.
+  it("remet la partie à zéro sans lever d'erreur", async () => {
+    await startGame((s) => {
+      s.cookies = 999_999;
+      s.items = { oven: 10 };
+      s.stats.clicks = 500;
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Réglages/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: /Réinitialiser/i }));
+    });
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+  });
+});
+
+describe("crypto", () => {
+  it("achète du CRMB au marché", async () => {
+    await startGame((s) => {
+      s.cookies = 1e9;
+      s.lifetime = 1e9;
+    });
+    await openTab(/CRMB/i);
+    // Un achat ne déclenche plus de notification: c'est le solde affiché qui
+    // confirme l'opération, pas un bandeau qui recouvre l'écran.
+    const soldeAvant = screen.getByTestId("crmb-solde").textContent;
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Acheter/i }));
+    });
+    expect(screen.getByTestId("crmb-solde").textContent).not.toBe(soldeAvant);
+  });
+
+  it("bloque le retrait d'une position verrouillée", async () => {
+    await startGame((s) => {
+      s.cookies = 1e9;
+      s.crypto.balance = 5;
+      s.crypto.positions = [
+        { id: "p1", amount: 1, tierId: "long", startedAt: Date.now(), unlockAt: Date.now() + 86_400_000 },
+      ];
+    });
+    await openTab(/CRMB/i);
+    const locked = screen.getByRole("button", { name: /Verrouillé/i });
+    expect(locked.disabled).toBe(true);
+  });
+});
+
+describe("sauvegarde", () => {
+  it("persiste la partie au démontage", async () => {
+    const { unmount } = await startGame((s) => (s.cookies = 777));
+    await clickCookie();
+    await act(async () => {
+      unmount();
+    });
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+    expect(saved.stats.clicks).toBeGreaterThanOrEqual(1);
+    expect(saved.cookies).toBeGreaterThan(777);
+  });
+
+  it("ne sérialise jamais les notifications", async () => {
+    const { unmount } = await startGame();
+    await act(async () => {
+      unmount();
+    });
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+    expect(saved.notice).toBeNull();
+  });
+});
+
+describe("robustesse", () => {
+  it("démarre sur une sauvegarde corrompue", async () => {
+    localStorage.setItem(SAVE_KEY, "{ ceci n'est pas du json");
+    render(<CookieCraze />);
+    await act(async () => {});
+    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+  });
+
+  it("survit à un localStorage indisponible", async () => {
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("accès refusé");
+    });
+    render(<CookieCraze />);
+    await act(async () => {});
+    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+    spy.mockRestore();
+  });
+});

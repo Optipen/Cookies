@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Même version que le projet Vercel, pour que la CI échoue là où le
+      # déploiement échouerait.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Sans `--legacy-peer-deps`: c'est ce drapeau qui masquait le conflit
+      # entre @eslint/js 10 et eslint 9, laissant la CI verte pendant que
+      # `npm install` échouait sur Vercel.
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Build de production
+        run: npm run build

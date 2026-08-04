@@ -1,113 +1,122 @@
-import React, { useState } from "react";
+import React, { memo } from "react";
+import { fmt } from "../utils/format.js";
 
-export default function Skins({ state, SKINS, selectSkin, buySkin, fmt }) {
-  const [previewSkin, setPreviewSkin] = useState(null);
-  
-  // Emit preview events for parent component
-  const handlePreview = (skinId) => {
-    setPreviewSkin(skinId);
-    window.dispatchEvent(new CustomEvent('skinPreview', { detail: skinId }));
-  };
-  
-  const stopPreview = () => {
-    setPreviewSkin(null);
-    window.dispatchEvent(new CustomEvent('skinPreview', { detail: null }));
-  };
+const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, missing, onPreview, onStopPreview, onBuy, onEquip }) {
   return (
-    <>
-      <div className="text-sm font-semibold text-zinc-300 mb-3">Marché des Skins</div>
-      <div className="grid grid-cols-1 gap-3">
-        {Object.values(SKINS).map((skin) => {
-          const isOwned = state.skinsOwned[skin.id];
-          const isEquipped = state.skin === skin.id;
-          const isPreviewing = previewSkin === skin.id;
-          const canAfford = state.cookies >= skin.price;
-          
-          return (
-            <div 
-              key={skin.id} 
-              className={`p-3 rounded-xl border transition-all duration-300 ${
-                isPreviewing 
-                  ? "bg-cyan-500/20 border-cyan-400/60 ring-2 ring-cyan-400/40" 
-                  : isEquipped 
-                  ? "bg-emerald-500/20 border-emerald-400/60"
-                  : "bg-zinc-800/40 border-zinc-700/60 hover:border-zinc-600"
-              }`}
-              onMouseEnter={() => handlePreview(skin.id)}
-              onMouseLeave={stopPreview}
-            >
-              <div className="relative">
-                <img
-                  src={skin.src}
-                  alt={skin.name}
-                  className={`h-16 w-16 mx-auto mb-2 select-none transition-transform duration-200 ${
-                    isPreviewing ? "scale-110" : ""
-                  } ${skin.className || ""}`}
-                  draggable="false"
-                />
-                {isEquipped && (
-                  <div className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    ✓
-                  </div>
-                )}
-                {isPreviewing && !isOwned && (
-                  <div className="absolute -top-1 -left-1 bg-cyan-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    👁️
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-center space-y-1">
-                <div className="font-semibold">{skin.name}</div>
-                {skin.description && (
-                  <div className="text-xs text-zinc-400 leading-tight">{skin.description}</div>
-                )}
-                {!isOwned && (
-                  <div className="text-xs text-cyan-300">Prix: {fmt(skin.price)}</div>
-                )}
-              </div>
-              
-              <div className="mt-3 space-y-2">
-                {isOwned ? (
-                  <>
-                    <button
-                      onClick={() => selectSkin(skin.id)}
-                      disabled={isEquipped}
-                      className={`w-full px-2 py-1.5 rounded-lg border transition-all duration-200 font-semibold ${
-                        isEquipped
-                          ? "bg-emerald-600/40 border-emerald-400/60 text-emerald-200 cursor-default"
-                          : "bg-zinc-800 border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600"
-                      }`}
-                    >
-                      {isEquipped ? "✓ Équipé" : "Équiper"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => buySkin(skin.id)}
-                      disabled={!canAfford}
-                      className={`w-full px-2 py-1.5 rounded-lg border font-semibold transition-all duration-200 ${
-                        canAfford
-                          ? "bg-amber-600/30 border-amber-400/40 hover:bg-amber-500/40 hover:border-amber-300/60 text-amber-200"
-                          : "bg-zinc-800/50 border-zinc-700/50 text-zinc-500 cursor-not-allowed opacity-60"
-                      }`}
-                    >
-                      {canAfford ? `Acheter ${fmt(skin.price)}` : `Besoin de ${fmt(skin.price)}`}
-                    </button>
-                    {!canAfford && (
-                      <div className="text-xs text-center text-zinc-500">
-                        Manque {fmt(skin.price - state.cookies)}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+    <div
+      onMouseEnter={() => onPreview(skin.id)}
+      onMouseLeave={onStopPreview}
+      onFocus={() => onPreview(skin.id)}
+      onBlur={onStopPreview}
+      className={`relative p-3 rounded-2xl border transition-all duration-200 ${
+        equipped
+          ? "bg-gradient-to-br from-emerald-100 to-teal-50 border-emerald-400 ring-2 ring-emerald-300/50"
+          : owned
+            ? "bg-white/75 border-amber-200 hover:border-amber-400 hover:shadow-lg"
+            : "bg-white/55 border-amber-200/70 hover:border-amber-300"
+      }`}
+    >
+      {equipped && (
+        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+          Équipé
+        </span>
+      )}
+
+      <div className="flex items-center gap-3">
+        <img
+          src={skin.src}
+          alt=""
+          aria-hidden="true"
+          draggable="false"
+          loading="lazy"
+          className={`h-16 w-16 shrink-0 select-none drop-shadow-md transition-transform duration-200 hover:scale-110 ${
+            skin.className || ""
+          } ${!owned ? "opacity-60 grayscale-[0.35]" : ""}`}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-amber-950">{skin.name}</div>
+          {skin.description && <div className="text-[11px] text-amber-800/75 leading-snug">{skin.description}</div>}
+          {!owned && (
+            <div className="mt-0.5 text-xs font-bold text-amber-700 tabular-nums">
+              {skin.crmb ? `${skin.crmb} CRMB 🪙` : `${fmt(skin.price)} 🍪`}
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
-    </>
+
+      <div className="mt-2.5">
+        {owned ? (
+          <button
+            type="button"
+            onClick={() => onEquip(skin.id)}
+            disabled={equipped}
+            className={`w-full px-3 py-2 rounded-xl border text-sm font-bold transition-colors ${
+              equipped
+                ? "bg-emerald-500/20 border-emerald-400 text-emerald-800 cursor-default"
+                : "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
+            }`}
+          >
+            {equipped ? "✓ Équipé" : "Équiper"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onBuy(skin.id)}
+            disabled={!affordable}
+            className={`w-full px-3 py-2 rounded-xl border text-sm font-bold transition-colors ${
+              affordable
+                ? "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
+                : "bg-stone-100 border-stone-200 text-stone-500 cursor-not-allowed"
+            }`}
+          >
+            {affordable
+              ? `Acheter · ${skin.crmb ? `${skin.crmb} CRMB` : fmt(skin.price)}`
+              : `Manque ${skin.crmb ? `${fmt(missing)} CRMB` : fmt(missing)}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+function Skins({ state, skins, onBuy, onEquip, onPreview, onStopPreview }) {
+  const ownedCount = Object.values(state.skinsOwned || {}).filter(Boolean).length;
+  const all = Object.values(skins);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold text-amber-950">Apparences</h3>
+        <span className="text-[11px] text-amber-700">
+          {ownedCount}/{all.length} débloquées
+        </span>
+      </div>
+      <p className="text-[11px] text-amber-800/70">Survole un skin pour l&apos;essayer sur le grand cookie.</p>
+
+      <div className="space-y-2">
+        {all.map((skin) => (
+          <SkinCard
+            key={skin.id}
+            skin={skin}
+            owned={!!state.skinsOwned[skin.id]}
+            equipped={state.skin === skin.id}
+            affordable={
+              skin.crmb ? (state.crypto?.balance || 0) >= skin.crmb : state.cookies >= skin.price
+            }
+            missing={
+              skin.crmb
+                ? Math.max(0, skin.crmb - (state.crypto?.balance || 0))
+                : Math.max(0, skin.price - state.cookies)
+            }
+            onPreview={onPreview}
+            onStopPreview={onStopPreview}
+            onBuy={onBuy}
+            onEquip={onEquip}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
+export default memo(Skins);

@@ -1,65 +1,79 @@
 {
   "mode": "standard",
   "standard": {
-    "softcaps": { "mult_rational_k": 12 },
+    "balance": {
+      "click_price_factor": 0.75,
+      "click_share": 0.06,
+      "price_growth": 1.22,
+      "reference_clicks_per_second": 5,
+      "reference_combo": 1.5,
+      "price_scale": 4,
+      "tier_first": 10
+    },
     "early": {
       "window_s": 300,
-      "cps_discount": 0.35,
-      "free_first_auto": true,
-      "cpc_base_mult": 1.5,
-      "golden": { "cooldown_s": [90, 150] },
-      "flash": { "no_purchase_threshold_s": 30, "discount": 0.30 }
+      "miner_discount": 0.1,
+      "free_first_miner": true,
+      "flash": {
+        "no_purchase_threshold_s": 30,
+        "discount": 0.25
+      }
     },
     "events": {
       "golden": {
-        "cooldown_s": [240, 420],
-        "dr_factor": 0.80,
+        "cooldown_s": [
+          45,
+          90
+        ],
+        "lifespan_s": 10,
         "dr_window_s": 180,
-        "cps_mult_max": 4,
-        "cpc_mult_max": 8,
-        "lucky_bank_min": 0.08,
-        "lucky_cps_mult": 10
+        "cps_mults": [
+          5,
+          3,
+          2
+        ],
+        "cpc_mults": [
+          10,
+          5,
+          3
+        ],
+        "lucky_mults": [
+          1,
+          0.5,
+          0.25,
+          0.1
+        ]
       },
       "rain": {
-        "cpc_factor": [1.8, 2.6],
-        "duration_s": 7,
-        "cooldown_s": [120, 180]
+        "duration_s": 8,
+        "count": 26,
+        "cooldown_s": [
+          90,
+          160
+        ],
+        "cpc_mults": [
+          2,
+          2.5,
+          3
+        ]
       }
     },
     "loops": {
-      "autosave_ms": 3000,
-      "loop_tick_ms": 300,
-      "loop_commit_ms": 600,
-      "flying_cookie_check_ms": 4000,
-      "speed_idle_threshold_ms": 10000,
-      "speed_check_ms": 250,
-      "particles_step_ms": 16
-    },
-    "particles": {
-      "burst_speed": 4,
-      "crumbs_speed": 3.6,
-      "crumbs_gravity": 0.04
+      "autosave_ms": 5000,
+      "loop_tick_ms": 250,
+      "loop_commit_ms": 500
     },
     "offline": {
-      "ratio_0_10min": 0.08,
-      "ratio_2h": 0.02,
-      "max_seconds": 5400
+      "ratio_0_10min": 0.1,
+      "ratio_2h": 0.03,
+      "max_seconds": 7200
     },
-    "milestones": {
-      "thresholds": [10, 25, 50, 100, 200, 400],
-      "multipliers": [1.2, 1.5, 2.2, 4.0, 6.0, 8.0]
-    },
-    "cooldowns": {
-      "micro": {
-        "buy_affordable_building": 40,
-        "gain_bank_fraction": 35,
-        "clicks_burst": 30
-      },
-      "main": {
-        "reach_bank_dynamic": 120,
-        "reach_cps_milestone": 180
-      }
+    "flying": {
+      "cooldown_s": [
+        40,
+        90
+      ],
+      "lifespan_s": 5
     }
   }
 }
-

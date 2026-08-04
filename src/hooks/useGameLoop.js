@@ -1,97 +1,125 @@
-import { useEffect, useRef, useCallback } from "react";
-import { cpsFrom } from "../utils/calc.js";
+import { useEffect, useRef } from "react";
+import { useLatestRef } from "./useLatestRef.js";
+import { deriveStats } from "../utils/selectors.js";
+import { stepMarket, addCrmb, CRMB } from "../utils/crypto.js";
 import tuning from "../data/tuning.json";
 
-// Boucle de jeu avec accumulation et commit moins fréquent pour réduire les re-renders
+/**
+ * Boucle de jeu unique.
+ *
+ * Toute la simulation (production, faucet, minage, staking, marché, temps de
+ * jeu) est regroupée dans un seul commit périodique. C'est ce qui garde le jeu
+ * fluide: un `setState` toutes les ~500 ms au lieu d'un par sous-système.
+ *
+ * L'état est lu via un ref, donc acheter un bâtiment ou changer d'onglet ne
+ * redémarre jamais l'intervalle.
+ */
 export function useGameLoop(state, setState, options = {}) {
-  const mode = (tuning && tuning.mode) || 'standard';
-  const cfg = (tuning && tuning[mode] && tuning[mode].loops) || {};
-  const tickMs = options.tickMs ?? (cfg.loop_tick_ms || 300);
-  const commitEveryMs = options.commitEveryMs ?? (cfg.loop_commit_ms || 600);
-  
-  // Refs pour éviter les interruptions de la boucle
+  const cfg = tuning?.[tuning?.mode || "standard"]?.loops || {};
+  const tickMs = options.tickMs ?? cfg.loop_tick_ms ?? 250;
+  const commitMs = options.commitMs ?? cfg.loop_commit_ms ?? 500;
+
+  const stateRef = useLatestRef(state);
+  const setStateRef = useLatestRef(setState);
+  const accRef = useRef({ cookies: 0, crmb: 0, elapsed: 0 });
   const lastCommitRef = useRef(0);
-  const accRef = useRef({ cookies: 0, lifetime: 0, mintedUnits: 0, cryptoAdded: 0, buffExpired: false, flashUntil: 0 });
-  const stateRef = useRef(state);
-  const setStateRef = useRef(setState);
-  
-  // Mettre à jour les refs quand state/setState changent
-  useEffect(() => {
-    stateRef.current = state;
-    setStateRef.current = setState;
-  }, [state, setState]);
-
-  // Fonction de tick isolée qui ne dépend pas des props
-  const tick = useCallback(() => {
-    const currentState = stateRef.current;
-    const currentSetState = setStateRef.current;
-    
-    if (!currentState || !currentSetState) return;
-    
-    const now = Date.now();
-    const stakeM = 1 + (currentState.crypto?.staked || 0) * 0.5;
-    const cpsNow = cpsFrom(currentState.items, currentState.upgrades, currentState.prestige.chips, stakeM) * (now < currentState.buffs.until ? currentState.buffs.cpsMulti : 1);
-    const dt = tickMs / 1000;
-
-    // Accumule les cookies/lifetime
-    accRef.current.cookies += cpsNow * dt;
-    accRef.current.lifetime += cpsNow * dt;
-
-    // Pré-calc faucet (basé sur lifetime post-commit approximatif)
-    const lifetimeProjected = (currentState.lifetime || 0) + accRef.current.lifetime;
-    const crypto = currentState.crypto || { perCookies: 20000, perAmount: 0.001, mintedUnits: 0, balance: 0 };
-    const units = Math.floor(lifetimeProjected / crypto.perCookies);
-    if (units > (crypto.mintedUnits + accRef.current.mintedUnits)) {
-      const diff = units - (crypto.mintedUnits + accRef.current.mintedUnits);
-      accRef.current.mintedUnits += diff;
-      accRef.current.cryptoAdded += diff * crypto.perAmount;
-      accRef.current.flashUntil = now + 1500;
-    }
-
-    // Buff expiry: si expiré, forcer un commit
-    if (currentState.buffs?.until && now >= currentState.buffs.until) {
-      accRef.current.buffExpired = true;
-    }
-
-    const shouldCommit = (now - (lastCommitRef.current || 0)) >= commitEveryMs || accRef.current.mintedUnits > 0 || accRef.current.buffExpired;
-    if (!shouldCommit) return;
-
-    lastCommitRef.current = now;
-    const acc = accRef.current;
-    accRef.current = { cookies: 0, lifetime: 0, mintedUnits: 0, cryptoAdded: 0, buffExpired: false, flashUntil: 0 };
-
-    currentSetState((s) => {
-      const now2 = Date.now();
-      // Applique les deltas
-      let cookies = s.cookies + acc.cookies;
-      let lifetime = s.lifetime + acc.lifetime;
-      let flags = { ...s.flags };
-      let crypto2 = { ...s.crypto };
-      let buffs = { ...s.buffs };
-
-      if (acc.mintedUnits > 0) {
-        crypto2.mintedUnits = (crypto2.mintedUnits || 0) + acc.mintedUnits;
-        crypto2.balance = Number(((crypto2.balance || 0) + acc.cryptoAdded).toFixed(6));
-        flags.cryptoFlashUntil = acc.flashUntil || now2 + 1500;
-      }
-
-      if (acc.buffExpired) {
-        buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
-      }
-
-      return { ...s, cookies, lifetime, buffs, crypto: crypto2, flags };
-    });
-  }, [tickMs, commitEveryMs]);
+  const lastTickRef = useRef(0);
 
   useEffect(() => {
-    // Démarrer la boucle avec setInterval
-    const iv = setInterval(tick, tickMs);
-    
-    // Cleanup
-    return () => {
-      clearInterval(iv);
+    lastCommitRef.current = Date.now();
+    lastTickRef.current = Date.now();
+
+    const tick = () => {
+      const s = stateRef.current;
+      if (!s) return;
+
+      const now = Date.now();
+      // Temps réellement écoulé plutôt que la période nominale: un onglet
+      // ralenti ne sous-produit plus, un onglet gelé ne sur-produit pas.
+      const dt = Math.min(5, Math.max(0, (now - lastTickRef.current) / 1000));
+      lastTickRef.current = now;
+
+      const stats = deriveStats(s, now);
+      const acc = accRef.current;
+      acc.cookies += stats.cps * dt;
+      // `crmbRate`, pas `miningRate`: ce dernier n'existe pas dans deriveStats.
+      // La faute rendait la somme NaN, `mined > 0` faux, et le matériel de
+      // minage comme le staking ne créditaient donc JAMAIS le moindre CRMB.
+      acc.crmb += (stats.crmbRate + stats.stakingYield) * dt;
+      acc.elapsed += dt * 1000;
+
+      const buffJustExpired = (s.buffs?.until || 0) > 0 && now >= s.buffs.until;
+      const marketDue = now - (s.crypto?.lastMarketTs || 0) >= CRMB.tickMs;
+
+      if (now - lastCommitRef.current < commitMs && !buffJustExpired && !marketDue) return;
+      lastCommitRef.current = now;
+
+      const gained = acc.cookies;
+      const mined = acc.crmb;
+      const elapsed = acc.elapsed;
+      acc.cookies = 0;
+      acc.crmb = 0;
+      acc.elapsed = 0;
+
+      setStateRef.current((prev) => {
+        const now2 = Date.now();
+        const next = { ...prev };
+
+        if (gained > 0) {
+          next.cookies = prev.cookies + gained;
+          next.lifetime = prev.lifetime + gained;
+        }
+
+        // Buff expiré: retour aux multiplicateurs neutres
+        if ((prev.buffs?.until || 0) > 0 && now2 >= prev.buffs.until) {
+          next.buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
+        }
+
+        const crypto = { ...prev.crypto };
+        let cryptoTouched = false;
+        const lifetime = next.lifetime ?? prev.lifetime;
+
+        // Il n'y a plus de faucet. Cuire des cookies ne rapporte aucun CRMB:
+        // c'est une monnaie de récompense, versée par les quêtes, les gros
+        // paliers, les succès qui comptent et les renaissances. L'ancien
+        // robinet (0,001 tous les 20 000 cookies) en versait des centaines de
+        // millions en fin de partie, et plus rien n'avait de valeur.
+
+        // Minage matériel + rendement de staking. `addCrmb` rejette le seul
+        // delta fautif: un rendement mal calculé ne doit pas emporter le
+        // portefeuille avec lui.
+        if (mined > 0) {
+          crypto.balance = addCrmb(crypto.balance, mined);
+          crypto.totalMined = addCrmb(crypto.totalMined, mined);
+          cryptoTouched = true;
+        }
+
+        // Marché: un pas toutes les CRMB.tickMs
+        if (now2 - (crypto.lastMarketTs || 0) >= CRMB.tickMs) {
+          const { price, priceHistory } = stepMarket(crypto, lifetime);
+          crypto.price = price;
+          crypto.priceHistory = priceHistory;
+          crypto.lastMarketTs = now2;
+          cryptoTouched = true;
+        }
+
+        if (cryptoTouched) next.crypto = crypto;
+
+        if (elapsed > 0) {
+          const stats2 = deriveStats(next, now2);
+          next.stats = {
+            ...prev.stats,
+            playtimeMs: (prev.stats?.playtimeMs || 0) + elapsed,
+            bestCps: Math.max(prev.stats?.bestCps || 0, stats2.cps),
+          };
+        }
+
+        next.lastTs = now2;
+        return next;
+      });
     };
-  }, [tick, tickMs]);
+
+    const iv = setInterval(tick, tickMs);
+    return () => clearInterval(iv);
+  }, [tickMs, commitMs, stateRef, setStateRef]);
 }
-
-

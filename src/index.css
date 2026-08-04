@@ -2,412 +2,283 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional base tweaks */
-html, body, #root { height: 100%; }
-@keyframes wiggle {
-  0%,100% { transform: translateX(0) }
-  20% { transform: translateX(-10px) }
-  40% { transform: translateX(8px) }
-  60% { transform: translateX(-6px) }
-  80% { transform: translateX(4px) }
+/* ==========================================================================
+   Cookie Craze — feuille de style
+   Palette chaude « boulangerie »: ambre, orange et crème, avec des accents
+   cyan (crypto) et violet (prestige). Tout est déclaré une seule fois ici;
+   les composants n'utilisent que des classes Tailwind ou celles définies plus bas.
+   ========================================================================== */
+
+:root {
+  --crust: 251 191 36;      /* amber-400  */
+  --crust-deep: 217 119 6;  /* amber-600  */
+  --cream: 255 251 235;     /* amber-50   */
+  --cocoa: 69 26 3;         /* amber-950  */
+  --mint: 16 185 129;       /* emerald-500 */
+  --sky: 6 182 212;         /* cyan-500   */
+  --grape: 139 92 246;      /* violet-500 */
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
+html,
+body,
+#root {
+  height: 100%;
 }
 
-/* Ambient + UI animations */
-@keyframes aurora {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Empêche le zoom involontaire au double-tap pendant les rafales de clics */
+  touch-action: manipulation;
+  overscroll-behavior: none;
 }
 
-@keyframes floaty {
-  0%,100% { transform: translateY(0px) }
-  50% { transform: translateY(-4px) }
+/* Le compteur principal ne doit jamais « sauter » quand les chiffres changent */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+/* ==========================================================================
+   Arrière-plan
+   ========================================================================== */
+
+.bg-bakery {
+  background-color: rgb(var(--cream));
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(251, 191, 36, 0.22), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 10% 100%, rgba(249, 115, 22, 0.14), transparent 65%),
+    radial-gradient(ellipse 60% 50% at 90% 90%, rgba(245, 158, 11, 0.12), transparent 65%);
+  background-attachment: fixed;
 }
 
-@keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 0 rgba(0,0,0,0); }
-  50% { box-shadow: 0 0 24px rgba(251, 191, 36, 0.25); }
+/* Panneaux translucides */
+.glass-warm {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.82), rgba(255, 251, 235, 0.62));
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-@layer utilities {
-  @keyframes fadeSlideIn {
-    0% { opacity: 0; transform: translateY(6px); }
-    100% { opacity: 1; transform: translateY(0); }
-  }
+/* ==========================================================================
+   Particules — éléments créés en DOM pur par ParticleLayer
+   ========================================================================== */
 
-  .animate-fade-in-up {
-    animation: fadeSlideIn 280ms ease both;
-  }
-  .bg-aurora {
-    background-image:
-      radial-gradient(1200px 600px at 10% 10%, rgba(244, 63, 94, 0.06), transparent 60%),
-      radial-gradient(900px 500px at 90% 20%, rgba(59, 130, 246, 0.06), transparent 55%),
-      radial-gradient(800px 600px at 40% 90%, rgba(251, 191, 36, 0.06), transparent 60%),
-      linear-gradient(120deg, #0b0b0f, #0d0d12 40%, #0b0b10);
-    background-size: 200% 200%;
-    animation: aurora 18s ease-in-out infinite;
-  }
+/* Les chiffres flottants passent au-dessus du cookie, dont la teinte est
+   proche: un liseré sombre garantit la lisibilité quel que soit le skin. */
+.particle-text {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #fffbeb;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px rgba(69, 26, 3, 0.85);
+  text-shadow: 0 2px 4px rgba(69, 26, 3, 0.45);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
 
-  .glass {
-    backdrop-filter: blur(10px);
-    background-color: rgba(24,24,27,0.55);
-    border: 1px solid rgba(63,63,70,0.7);
-  }
+.particle-crumb,
+.particle-gold {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
 
-  .glass-strong {
-    backdrop-filter: blur(14px);
-    background-color: rgba(24,24,27,0.7);
-    border: 1px solid rgba(82,82,91,0.8);
-  }
+/* ==========================================================================
+   Animations
+   ========================================================================== */
 
-  .btn-pressable {
-    transition: transform 150ms ease, box-shadow 200ms ease, background-color 200ms ease, border-color 200ms ease;
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
   }
-  .btn-pressable:active {
-    transform: translateY(1px) scale(0.98);
+  50% {
+    transform: translateY(-10px);
   }
+}
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
 
-  .progress-shimmer {
-    background-image: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 2.2s linear infinite;
-    mix-blend-mode: screen;
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
   }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 4s ease-in-out infinite;
+}
 
-  .card-shadow {
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
   }
+  15% {
+    transform: translateX(-9px) rotate(-0.6deg);
+  }
+  30% {
+    transform: translateX(7px) rotate(0.5deg);
+  }
+  45% {
+    transform: translateX(-5px);
+  }
+  60% {
+    transform: translateX(4px);
+  }
+  80% {
+    transform: translateX(-2px);
+  }
+}
+.animate-shake {
+  animation: shake 0.65s ease-in-out;
+}
 
-  /* --- Bakery light theme --- */
-  .bg-bakery {
-    background-image:
-      radial-gradient(800px 400px at 10% 0%, rgba(255, 200, 150, 0.18), transparent 60%),
-      radial-gradient(900px 500px at 90% 20%, rgba(150, 210, 255, 0.18), transparent 60%),
-      linear-gradient(180deg, #fff7ed, #fffdfa 30%, #fff7ed 100%);
-    background-size: 160% 160%;
-    animation: aurora 22s ease-in-out infinite;
+@keyframes golden-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 22px rgba(250, 204, 21, 0.65);
+    transform: scale(1);
   }
+  50% {
+    box-shadow: 0 0 40px rgba(250, 204, 21, 0.95);
+    transform: scale(1.08);
+  }
+}
+.animate-golden {
+  animation: golden-glow 1.3s ease-in-out infinite;
+}
 
-  .sprinkles {
-    background-image:
-      radial-gradient(circle at 12px 8px, rgba(255, 182, 193, 0.55) 1.2px, transparent 1.3px),
-      radial-gradient(circle at 20px 16px, rgba(135, 206, 235, 0.55) 1.2px, transparent 1.3px),
-      radial-gradient(circle at 8px 18px, rgba(255, 215, 0, 0.55) 1.2px, transparent 1.3px),
-      radial-gradient(circle at 18px 4px, rgba(144, 238, 144, 0.55) 1.2px, transparent 1.3px);
-    background-size: 28px 24px, 28px 24px, 28px 24px, 28px 24px;
-    opacity: 0.22;
+@keyframes drift {
+  0% {
+    transform: translate(0, 0);
   }
+  25% {
+    transform: translate(26px, -18px);
+  }
+  50% {
+    transform: translate(-14px, -32px);
+  }
+  75% {
+    transform: translate(-30px, -12px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+.animate-drift {
+  animation: drift 3.4s ease-in-out infinite;
+}
 
-  .glass-light {
-    backdrop-filter: blur(12px);
-    background-color: rgba(255,255,255,0.6);
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: 0 10px 30px rgba(209, 213, 219, 0.45);
+/* Pluie de miettes: la chute est purement CSS, aucun timer JS ne les déplace */
+@keyframes rain-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
   }
+  8% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(115vh) rotate(320deg);
+    opacity: 0;
+  }
+}
+.animate-rain {
+  animation-name: rain-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
 
-  .badge-soft-amber { background-color: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); }
-  .badge-soft-blue { background-color: rgba(59, 130, 246, 0.10); border: 1px solid rgba(59, 130, 246, 0.30); }
-  .badge-soft-green { background-color: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); }
+/* ==========================================================================
+   Barres de défilement
+   ========================================================================== */
 
-  /* --- Cinematic neon theme --- */
-  .bg-cinematic {
-    background-image:
-      radial-gradient(1200px 800px at 50% -10%, rgba(56, 189, 248, 0.18), transparent 55%),
-      radial-gradient(1000px 700px at 80% 120%, rgba(168, 85, 247, 0.20), transparent 60%),
-      linear-gradient(180deg, #070a12 0%, #0a0f1d 40%, #0b1120 100%);
-    background-size: 200% 200%;
-    animation: aurora 26s ease-in-out infinite;
-  }
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(217, 119, 6, 0.35) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(217, 119, 6, 0.3);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(217, 119, 6, 0.5);
+}
 
-  /* --- Bakery warm theme --- */
-  .bg-bakery-warm {
-    background-image:
-      radial-gradient(1200px 600px at 20% 10%, rgba(254, 243, 199, 0.4), transparent 60%), /* cream glow */
-      radial-gradient(900px 500px at 80% 20%, rgba(254, 215, 170, 0.3), transparent 55%), /* peach warmth */
-      radial-gradient(800px 600px at 50% 90%, rgba(251, 207, 232, 0.2), transparent 60%), /* pink accent */
-      linear-gradient(135deg, #fef3c7, #fed7aa 40%, #fbbf24 80%, #f59e0b); /* cream to golden gradient */
-    background-size: 200% 200%;
-    animation: aurora 20s ease-in-out infinite;
-    position: relative;
-  }
-  
-  .bg-bakery-warm::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: 
-      repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(251, 191, 36, 0.03) 35px, rgba(251, 191, 36, 0.03) 70px),
-      repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(249, 115, 22, 0.02) 35px, rgba(249, 115, 22, 0.02) 70px);
-    pointer-events: none;
-  }
+/* ==========================================================================
+   Accessibilité
+   ========================================================================== */
 
-  .beam-top {
-    background: radial-gradient(600px 220px at 50% 0%, rgba(99, 102, 241, 0.35), transparent 70%);
-    filter: blur(12px);
-    opacity: 0.5;
-  }
-  .beam-bottom {
-    background: radial-gradient(700px 260px at 50% 100%, rgba(34, 211, 238, 0.28), transparent 70%);
-    filter: blur(14px);
-    opacity: 0.45;
-  }
-
-  .grid-glow {
-    background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
-    background-size: 32px 32px;
-    mask-image: radial-gradient(circle at 50% 30%, black 40%, transparent 75%);
-    pointer-events: none;
-  }
-
-  .glass-neon {
-    backdrop-filter: blur(12px);
-    background-color: rgba(10, 17, 32, 0.55);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    box-shadow: 0 10px 30px rgba(2, 132, 199, 0.28), inset 0 0 0 0.5px rgba(168, 85, 247, 0.25);
-  }
-
-  .glass-warm {
-    backdrop-filter: blur(16px) saturate(180%);
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.85), 
-      rgba(254, 243, 199, 0.75)
-    );
-    border: 1px solid rgba(251, 191, 36, 0.4);
-    box-shadow: 
-      0 8px 32px rgba(180, 83, 9, 0.15),
-      0 4px 16px rgba(217, 119, 6, 0.1),
-      inset 0 2px 4px rgba(255, 255, 255, 0.9),
-      inset 0 -1px 2px rgba(180, 83, 9, 0.1);
-  }
-
-  .badge-neon-cyan { background-color: rgba(34, 211, 238, 0.16); border: 1px solid rgba(34, 211, 238, 0.4); color: #cffafe; }
-  .badge-neon-amber { background-color: rgba(251, 191, 36, 0.16); border: 1px solid rgba(251, 191, 36, 0.4); color: #fde68a; }
-  .badge-neon-green { background-color: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.4); color: #a7f3d0; }
-
-  /* --- Warm theme badges --- */
-  .badge-warm {
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.95), 
-      rgba(254, 243, 199, 0.85)
-    );
-    border: 1px solid rgba(217, 119, 6, 0.3);
-    backdrop-filter: blur(12px);
-    color: #92400e;
-    font-weight: 600;
-    box-shadow: 
-      0 2px 8px rgba(217, 119, 6, 0.15),
-      inset 0 1px 2px rgba(255, 255, 255, 0.9);
-  }
-
-  .badge-glow {
-    box-shadow: 
-      0 0 20px rgba(251, 191, 36, 0.4),
-      0 0 40px rgba(251, 191, 36, 0.2);
-    animation: warm-glow 2s ease-in-out infinite;
-  }
-
-  .badge-warm-price {
-    background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
-    color: #ffffff;
-    font-weight: 800;
-    text-shadow: 0 1px 3px rgba(180, 83, 9, 0.4);
-    box-shadow: 
-      0 2px 8px rgba(217, 119, 6, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  }
-
-  .badge-warm-boost {
-    background: linear-gradient(135deg, #34d399, #10b981, #059669);
-    color: #ffffff;
-    font-weight: 800;
-    text-shadow: 0 1px 3px rgba(5, 150, 105, 0.4);
-    box-shadow: 
-      0 2px 8px rgba(16, 185, 129, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  }
-
-  /* --- Cookie animations and effects --- */
-  .cookie-glow {
-    box-shadow: 
-      0 0 60px rgba(251, 191, 36, 0.3),
-      0 0 120px rgba(249, 115, 22, 0.15),
-      inset 0 0 40px rgba(255, 255, 255, 0.1);
-  }
-
-  .cookie-hover {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .cookie-hover:hover {
-    filter: brightness(1.1) contrast(1.05);
-    transform: scale(1.02);
-  }
-
-  .item-card {
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.9), 
-      rgba(254, 243, 199, 0.8)
-    );
-    border: 1px solid rgba(217, 119, 6, 0.2);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-  }
-  
-  .item-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(45deg, 
-      transparent 30%, 
-      rgba(255, 255, 255, 0.3) 50%, 
-      transparent 70%
-    );
-    transform: rotate(45deg) translateY(100%);
-    transition: transform 0.6s;
-  }
-
-  .item-card:hover {
-    border-color: rgba(251, 191, 36, 0.6);
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.95), 
-      rgba(254, 215, 170, 0.85)
-    );
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 
-      0 12px 40px rgba(217, 119, 6, 0.15),
-      0 6px 20px rgba(251, 191, 36, 0.2);
-  }
-  
-  .item-card:hover::before {
-    transform: rotate(45deg) translateY(-100%);
-  }
-
-  @keyframes cookie-crumbs {
-    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-    100% { transform: translateY(-20px) rotate(180deg); opacity: 0; }
-  }
-
-  @keyframes warm-glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.3); }
-    50% { box-shadow: 0 0 40px rgba(251, 191, 36, 0.5); }
-  }
-
-  /* Text-only glow to avoid rectangular box behind numbers */
-  @keyframes textGlow {
-    0%, 100% {
-      text-shadow:
-        0 0 6px rgba(251, 191, 36, 0.25),
-        0 0 14px rgba(245, 158, 11, 0.20);
-    }
-    50% {
-      text-shadow:
-        0 0 10px rgba(251, 191, 36, 0.45),
-        0 0 22px rgba(245, 158, 11, 0.35);
-    }
-  }
-
-  .crumb-particle {
-    animation: cookie-crumbs 1.5s ease-out forwards;
-  }
-
-  .value-highlight {
-    animation: textGlow 2s ease-in-out infinite;
-  }
-  
-  /* --- Enhanced animations --- */
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-  
-  @keyframes pulse-scale {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-  }
-  
-  @keyframes sparkle {
-    0%, 100% { opacity: 0; }
-    50% { opacity: 1; }
-  }
-  
-  .float-animation {
-    animation: float 3s ease-in-out infinite;
-  }
-  
-  .pulse-animation {
-    animation: pulse-scale 2s ease-in-out infinite;
-  }
-  
-  /* --- Cookie container enhancements --- */
-  .cookie-container {
-    position: relative;
-  }
-  
-  .cookie-container::after {
-    content: '✨';
-    position: absolute;
-    font-size: 20px;
-    animation: sparkle 2s ease-in-out infinite;
-    top: 10%;
-    right: 10%;
-  }
-  
-  /* --- Button enhancements --- */
-  .btn-pressable {
-    position: relative;
-    overflow: hidden;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .btn-pressable::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-  }
-  
-  .btn-pressable:active::after {
-    width: 300px;
-    height: 300px;
-  }
-
-  /* Hide scrollbar for tab navigation on mobile */
-  .scrollbar-hide {
-    -ms-overflow-style: none;  /* Internet Explorer 10+ */
-    scrollbar-width: none;  /* Firefox */
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;  /* Safari and Chrome */
+/* Cible de clic confortable sur mobile pour tous les boutons du jeu */
+@media (pointer: coarse) {
+  button {
+    min-height: 40px;
   }
 }
 
-/* High contrast accessibility mode */
+/* Focus visible cohérent, jamais supprimé */
+:focus-visible {
+  outline: 2px solid rgb(217, 119, 6);
+  outline-offset: 2px;
+}
+
+/* Mode contraste élevé: on renforce bordures et textes plutôt que d'inverser */
 .high-contrast {
-  filter: none;
+  --tw-text-opacity: 1;
 }
-.high-contrast .text-zinc-400 { color: #52525b !important; }
-.high-contrast .text-amber-700 { color: #78350f !important; }
-.high-contrast .text-amber-800 { color: #78350f !important; }
-.high-contrast .text-amber-800\/80 { color: rgba(120, 53, 15, 0.95) !important; }
-.high-contrast .text-amber-900 { color: #451a03 !important; }
-.high-contrast .badge-warm { border-color: rgba(120,53,15,0.5) !important; color: #451a03 !important; }
-.high-contrast .glass-warm { border-color: rgba(120,53,15,0.5) !important; }
+.high-contrast .glass-warm {
+  background: #ffffff;
+  border-color: #92400e;
+  border-width: 2px;
+  backdrop-filter: none;
+}
+.high-contrast button {
+  border-width: 2px !important;
+}
+.high-contrast .text-amber-800\/70,
+.high-contrast .text-amber-800\/75,
+.high-contrast .text-amber-800\/80 {
+  color: rgb(120 53 15) !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Respecte le réglage système: aucune animation décorative */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
