@@ -111,7 +111,7 @@ L'addition est exacte : puissance 1 + un Curseur = **exactement 1,25**. Le prix,
 lui, croît de 22 % par exemplaire.
 
 **Un Mineur rapporte deux gains, dans deux unités différentes.** Un Portail
-donne **+100 000 /s de minage** *et*, par la part reversée, **+5 000 /clic**.
+donne **+80 000 /s de minage** *et*, par la part reversée, **+4 800 /clic**.
 Ces deux nombres ne s'additionnent pas — l'un est une production par seconde,
 l'autre une puissance par clic — et la boutique les affiche séparément.
 
@@ -691,8 +691,9 @@ défaut n'a simplement pas été mesuré.
 
 ## Le jeu
 
-- **16 bâtiments** : 8 Cliqueurs et 8 Mineurs, aux prix géométriques (×1,22 par
-  exemplaire), sans mur de progression.
+- **24 bâtiments** : 12 Cliqueurs et 12 Mineurs, aux prix géométriques (×1,22
+  par exemplaire), sans mur de progression. Huit d'entre eux — les rangs 8 à 11
+  des deux familles — n'existent qu'une fois l'Ascension atteinte.
 - **Améliorations infinies** : générées à la demande. Chaque bâtiment débloque
   un palier ×2 à 10, 20, 40, 80, 160 exemplaires — un doublement à chaque fois.
   Il n'y a pas de dernière amélioration.
@@ -705,14 +706,20 @@ défaut n'a simplement pas été mesuré.
 - **Arbre céleste** : 8 améliorations permanentes achetées avec les chips de
   prestige, deux sans niveau maximum, chaque niveau valant +0,25. Elles
   survivent à toutes les renaissances suivantes.
-- **53 succès** en 9 catégories, avec récompense en cookies — et en CRMB à
+- **Ascension** : au-dessus du prestige. Trois voies — Horizon (huit bâtiments
+  de plus), Éclat (+0,25 sur les deux axes, sans fin), Écho (renaissances plus
+  généreuses) — payées en étoiles.
+- **Le Registre** : des contrats permanents payés en CRMB, +0,25 sur les deux
+  axes chacun, qui survivent aux ascensions.
+- **55 succès** en 9 catégories, avec récompense en cookies — et en CRMB à
   partir du palier Or.
 - **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes flash.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
 
-Six onglets : Boutique (filtres Tout / Clic / Minage), Améliorations, Quêtes,
-CRMB, Prestige, Profil (statistiques, succès, apparences).
+**24 bâtiments** au total : 12 Cliqueurs et 12 Mineurs, dont huit que seule
+l'Ascension ouvre. Six onglets : Boutique (filtres Tout / Clic / Minage),
+Améliorations, Quêtes, CRMB, Prestige, Profil (statistiques, succès, apparences).
 
 ### Le CRMB est une récompense, pas un revenu
 
