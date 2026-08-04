@@ -1,9 +1,9 @@
 import { ITEMS } from "../data/items.js";
 import { getUpgrade } from "../data/upgrades.js";
+import { tierState } from "./grid.js";
 
 /**
- * Multiplicateur propre à chaque bâtiment: améliorations de palier (×2, ×3, ×5)
- * et synergies entre familles.
+ * Multiplicateur propre à chaque bâtiment: améliorations de palier (×2).
  */
 export const computePerItemMult = (items = {}, upgrades = {}) => {
   const mult = {};
@@ -41,13 +41,26 @@ const sumFamily = (items, upgrades, mode) => {
 };
 
 /**
+ * Bonus des chips célestes, **par paliers**.
+ *
+ * Chaque chip ne donne plus « +2 % ». Les chips remplissent un palier de
+ * l'échelle 1 · 2,5 · 5 · 10 · 25 …, et franchir un palier ajoute exactement
+ * +0,25 au multiplicateur. C'est ce qui supprime les ×1,02 et ×2,06: entre
+ * deux paliers le nombre ne bouge pas, une barre montre ce qu'il reste.
+ */
+export const chipTier = (chips = 0) => tierState(Math.max(0, chips || 0));
+export const chipMult = (chips = 0) => chipTier(chips).mult;
+
+/**
  * Bonus commun aux deux familles: chips célestes et staking CRMB.
  *
  * Il s'applique au clic ET au minage. Quand il ne portait que le minage, chaque
  * prestige faisait décrocher le clic un peu plus — le rapport entre jeu actif et
  * jeu passif dérivait vers zéro au fil des renaissances.
+ *
+ * Les deux facteurs sont sur la grille, leur produit l'est donc aussi.
  */
-export const globalBonus = (chips = 0, stakeMulti = 1) => (1 + (chips || 0) * 0.02) * stakeMulti;
+export const globalBonus = (chips = 0, stakeMulti = 1) => chipMult(chips) * (stakeMulti || 1);
 
 /** Cookies produits chaque seconde par les Mineurs. */
 export const miningFrom = (items = {}, upgrades = {}, chips = 0, stakeMulti = 1) =>

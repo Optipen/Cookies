@@ -22,22 +22,28 @@ const ordinal = (n) => (n >= NAMES.length ? ` ${Math.floor(n / NAMES.length) + 1
 
 // --- Paliers de possession -------------------------------------------------
 
-/** Seuil du n-ième palier: 10, 25, 50, 100, 200, 400, puis ×1,7. */
+/**
+ * Seuil du n-ième palier: 25, 50, 100, 200, 400, 800 … — un doublement à chaque
+ * fois, sans fin.
+ *
+ * Le premier palier était à 10 exemplaires et les multiplicateurs montaient
+ * jusqu'à ×5: un bâtiment à 400 exemplaires cumulait ×360, et la partie
+ * s'emballait en quelques minutes. Un doublement régulier récompensé par un
+ * ×2 régulier garde exactement le même geste — « doubler mon parc le rend deux
+ * fois meilleur » — dix fois plus lentement.
+ */
+export const TIER_FIRST = BALANCE.tier_first ?? 10;
 export function tierThreshold(n) {
-  const early = [10, 25, 50, 100, 200, 400];
-  if (n < early.length) return early[n];
-  return Math.round(400 * Math.pow(1.7, n - early.length + 1));
+  return TIER_FIRST * Math.pow(2, Math.max(0, Math.floor(n)));
 }
 
-/** Multiplicateur du n-ième palier: ×2 puis ×3 puis ×5. Toujours net. */
-export function tierMultiplier(n) {
-  if (n < 3) return 2;
-  if (n < 5) return 3;
-  return 5;
+/** Multiplicateur du n-ième palier: toujours ×2. Un seul nombre à retenir. */
+export function tierMultiplier() {
+  return 2;
 }
 
-/** Coût d'un palier: environ quinze exemplaires du bâtiment au seuil atteint. */
-const tierCost = (item, threshold) => Math.ceil(item.base * Math.pow(item.growth, threshold) * 15);
+/** Coût d'un palier: environ vingt exemplaires du bâtiment au seuil atteint. */
+const tierCost = (item, threshold) => Math.ceil(item.base * Math.pow(item.growth, threshold) * 20);
 
 function makeTierUpgrade(item, n) {
   const threshold = tierThreshold(n);
@@ -73,11 +79,14 @@ export const SHARE_BASE = BALANCE.click_share ?? 0.03;
 // puissance de clic. Une telle échelle ×2 sans équivalent côté minage faisait
 // grimper le rapport actif/passif au-delà de 1 000× en six heures de jeu
 // simulé. Les deux axes progressent par les mêmes leviers: paliers par bâtiment
-// (×2 · ×3 · ×5) et bonus globaux.
+// (×2) et bonus globaux.
 
 // --- Bonus globaux ---------------------------------------------------------
 
-const globalUnlockLifetime = (n) => 1_000_000 * Math.pow(60, n);
+// Un cran tous les 10 000× de production totale, et non tous les 60×: les
+// bonus globaux doublent TOUT, c'est le levier le plus violent du jeu. Espacés
+// de 60×, le joueur en décrochait un toutes les quelques minutes.
+const globalUnlockLifetime = (n) => 100_000 * Math.pow(10_000, n);
 
 function makeGlobalUpgrade(n) {
   const required = globalUnlockLifetime(n);

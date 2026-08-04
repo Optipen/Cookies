@@ -21,9 +21,9 @@ export function useAutosave(state, saveFn, { enabled = true } = {}) {
     const persist = () => {
       const s = stateRef.current;
       if (!s) return;
-      // On ne sérialise jamais les toasts ni les effets visuels en cours
-      const { toasts, fx, ...persistable } = s;
-      saveRef.current({ ...persistable, toasts: [], fx: { banner: null, shakeUntil: 0, tag: null }, lastTs: Date.now() });
+      // On ne sérialise jamais la notification ni les effets visuels en cours
+      const { notice, fx, ...persistable } = s;
+      saveRef.current({ ...persistable, notice: null, fx: { banner: null, shakeUntil: 0, tag: null }, lastTs: Date.now() });
     };
 
     const iv = setInterval(persist, autosaveMs);

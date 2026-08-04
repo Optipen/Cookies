@@ -176,11 +176,13 @@ export function resolveReward(quest, state, ctx, meta) {
   try {
     const r = quest.reward ? quest.reward(state, ctx, meta) : null;
     if (!r) return null;
-    // Bonus permanent de l'arbre céleste sur les gains de quête
+    // Bonus permanent de l'arbre céleste sur les gains de quête.
+    // Il ne porte que sur les cookies: appliqué au CRMB il rendrait 1,25 CRMB,
+    // et une monnaie de récompense ne se compte pas en virgules.
     const mult = ctx?.questMult || 1;
     return {
       cookies: Math.max(0, Math.floor((r.cookies || 0) * mult)),
-      crmb: Math.max(0, (r.crmb || 0) * mult),
+      crmb: Math.max(0, Math.floor(r.crmb || 0)),
       buff: r.buff || null,
       discount: r.discount || null,
       chips: Math.max(0, Math.floor(r.chips || 0)),
@@ -203,7 +205,8 @@ export function applyReward(state, reward, now = Date.now()) {
   if (reward.crmb > 0) {
     next.crypto = {
       ...state.crypto,
-      balance: Math.round(((state.crypto?.balance || 0) + reward.crmb + Number.EPSILON) * 1e6) / 1e6,
+      balance: (state.crypto?.balance || 0) + reward.crmb,
+      totalEarned: (state.crypto?.totalEarned || 0) + reward.crmb,
     };
   }
 

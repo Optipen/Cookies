@@ -14,10 +14,10 @@ const TICK_MS = 700;
  * l'état des quêtes, donc aucune boucle de rendu — c'était le défaut de
  * l'ancien MissionEngine, qui se relançait à chaque `setState` qu'il produisait.
  */
-export function useQuests(state, setState, toast, onCelebrate) {
+export function useQuests(state, setState, notify, onCelebrate) {
   const stateRef = useLatestRef(state);
   const setStateRef = useLatestRef(setState);
-  const toastRef = useLatestRef(toast);
+  const notifyRef = useLatestRef(notify);
   const celebrateRef = useLatestRef(onCelebrate);
 
   useEffect(() => {
@@ -41,36 +41,37 @@ export function useQuests(state, setState, toast, onCelebrate) {
         return fresh.changed ? fresh.state : prev;
       });
 
-      for (const ev of result.events) {
-        if (ev.type === "completed") {
-          // Notification courte: la carte de quête porte déjà le détail. Le
-          // libellé complet tenait sur trois lignes et masquait la boutique.
-          const parts = [];
-          if (ev.reward?.cookies) parts.push(`+${fmt(ev.reward.cookies)}`);
-          if (ev.reward?.crmb) parts.push(`+${fmtCrmb(ev.reward.crmb, 2)} CRMB`);
-          if (ev.reward?.buff) parts.push(ev.reward.buff.label);
-          if (ev.reward?.discount) parts.push(ev.reward.discount.label);
-          toastRef.current(
-            `${ev.icon || "✅"} ${ev.daily ? "Quête du jour" : "Quête"} ✓ ${parts.join(" · ")}`,
-            "success",
-            { ms: 3400 }
-          );
-          celebrateRef.current?.(ev);
-        } else if (ev.type === "failed") {
-          toastRef.current("⌛ Quête échouée", "warn", { ms: 2200 });
-        }
+      // Une seule notification, même si trois quêtes tombent dans le même tick.
+      // Les échecs ne s'annoncent plus du tout: la carte de quête l'indique, et
+      // interrompre le joueur pour une mauvaise nouvelle qu'il n'a pas provoquée
+      // n'apporte rien.
+      const finies = result.events.filter((e) => e.type === "completed");
+      if (finies.length) {
+        const parts = [];
+        const cookies = finies.reduce((a, e) => a + (e.reward?.cookies || 0), 0);
+        const crmb = finies.reduce((a, e) => a + (e.reward?.crmb || 0), 0);
+        if (cookies) parts.push(`+${fmt(cookies)}`);
+        if (crmb) parts.push(`+${fmtCrmb(crmb, 0)} CRMB`);
+
+        const titre =
+          finies.length === 1
+            ? `${finies[0].icon || "✅"} ${finies[0].daily ? "Quête du jour" : "Quête"} terminée`
+            : `✅ ${finies.length} quêtes terminées`;
+        notifyRef.current.event(parts.length ? `${titre} · ${parts.join(" · ")}` : titre, "success");
+        for (const ev of finies) celebrateRef.current?.(ev);
       }
     }, TICK_MS);
 
     return () => clearInterval(iv);
-  }, [stateRef, setStateRef, toastRef, celebrateRef]);
+  }, [stateRef, setStateRef, notifyRef, celebrateRef]);
 
+  // Remplacer une quête est une action volontaire: la carte change sous les
+  // yeux du joueur, une notification pour le lui annoncer serait du bruit.
   const reroll = useCallback(
     (questId) => {
       setStateRef.current((prev) => rerollQuest(prev, questId, buildContext(prev), Date.now()));
-      toastRef.current("Quête remplacée", "info", { ms: 1500 });
     },
-    [setStateRef, toastRef]
+    [setStateRef]
   );
 
   return { reroll };

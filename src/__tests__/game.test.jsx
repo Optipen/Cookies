@@ -84,11 +84,11 @@ describe("boucle de jeu", () => {
 
   it("achète un bâtiment et met à jour la production", async () => {
     await startGame((s) => (s.cookies = 100_000));
-    const ovenButton = screen.getByRole("button", { name: /Four, 0 possédés/i });
+    expect(screen.getByLabelText("Détail de Four").textContent).toContain("+2");
     await act(async () => {
-      fireEvent.click(ovenButton);
+      fireEvent.click(screen.getByRole("button", { name: /^Acheter Four/i }));
     });
-    expect(screen.getByRole("button", { name: /Four, 1 possédés/i })).toBeTruthy();
+    expect(screen.getByLabelText("Détail de Four").textContent).toContain("×1");
   });
 
   it("refuse un achat trop cher", async () => {
@@ -99,15 +99,14 @@ describe("boucle de jeu", () => {
       s.flags.freeFirstAutoGiven = true;
       s.items = { oven: 1 };
     });
-    const ovenButton = screen.getByRole("button", { name: /Four, 1 possédés/i });
-    expect(ovenButton.disabled).toBe(true);
+    expect(screen.getByRole("button", { name: /^Acheter Four/i }).disabled).toBe(true);
   });
 
   it("offre le premier bâtiment automatique en début de partie", async () => {
     await startGame((s) => (s.cookies = 0));
-    const ovenButton = screen.getByRole("button", { name: /Four, 0 possédés/i });
+    const ovenButton = screen.getByRole("button", { name: /^Acheter Four/i });
     expect(ovenButton.disabled).toBe(false);
-    expect(ovenButton.textContent).toContain("OFFERT");
+    expect(ovenButton.textContent).toContain("Offert");
   });
 });
 
@@ -236,10 +235,13 @@ describe("crypto", () => {
       s.lifetime = 1e9;
     });
     await openTab(/CRMB/i);
+    // Un achat ne déclenche plus de notification: c'est le solde affiché qui
+    // confirme l'opération, pas un bandeau qui recouvre l'écran.
+    const soldeAvant = screen.getByTestId("crmb-solde").textContent;
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Acheter/i }));
     });
-    expect(screen.getByText(/Acheté .* CRMB/)).toBeTruthy();
+    expect(screen.getByTestId("crmb-solde").textContent).not.toBe(soldeAvant);
   });
 
   it("bloque le retrait d'une position verrouillée", async () => {
@@ -274,7 +276,7 @@ describe("sauvegarde", () => {
       unmount();
     });
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
-    expect(saved.toasts).toEqual([]);
+    expect(saved.notice).toBeNull();
   });
 });
 

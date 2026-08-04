@@ -29,10 +29,26 @@ export const BALANCE = tuning?.[tuning?.mode || "standard"]?.balance || {};
 export const CLICK_PRICE_FACTOR = BALANCE.click_price_factor ?? 1.5;
 
 /** Croissance du prix à chaque exemplaire acheté. */
-export const PRICE_GROWTH = 1.15;
+export const PRICE_GROWTH = BALANCE.price_growth ?? 1.15;
 
-// Prix de base des Mineurs, par rang.
-const MINE_BASE = [60, 1_000, 8_000, 60_000, 340_000, 2_400_000, 17_000_000, 95_000_000];
+// Prix de base, par rang: une puissance de dix à chaque fois.
+//
+// Un rang coûte dix fois le précédent et rapporte cinq fois plus par
+// exemplaire; il devient donc rentable après quelques exemplaires du rang
+// d'en dessous. Espacés de vingt, les rangs mettaient un quart d'heure à se
+// débloquer et la boutique restait figée trop longtemps.
+const MINE_BASE = [25, 250, 2_500, 25_000, 250_000, 2_500_000, 25_000_000, 250_000_000];
+
+/**
+ * Échelle générale des prix.
+ *
+ * C'est elle qui fixe le **temps de retour** d'un achat: à 1, un Curseur se
+ * rembourse en dix-huit secondes, et le joueur rachète sans arrêt sans jamais
+ * rien désirer. Monter cette échelle espace les achats sans toucher ni aux
+ * valeurs propres ni aux prix relatifs entre familles.
+ */
+export const PRICE_SCALE = BALANCE.price_scale ?? 1;
+const priceOf = (rank) => Math.round(MINE_BASE[rank] * PRICE_SCALE);
 
 const mineItem = (rank, id, name, emoji, value, desc) => ({
   id,
@@ -41,7 +57,7 @@ const mineItem = (rank, id, name, emoji, value, desc) => ({
   name,
   emoji,
   value, // cookies par seconde
-  base: MINE_BASE[rank],
+  base: priceOf(rank),
   growth: PRICE_GROWTH,
   desc,
 });
@@ -53,7 +69,7 @@ const clickItem = (rank, id, name, emoji, value, desc) => ({
   name,
   emoji,
   value, // cookies ajoutés à chaque clic
-  base: Math.round(MINE_BASE[rank] * CLICK_PRICE_FACTOR),
+  base: Math.round(priceOf(rank) * CLICK_PRICE_FACTOR),
   growth: PRICE_GROWTH,
   desc,
 });

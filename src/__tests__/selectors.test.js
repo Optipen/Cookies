@@ -14,7 +14,8 @@ import {
   REF_COMBO,
 } from "../utils/selectors.js";
 import { SHARE_BASE, tierThreshold, tierMultiplier } from "../data/upgrades.js";
-import { miningFrom, clickPowerFrom } from "../utils/calc.js";
+import { miningFrom, clickPowerFrom, chipMult } from "../utils/calc.js";
+import { onGrid } from "../utils/grid.js";
 import { createFreshState } from "../utils/state.js";
 import { prestigeEffects, chipsFor, upgradeCost, availableChips, PRESTIGE_BY_ID } from "../data/prestige.js";
 import { ITEMS } from "../data/items.js";
@@ -36,9 +37,25 @@ describe("minage", () => {
     expect(miningFrom({}, {}, 0)).toBe(0);
   });
 
-  it("applique le bonus des chips de prestige", () => {
+  it("applique le bonus des chips par paliers propres", () => {
+    // Les chips ne donnent plus « +2 % » chacune: elles remplissent un palier,
+    // et franchir un palier ajoute exactement +0,25. C'est ce qui interdit les
+    // ×1,02 et ×2,06 que produisait l'ancien pourcentage.
     const base = miningFrom({ oven: 10 }, {}, 0);
-    expect(miningFrom({ oven: 10 }, {}, 50)).toBeCloseTo(base * 2); // 50 chips = +100 %
+    expect(miningFrom({ oven: 10 }, {}, 0)).toBe(base);
+    expect(miningFrom({ oven: 10 }, {}, 1)).toBeCloseTo(base * 1.25, 6);
+    expect(miningFrom({ oven: 10 }, {}, 10)).toBeCloseTo(base * 2, 6);
+    for (const chips of [0, 1, 2, 7, 42, 1234, 1e6]) {
+      expect(onGrid(chipMult(chips))).toBe(true);
+    }
+  });
+
+  it("ne bouge pas entre deux paliers de chips", () => {
+    // 3 chips ou 4 chips: même multiplicateur. La barre de progression montre
+    // ce qu'il reste, le nombre reste net.
+    expect(chipMult(3)).toBe(chipMult(4));
+    expect(chipMult(5)).toBe(chipMult(9));
+    expect(chipMult(10)).toBeGreaterThan(chipMult(9));
   });
 });
 
@@ -236,7 +253,10 @@ describe("achat groupé", () => {
     for (const [from, n] of [[0, 30], [0, 120], [40, 80]]) {
       let unParUn = 0;
       for (let k = 0; k < n; k++) unParUn += bulkCost(item, from + k, 1);
-      expect(bulkCost(item, from, n)).toBeCloseTo(unParUn, 5);
+      // Comparaison relative: la somme géométrique fermée et la somme itérée
+      // divergent des derniers bits du flottant passé 10^13, ce qui n'a aucune
+      // conséquence en jeu — c'est l'écart RELATIF qui doit être nul.
+      expect(bulkCost(item, from, n) / unParUn).toBeCloseTo(1, 9);
     }
   });
 
@@ -332,23 +352,19 @@ describe("Mineurs: deux gains, deux unités", () => {
   });
 });
 
-describe("paliers: ×1,7 espace les seuils, il ne multiplie rien", () => {
-  it("écarte les seuils de ×1,7 une fois la série de départ passée", () => {
-    expect([0, 1, 2, 3, 4, 5].map(tierThreshold)).toEqual([10, 25, 50, 100, 200, 400]);
-    for (let n = 6; n < 40; n++) {
-      expect(tierThreshold(n) / tierThreshold(n - 1)).toBeCloseTo(1.7, 1);
+describe("paliers: doubler le parc, doubler le rendement", () => {
+  it("double le seuil à chaque palier, sans fin", () => {
+    expect([0, 1, 2, 3, 4, 5].map(tierThreshold)).toEqual([10, 20, 40, 80, 160, 320]);
+    for (let n = 1; n < 40; n++) {
+      expect(tierThreshold(n) / tierThreshold(n - 1)).toBe(2);
     }
-    // Les seuils montent sans fin: il n'y a pas de dernier palier.
     expect(tierThreshold(39)).toBeGreaterThan(tierThreshold(38));
   });
 
-  it("garde des multiplicateurs nets, jamais ×1,7", () => {
-    for (let n = 0; n < 40; n++) {
-      expect([2, 3, 5]).toContain(tierMultiplier(n));
-    }
-    expect([0, 1, 2].map(tierMultiplier)).toEqual([2, 2, 2]);
-    expect([3, 4].map(tierMultiplier)).toEqual([3, 3]);
-    expect([5, 6, 20].map(tierMultiplier)).toEqual([5, 5, 5]);
+  it("garde un multiplicateur unique et net: ×2", () => {
+    // Un seul nombre à retenir. L'échelle ×2/×3/×5 cumulait ×360 à 400
+    // exemplaires et faisait s'emballer la partie en quelques minutes.
+    for (let n = 0; n < 40; n++) expect(tierMultiplier(n)).toBe(2);
   });
 });
 
@@ -412,7 +428,7 @@ describe("prestige", () => {
     const sans = settled((x) => (x.items = { oven: 20, cursor: 20 }));
     const avec = settled((x) => {
       x.items = { oven: 20, cursor: 20 };
-      x.prestige = { chips: 50, spent: 0, upgrades: {} };
+      x.prestige = { chips: 10, spent: 0, upgrades: {} }; // 4 paliers = ×2 pile
     });
     const a = deriveStats(sans, LATER);
     const b = deriveStats(avec, LATER);
@@ -420,9 +436,20 @@ describe("prestige", () => {
     expect(b.buildingsPower / a.buildingsPower).toBeCloseTo(2, 5);
   });
 
-  it("plafonne la réduction de coût", () => {
+  it("plafonne la réduction de coût à -50 %", () => {
     const maxed = prestigeEffects({ prestige: { upgrades: { cheap_bricks: 999 } } });
-    expect(maxed.costMult).toBeGreaterThanOrEqual(0.7);
+    expect(maxed.costMult).toBe(0.5);
+  });
+
+  it("garde les multiplicateurs de l'arbre sur la grille", () => {
+    for (const n of [0, 1, 2, 3, 7, 40]) {
+      const e = prestigeEffects({ prestige: { upgrades: { celestial_dough: n, golden_fingers: n } } });
+      expect(onGrid(e.cpsMult)).toBe(true);
+      expect(onGrid(e.cpcMult)).toBe(true);
+    }
+    // Un niveau = +0,25 exactement, pas +5 %.
+    expect(prestigeEffects({ prestige: { upgrades: { celestial_dough: 1 } } }).cpsMult).toBe(1.25);
+    expect(prestigeEffects({ prestige: { upgrades: { celestial_dough: 4 } } }).cpsMult).toBe(2);
   });
 
   it("rend des effets neutres sans arbre", () => {

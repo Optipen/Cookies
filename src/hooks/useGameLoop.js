@@ -74,17 +74,13 @@ export function useGameLoop(state, setState, options = {}) {
 
         const crypto = { ...prev.crypto };
         let cryptoTouched = false;
-
-        // Faucet: du CRMB offert à mesure que l'on cuit des cookies
         const lifetime = next.lifetime ?? prev.lifetime;
-        const units = Math.floor(lifetime / (crypto.perCookies || 20_000));
-        if (units > (crypto.mintedUnits || 0)) {
-          const diff = units - (crypto.mintedUnits || 0);
-          crypto.mintedUnits = units;
-          crypto.balance = roundCrmb((crypto.balance || 0) + diff * (crypto.perAmount || 0.001));
-          cryptoTouched = true;
-          next.flags = { ...prev.flags, cryptoFlashUntil: now2 + 1500 };
-        }
+
+        // Il n'y a plus de faucet. Cuire des cookies ne rapporte aucun CRMB:
+        // c'est une monnaie de récompense, versée par les quêtes, les gros
+        // paliers, les succès qui comptent et les renaissances. L'ancien
+        // robinet (0,001 tous les 20 000 cookies) en versait des centaines de
+        // millions en fin de partie, et plus rien n'avait de valeur.
 
         // Minage matériel + rendement de staking
         if (mined > 0) {

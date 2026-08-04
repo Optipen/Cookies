@@ -1,3 +1,5 @@
+import { STEP, niceIntAt, snap } from "../utils/grid.js";
+
 // === Arbre céleste ===
 //
 // Améliorations permanentes achetées avec les chips de prestige. Elles
@@ -8,79 +10,83 @@
 // vers 4,1e12 cookies cuits — passé ce point le prestige n'apportait plus rien
 // et la partie n'avait plus d'horizon.
 
+// Coût d'un niveau, sur l'échelle des nombres agréables: 1 · 2,5 · 5 · 10 · 25…
+// Un nœud « cher » démarre simplement plus haut sur la même échelle.
+const ladderCost = (first) => (lvl) => niceIntAt(first + lvl);
+
 export const PRESTIGE_UPGRADES = [
   {
     id: "celestial_dough",
     name: "Pâte céleste",
     emoji: "☁️",
-    desc: "+5 % de production par niveau.",
+    desc: "+0,25 au multiplicateur de minage, par niveau.",
     maxLevel: Infinity,
-    cost: (lvl) => Math.ceil(1 + lvl * 2 + Math.pow(lvl, 1.7) * 0.4),
-    effect: { type: "cps_mult", perLevel: 0.05 },
+    cost: ladderCost(0),
+    effect: { type: "cps_mult", perLevel: STEP },
   },
   {
     id: "golden_fingers",
     name: "Doigts d'or",
     emoji: "🖐️",
-    desc: "+5 % de puissance de clic par niveau.",
+    desc: "+0,25 au multiplicateur de puissance de clic, par niveau.",
     maxLevel: Infinity,
-    cost: (lvl) => Math.ceil(1 + lvl * 2 + Math.pow(lvl, 1.7) * 0.4),
-    effect: { type: "cpc_mult", perLevel: 0.05 },
+    cost: ladderCost(0),
+    effect: { type: "cpc_mult", perLevel: STEP },
   },
   {
     id: "cheap_bricks",
     name: "Briques bon marché",
     emoji: "🧱",
-    desc: "-2 % sur le coût des bâtiments par niveau (max -30 %).",
-    maxLevel: 15, // borné: une réduction de 100 % rendrait tout gratuit
-    cost: (lvl) => 3 + lvl * 3,
-    effect: { type: "cost_reduction", perLevel: 0.02, cap: 0.3 },
+    desc: "-5 % sur le coût des bâtiments par niveau (max -50 %).",
+    maxLevel: 10, // borné: une réduction de 100 % rendrait tout gratuit
+    cost: ladderCost(1),
+    effect: { type: "cost_reduction", perLevel: 0.05, cap: 0.5 },
   },
   {
     id: "head_start",
     name: "Départ lancé",
     emoji: "🚀",
-    desc: "Après un prestige, repars avec 3 % de ta production totale par niveau (max 30 %).",
+    desc: "Après un prestige, repars avec 5 % de ta production totale par niveau (max 50 %).",
     // Exprimé en fraction et non en valeur absolue: un ×10 par niveau sans
     // limite aurait fini par offrir plus de cookies que la partie entière.
     maxLevel: 10,
-    cost: (lvl) => Math.ceil(2 + lvl * 4 + Math.pow(lvl, 1.8) * 0.6),
-    effect: { type: "start_fraction", perLevel: 0.03, cap: 0.3 },
+    cost: ladderCost(2),
+    effect: { type: "start_fraction", perLevel: 0.05, cap: 0.5 },
   },
   {
     id: "night_shift",
     name: "Équipe de nuit",
     emoji: "🌙",
-    desc: "+15 % de rendement hors-ligne par niveau.",
-    maxLevel: Infinity,
-    cost: (lvl) => Math.ceil(2 + lvl * 3 + Math.pow(lvl, 1.6) * 0.5),
-    effect: { type: "offline_mult", perLevel: 0.15 },
+    desc: "+25 % de rendement hors-ligne par niveau.",
+    maxLevel: 8,
+    cost: ladderCost(1),
+    effect: { type: "offline_mult", perLevel: 0.25 },
   },
   {
     id: "lucky_star",
     name: "Étoile chanceuse",
     emoji: "⭐",
-    desc: "Cookies dorés 10 % plus fréquents par niveau.",
-    maxLevel: 25, // borné: au-delà les dorés deviendraient permanents
-    cost: (lvl) => 3 + lvl * 3,
-    effect: { type: "golden_rate", perLevel: 0.1 },
+    desc: "Cookies dorés 25 % plus fréquents par niveau.",
+    maxLevel: 8, // borné: au-delà les dorés deviendraient permanents
+    cost: ladderCost(1),
+    effect: { type: "golden_rate", perLevel: 0.25 },
   },
   {
     id: "crypto_edge",
     name: "Avantage crypto",
     emoji: "🪙",
-    desc: "+20 % de rendement de minage et de staking par niveau.",
-    maxLevel: Infinity,
-    cost: (lvl) => Math.ceil(4 + lvl * 4 + Math.pow(lvl, 1.7) * 0.7),
-    effect: { type: "crypto_mult", perLevel: 0.2 },
+    desc: "+25 % de rendement de minage et de staking par niveau.",
+    maxLevel: 8,
+    cost: ladderCost(2),
+    effect: { type: "crypto_mult", perLevel: 0.25 },
   },
   {
     id: "quest_master",
     name: "Maître des quêtes",
     emoji: "📜",
     desc: "+25 % sur les récompenses de quête par niveau.",
-    maxLevel: Infinity,
-    cost: (lvl) => Math.ceil(3 + lvl * 4 + Math.pow(lvl, 1.7) * 0.6),
+    maxLevel: 8,
+    cost: ladderCost(2),
     effect: { type: "quest_mult", perLevel: 0.25 },
   },
 ];
@@ -113,11 +119,12 @@ export function prestigeEffects(state) {
     e.cheap_bricks.effect.cap,
     lvl("cheap_bricks") * e.cheap_bricks.effect.perLevel
   );
-  const goldenLevels = Math.min(25, lvl("lucky_star"));
+  const goldenLevels = Math.min(e.lucky_star.maxLevel, lvl("lucky_star"));
 
   return {
-    cpsMult: 1 + lvl("celestial_dough") * e.celestial_dough.effect.perLevel,
-    cpcMult: 1 + lvl("golden_fingers") * e.golden_fingers.effect.perLevel,
+    // Sur la grille par construction: 1 + 0,25 × niveau.
+    cpsMult: snap(1 + lvl("celestial_dough") * e.celestial_dough.effect.perLevel),
+    cpcMult: snap(1 + lvl("golden_fingers") * e.golden_fingers.effect.perLevel),
     costMult: 1 - costReduction,
     startFraction: Math.min(e.head_start.effect.cap, lvl("head_start") * e.head_start.effect.perLevel),
     offlineMult: 1 + lvl("night_shift") * e.night_shift.effect.perLevel,
@@ -136,5 +143,11 @@ export function prestigeEffects(state) {
  */
 export const chipsFor = (lifetime) => Math.floor(Math.cbrt(Math.max(0, lifetime) / 1_000));
 
-/** Seuil minimal pour que le prestige soit proposé. */
-export const PRESTIGE_MIN_LIFETIME = 1_000_000;
+/**
+ * Seuil minimal pour que le prestige soit proposé.
+ *
+ * Calé pour tomber vers une heure de jeu actif: à un million, la première
+ * renaissance arrivait au bout d'une demi-heure, avant même que le joueur ait
+ * fini de découvrir la boutique.
+ */
+export const PRESTIGE_MIN_LIFETIME = 5_000_000;

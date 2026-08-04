@@ -95,3 +95,11 @@ export const TIER_STYLE = {
 
 /** Récompense en cookies d'un succès, proportionnelle à son palier. */
 export const achievementReward = (tier, cps) => Math.max(100 * tier, Math.floor(cps * 30 * tier));
+
+/**
+ * Récompense en CRMB d'un succès. Seuls les paliers qui comptent en donnent,
+ * et toujours en nombres entiers: Or +1, Platine +2, Légendaire +5. Bronze et
+ * Argent n'en donnent aucun — c'est ce qui garde la monnaie désirable.
+ */
+export const CRMB_PAR_PALIER = { 1: 0, 2: 0, 3: 1, 4: 2, 5: 5 };
+export const achievementCrmb = (tier) => CRMB_PAR_PALIER[tier] || 0;

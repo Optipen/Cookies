@@ -3,9 +3,12 @@
   "standard": {
     "balance": {
       "click_price_factor": 1,
-      "click_share": 0.06,
+      "click_share": 0.05,
+      "price_growth": 1.22,
       "reference_clicks_per_second": 5,
-      "reference_combo": 2.2
+      "reference_combo": 2.25,
+      "price_scale": 4,
+      "tier_first": 10
     },
     "early": {
       "window_s": 300,

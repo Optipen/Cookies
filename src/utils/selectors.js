@@ -8,7 +8,9 @@ import { ITEMS, ITEM_BY_ID, BALANCE } from "../data/items.js";
 import { getUpgrade, SHARE_BASE } from "../data/upgrades.js";
 import { miningFrom, clickPowerFrom, computePerItemMult } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
-import { stakingBoost, miningRate, stakingYieldPerSecond } from "./crypto.js";
+import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
+import { chipTier } from "./calc.js";
+import { multOf } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -38,15 +40,29 @@ export function clickUpgradeMult(upgrades = {}) {
 // Cliquer sans interruption fait monter un multiplicateur qui retombe vite.
 // C'est ce qui récompense la présence du joueur.
 
+// Le combo monte par crans de +0,25, pas en glissant. Un multiplicateur qui
+// affichait ×2,07 puis ×2,13 ne se lisait pas; huit crans nets se lisent d'un
+// coup d'œil et se ressentent — chaque palier est un petit événement.
 export const COMBO = {
   max: 3,
-  clicksToMax: 30,
+  steps: 8, // ×1 → ×3 par pas de 0,25
+  clicksPerStep: 4,
+  clicksToMax: 32,
   windowMs: 1400,
   decayPerSecond: 12,
 };
 
-export const comboMultiplier = (streak = 0) =>
-  1 + (COMBO.max - 1) * Math.min(1, Math.max(0, streak) / COMBO.clicksToMax);
+export const comboStep = (streak = 0) =>
+  Math.min(COMBO.steps, Math.floor(Math.max(0, streak) / COMBO.clicksPerStep));
+
+export const comboMultiplier = (streak = 0) => multOf(comboStep(streak));
+
+/** Avancement vers le cran suivant, pour la jauge. */
+export const comboProgress = (streak = 0) => {
+  const s = comboStep(streak);
+  if (s >= COMBO.steps) return 1;
+  return (Math.max(0, streak) - s * COMBO.clicksPerStep) / COMBO.clicksPerStep;
+};
 
 // === Reversement du minage vers le clic ===
 //
@@ -60,18 +76,24 @@ export const shareOf = () => SHARE_BASE;
  * Toutes les valeurs dérivées d'un état, en un seul passage.
  *
  * Formule complète:
- *   minage      = Σ(mineurs × valeur × palier) × (1 + 0,02·chips) × staking × céleste
- *   clicPropre  = (base + Σ(cliqueurs × valeur × palier)) × multiplicateurs × céleste
+ *   global      = chips(palier) × staking(palier)          ← toujours sur la grille
+ *   minage      = Σ(mineurs × valeur × palier) × global × céleste
+ *   clicPropre  = (base + Σ(cliqueurs × valeur × palier)) × global × céleste
  *   parClic     = (clicPropre + minage × part) × combo × buff
  *
  * Les deux sommes sont linéaires et sans plafond: le millionième Cliqueur
  * ajoute exactement autant que le premier. L'équilibre entre les deux axes est
  * tenu par les prix, pas par un amortissement.
+ *
+ * Tous les facteurs de la ligne « global » sont des multiples de 0,25 choisis,
+ * jamais des pourcentages accumulés: c'est ce qui interdit les ×1,02.
  */
 export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const prestige = prestigeEffects(state);
   const positions = state.crypto?.positions || [];
-  const stakeMult = stakingBoost(positions);
+  const stakeTier = stakingTier(positions);
+  const stakeMult = stakeTier.mult;
+  const chipTierState = chipTier(state.prestige?.chips || 0);
 
   const buffActive = (state.buffs?.until || 0) > now;
   const buffMine = buffActive ? state.buffs.cpsMulti || 1 : 1;
@@ -114,6 +136,10 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     cpcBase: perClickNoCombo,
 
     stakeMult,
+    // Paliers en cours, pour les barres de progression: le multiplicateur ne
+    // bouge pas entre deux crans, mais on voit le suivant approcher.
+    chipTier: chipTierState,
+    stakeTier,
     prestige,
     buffActive,
     buffCps: buffMine,

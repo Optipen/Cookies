@@ -22,7 +22,8 @@ const rand = (min, max) => min + Math.random() * (max - min);
  * clic et le masquage mais pas le spawn: le cookie doré restait figé à
  * l'écran, inerte et impossible à faire disparaître.
  */
-export function useEvents({ stateRef, setState, toast, fx, audio }) {
+export function useEvents({ stateRef, setState, notify, fx, audio }) {
+  const { event, major } = notify;
   const [golden, setGolden] = useState(null); // { left, top, until }
   const [rain, setRain] = useState([]); // miettes cliquables, animées en CSS
   const [flying, setFlying] = useState(null);
@@ -56,14 +57,14 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
 
     setGolden({ left, top, until: Date.now() + lifespan, id: Math.random().toString(36).slice(2) });
     audio.play("golden");
-    fx.banner({ title: "Cookie doré !", sub: "Clique vite ✨", ms: 1600 });
+    // Le doré se signale par lui-même à l'écran: pas besoin d'un bandeau.
 
     clearTimer("hide");
     timersRef.current.hide = setTimeout(() => {
       setGolden(null);
       schedulersRef.current.golden?.();
     }, lifespan);
-  }, [audio, fx, stateRef]);
+  }, [audio, stateRef]);
 
   const scheduleGolden = useCallback(() => {
     if (!isFeatureEnabled("ENABLE_GOLDEN_COOKIES") || !isFeatureEnabled("ENABLE_EVENTS")) return;
@@ -92,11 +93,14 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
       const stats = deriveStats(prev, now);
       const gcfg = cfgFor(["events", "golden"], {});
 
-      // Rendements décroissants si on enchaîne les dorés
+      // Rendements décroissants si on enchaîne les dorés: on descend d'un cran
+      // dans une échelle de multiplicateurs ronds, au lieu de multiplier par
+      // 0,8 et d'obtenir ×5,6 puis ×4,48.
       const window_ = (gcfg.dr_window_s ?? 180) * 1000;
       const recent = now - (prev.flags?.goldenLastTs || 0) < window_;
       const stacks = recent ? (prev.flags?.goldenStacks || 0) + 1 : 0;
-      const dr = Math.pow(gcfg.dr_factor ?? 0.8, stacks);
+      const pick = (echelle) => echelle[Math.min(echelle.length - 1, stacks)];
+      const dr = pick([1, 0.5, 0.25, 0.1]);
 
       const next = {
         ...prev,
@@ -106,29 +110,29 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
 
       const roll = Math.random();
       if (roll < 0.35) {
-        const m = Math.max(1.5, (gcfg.cps_mult_max ?? 7) * dr);
-        next.buffs = { cpsMulti: m, cpcMulti: 1, until: now + 25_000, label: `FRENZY ×${m.toFixed(1)} CPS` };
-        toast(`FRENZY — CPS ×${m.toFixed(1)} pendant 25 s !`, "success");
+        const m = pick(gcfg.cps_mults || [5, 3, 2]);
+        next.buffs = { cpsMulti: m, cpcMulti: 1, until: now + 25_000, label: `Minage ×${m}` };
+        major(`Minage ×${m} pendant 25 s`, "gold");
       } else if (roll < 0.65) {
-        const m = Math.max(2, (gcfg.cpc_mult_max ?? 12) * dr);
-        next.buffs = { cpsMulti: 1, cpcMulti: m, until: now + 15_000, label: `CLICK FRENZY ×${m.toFixed(0)} CPC` };
-        toast(`CLICK FRENZY — CPC ×${m.toFixed(0)} pendant 15 s !`, "success");
+        const m = pick(gcfg.cpc_mults || [10, 5, 3]);
+        next.buffs = { cpsMulti: 1, cpcMulti: m, until: now + 15_000, label: `Clic ×${m}` };
+        major(`Puissance de clic ×${m} pendant 15 s`, "gold");
       } else if (roll < 0.88) {
-        const bonus = Math.max(prev.cookies * (gcfg.lucky_bank_min ?? 0.1), stats.cps * (gcfg.lucky_cps_mult ?? 15)) * dr;
+        const bonus = Math.max(prev.cookies * 0.1, stats.cps * 25) * dr;
         next.cookies = prev.cookies + bonus;
         next.lifetime = prev.lifetime + bonus;
-        toast(`Chance ! +${fmt(bonus)} cookies`, "success");
+        major(`Chance — +${fmt(bonus)} cookies`, "gold");
       } else {
         const bonus = stats.cpc * 60 * dr;
         next.cookies = prev.cookies + bonus;
         next.lifetime = prev.lifetime + bonus;
-        next.flags = { ...next.flags, discountAll: { value: 0.3, until: now + 45_000 } };
-        toast(`Jackpot ! +${fmt(bonus)} cookies et -30 % sur les achats`, "success");
+        next.flags = { ...next.flags, discountAll: { value: 0.25, until: now + 45_000 } };
+        major(`Jackpot — +${fmt(bonus)} cookies et -25 % sur les achats`, "gold");
       }
 
       return next;
     });
-  }, [audio, fx, scheduleGolden, setState, toast]);
+  }, [audio, fx, scheduleGolden, setState, major]);
 
   // --- Pluie de miettes ----------------------------------------------------
   // Les miettes tombent via une animation CSS: aucune boucle JS ne les déplace,
@@ -148,14 +152,14 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
         duration: rand(duration * 0.55, duration * 0.9),
       }))
     );
-    toast("Pluie de miettes ! Attrape-les 🍪", "info", { ms: 2500 });
+    event("Pluie de miettes — attrape-les", "gold");
 
     clearTimer("rain");
     timersRef.current.rain = setTimeout(() => {
       setRain([]);
       schedulersRef.current.rain?.();
     }, duration * 1000 + 800);
-  }, [toast]);
+  }, [event]);
 
   const scheduleRain = useCallback(() => {
     if (!isFeatureEnabled("ENABLE_RAIN") || !isFeatureEnabled("ENABLE_EVENTS")) return;
@@ -217,11 +221,11 @@ export function useEvents({ stateRef, setState, toast, fx, audio }) {
     fx.burstGold(20);
     setState((prev) => ({
       ...prev,
-      buffs: { cpsMulti: 1, cpcMulti: 1.6, until: Date.now() + 20_000, label: "VITESSE +60 % CPC" },
+      buffs: { cpsMulti: 1, cpcMulti: 2, until: Date.now() + 20_000, label: "Clic ×2" },
       stats: { ...prev.stats, goldenClicks: (prev.stats?.goldenClicks || 0) + 1 },
     }));
-    toast("Cookie volant ! CPC +60 % pendant 20 s", "success");
-  }, [audio, fx, scheduleFlying, setState, toast]);
+    event("Cookie volant — puissance de clic ×2 pendant 20 s", "gold");
+  }, [audio, fx, scheduleFlying, setState, event]);
 
   // Publie les planificateurs après le commit: les rappels de minuterie ne
   // s'exécutent jamais pendant un rendu, ils lisent donc toujours une version

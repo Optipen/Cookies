@@ -16,13 +16,14 @@ import CookieBiteMask from "./CookieBiteMask.jsx";
 import Intro from "./Intro.jsx";
 
 import { ITEMS } from "../data/items.js";
-import { nextMilestone } from "../data/upgrades.js";
+import { nextMilestone, tierThreshold } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
-import { deriveStats, costOf, isEarlyWindow, timeToAfford, COMBO } from "../utils/selectors.js";
-import { fmt, fmtInt, fmtCrmb, fmtDuration } from "../utils/format.js";
+import { deriveStats, costOf, isEarlyWindow, timeToAfford, maxAffordable, COMBO, comboStep, comboProgress } from "../utils/selectors.js";
+import { STEP } from "../utils/grid.js";
+import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
   saveState,
@@ -38,7 +39,7 @@ import { buyPrice, sellPrice, minerCost, roundCrmb, getTier, MINERS } from "../u
 import { buildContext } from "../quests/engine.js";
 
 import { useAudio } from "../hooks/useAudio.js";
-import { useToast } from "../hooks/useToast.js";
+import { useNotify } from "../hooks/useNotify.js";
 import { useGameLoop } from "../hooks/useGameLoop.js";
 import { useAutosave } from "../hooks/useAutosave.js";
 import { useQuests } from "../hooks/useQuests.js";
@@ -72,32 +73,37 @@ const TABS = [
 const ComboMeter = memo(function ComboMeter({ display }) {
   const { streak, mult } = display;
   if (streak <= 0) return null;
-  const pct = Math.min(100, (streak / COMBO.clicksToMax) * 100);
-  const plein = mult >= COMBO.max - 0.01;
+  const cran = comboStep(streak);
+  const plein = cran >= COMBO.steps;
+  // La barre montre l'avancée vers le CRAN suivant, pas vers le maximum: le
+  // multiplicateur ne bouge qu'en franchissant un cran, autant montrer lequel.
+  const pct = comboProgress(streak) * 100;
 
   return (
     <div className="mt-2 mx-auto w-full max-w-[15rem]">
       <div className="flex items-center justify-between text-[11px] mb-1">
         <span className="font-semibold text-amber-800">🔥 Combo</span>
         <span className={`font-black tabular-nums ${plein ? "text-orange-600" : "text-amber-700"}`}>
-          ×{mult.toFixed(2)}
+          ×{fmtMult(mult)}
+          {!plein && <span className="ml-1 font-medium text-amber-600/70">→ ×{fmtMult(mult + STEP)}</span>}
         </span>
       </div>
-      <div
-        className="h-1.5 rounded-full bg-amber-100 overflow-hidden"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-        aria-label="Chaîne de clics"
-      >
-        <div
-          className={`h-full transition-[width] duration-100 ease-linear ${
-            plein ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gradient-to-r from-amber-300 to-orange-400"
-          }`}
-          style={{ width: `${pct}%` }}
-        />
+      {/* Un segment par cran: on voit d'un coup d'œil combien il en reste. */}
+      <div className="flex gap-0.5" aria-hidden="true">
+        {Array.from({ length: COMBO.steps }, (_, i) => (
+          <div key={i} className="h-1.5 flex-1 rounded-full bg-amber-100 overflow-hidden">
+            <div
+              className={`h-full transition-[width] duration-100 ease-linear ${
+                plein ? "bg-gradient-to-r from-orange-400 to-red-500" : "bg-gradient-to-r from-amber-300 to-orange-400"
+              }`}
+              style={{ width: i < cran ? "100%" : i === cran ? `${pct}%` : "0%" }}
+            />
+          </div>
+        ))}
       </div>
+      <span className="sr-only" role="progressbar" aria-valuemin={0} aria-valuemax={COMBO.steps} aria-valuenow={cran}>
+        Combo, cran {cran} sur {COMBO.steps}
+      </span>
     </div>
   );
 });
@@ -160,6 +166,48 @@ const BuffBadge = memo(function BuffBadge({ buffs }) {
       {buffs.label}
       <span className="tabular-nums opacity-90">{Math.ceil(left / 1000)}s</span>
     </motion.div>
+  );
+});
+
+/**
+ * L'unique notification du jeu.
+ *
+ * En haut, jamais en bas: la boutique et la navigation vivent sous le pouce et
+ * rien ne doit les recouvrir. Un seul emplacement, donc pas de pile qui grandit.
+ * Le niveau `major` a droit à une entrée plus franche — c'est ce qui distingue
+ * une renaissance d'une sauvegarde exportée.
+ */
+const Notice = memo(function Notice({ notice, reducedMotion }) {
+  const grand = notice?.level === "major";
+  const tons = {
+    success: "from-emerald-500 to-teal-500",
+    warn: "from-rose-500 to-red-500",
+    gold: "from-amber-400 to-orange-500",
+    info: "from-stone-700 to-stone-800",
+  };
+  return (
+    <AnimatePresence>
+      {notice && (
+        <motion.div
+          key={notice.id}
+          role="status"
+          initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -24, scale: grand ? 0.8 : 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }}
+          transition={
+            reducedMotion
+              ? { duration: 0.15 }
+              : { type: "spring", stiffness: grand ? 260 : 420, damping: grand ? 16 : 30 }
+          }
+          className={`fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none text-white text-center
+            top-[max(0.75rem,env(safe-area-inset-top))] w-[min(92vw,28rem)]
+            rounded-2xl shadow-2xl bg-gradient-to-r ${tons[notice.tone] || tons.info}
+            ${grand ? "px-5 py-3.5 text-base font-black" : "px-4 py-2.5 text-sm font-semibold"}`}
+        >
+          {notice.msg}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 
@@ -270,7 +318,7 @@ export default function CookieCraze() {
 
   const soundsOn = isFeatureEnabled("ENABLE_SOUNDS") && state.ui.sounds;
   const audio = useAudio(soundsOn, state.ui.volume ?? 0.6);
-  const { toast } = useToast(setState);
+  const notify = useNotify(setState);
 
   const combo = useCombo();
   // Horloge partagée plutôt qu'un `Date.now()` au rendu: les buffs et la fenêtre
@@ -293,6 +341,18 @@ export default function CookieCraze() {
     []
   );
 
+  /**
+   * Achat refusé: une secousse courte, aucun texte.
+   *
+   * « Pas assez de cookies » s'affichait neuf fois dans ce fichier, et c'était
+   * la notification la plus fréquente du jeu — pour dire au joueur ce que le
+   * bouton grisé lui disait déjà. Le geste échoue, on le sent, on passe.
+   */
+  const refuse = useCallback(() => {
+    audio.play("error", 0.25);
+    fx.shake(220);
+  }, [audio, fx]);
+
   // --- Systèmes ------------------------------------------------------------
   useGameLoop(state, setState);
   useAutosave(state, saveState);
@@ -302,10 +362,10 @@ export default function CookieCraze() {
     audio.play("golden", 0.4);
   }, [audio]);
 
-  const { reroll } = useQuests(state, setState, toast, celebrate);
-  useAchievements(state, setState, toast, celebrate);
+  const { reroll } = useQuests(state, setState, notify, celebrate);
+  useAchievements(state, setState, notify, celebrate);
 
-  const events = useEvents({ stateRef, setState, toast, fx, audio });
+  const events = useEvents({ stateRef, setState, notify, fx, audio });
 
   // --- Démarrage: reset différé + progression hors-ligne --------------------
   // Cet effet fait exactement ce pour quoi les effets existent: se synchroniser
@@ -455,12 +515,18 @@ export default function CookieCraze() {
   }, [audio, combo, stateRef]);
 
   const buy = useCallback(
-    (itemId, count = 1) => {
+    (itemId, quantite = 1) => {
       const s = stateRef.current;
+      // « Max » se résout au moment du clic, pas au rendu: le prix affiché a pu
+      // changer entre les deux si la production a tourné.
+      const count = quantite === "max" ? maxAffordable(s, itemId) : quantite;
+      if (count < 1) {
+        refuse();
+        return;
+      }
       const price = costOf(s, itemId, count);
       if (s.cookies < price) {
-        audio.play("error", 0.15);
-        toast("Pas assez de cookies…", "warn", { ms: 1600 });
+        refuse();
         return;
       }
 
@@ -469,7 +535,9 @@ export default function CookieCraze() {
       const before = deriveStats(s);
       const after = deriveStats({ ...s, items: { ...s.items, [itemId]: ownedBefore + count } });
 
-      const crossesMilestone = [10, 25, 50, 100, 200, 400].some(
+      // Les seuils suivent la même échelle que les paliers d'améliorations:
+      // 10, 20, 40, 80 … Les coder en dur les avait déjà désynchronisés une fois.
+      const crossesMilestone = Array.from({ length: 12 }, (_, i) => tierThreshold(i)).some(
         (m) => ownedBefore < m && ownedBefore + count >= m
       );
       const big = crossesMilestone || price / Math.max(1, s.cookies) >= 0.45;
@@ -504,7 +572,7 @@ export default function CookieCraze() {
 
       if (big && isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstGold(30);
     },
-    [audio, toast, stateRef]
+    [audio, refuse, stateRef]
   );
 
   const buyUpgrade = useCallback(
@@ -512,8 +580,7 @@ export default function CookieCraze() {
       const s = stateRef.current;
       if (s.upgrades[upgrade.id]) return;
       if (s.cookies < upgrade.cost) {
-        audio.play("error", 0.15);
-        toast("Pas assez de cookies…", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       audio.play("bigBuy", 0.5);
@@ -525,9 +592,9 @@ export default function CookieCraze() {
         stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + upgrade.cost },
         fx: { ...prev.fx, banner: { title: "Amélioration", sub: upgrade.name, until: Date.now() + 2000 } },
       }));
-      toast(`Amélioration : ${upgrade.name}`, "success");
+      notify.event(`${upgrade.emoji} ${upgrade.name}`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, notify, refuse, stateRef]
   );
 
   const buySkin = useCallback(
@@ -536,8 +603,7 @@ export default function CookieCraze() {
       const skin = SKINS[skinId];
       if (!skin || s.skinsOwned[skinId]) return;
       if (s.cookies < skin.price) {
-        audio.play("error", 0.15);
-        toast("Pas assez de cookies…", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       audio.play("golden", 0.45);
@@ -549,9 +615,9 @@ export default function CookieCraze() {
         skin: skinId,
         stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + skin.price },
       }));
-      toast(`Skin débloqué et équipé : ${skin.name}`, "success");
+      notify.event(`Nouvelle apparence — ${skin.name}`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, notify, refuse, stateRef]
   );
 
   // Référence stable: sinon `memo(Skins)` se re-rend à chaque tick du jeu
@@ -562,9 +628,8 @@ export default function CookieCraze() {
       if (!stateRef.current.skinsOwned[skinId]) return;
       audio.play("buy", 0.3);
       setState((prev) => ({ ...prev, skin: skinId }));
-      toast(`Skin équipé : ${SKINS[skinId]?.name}`, "success", { ms: 1600 });
     },
-    [audio, toast, stateRef]
+    [audio, stateRef]
   );
 
   // --- Crypto --------------------------------------------------------------
@@ -574,8 +639,7 @@ export default function CookieCraze() {
       const s = stateRef.current;
       const cost = buyPrice(s.crypto.price) * amount;
       if (amount <= 0 || s.cookies < cost) {
-        audio.play("error", 0.15);
-        toast("Fonds insuffisants", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       audio.play("buy", 0.35);
@@ -589,17 +653,15 @@ export default function CookieCraze() {
           realizedPnl: (prev.crypto.realizedPnl || 0) - cost,
         },
       }));
-      toast(`Acheté ${fmtCrmb(amount)} CRMB pour ${fmt(cost)} cookies`, "success", { ms: 2200 });
     },
-    [audio, toast, stateRef]
+    [audio, refuse, stateRef]
   );
 
   const cryptoSell = useCallback(
     (amount) => {
       const s = stateRef.current;
       if (amount <= 0 || s.crypto.balance < amount) {
-        audio.play("error", 0.15);
-        toast("Solde CRMB insuffisant", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       const gain = sellPrice(s.crypto.price) * amount;
@@ -615,17 +677,15 @@ export default function CookieCraze() {
           realizedPnl: (prev.crypto.realizedPnl || 0) + gain,
         },
       }));
-      toast(`Vendu ${fmtCrmb(amount)} CRMB pour ${fmt(gain)} cookies`, "success", { ms: 2200 });
     },
-    [audio, toast, stateRef]
+    [audio, refuse, stateRef]
   );
 
   const cryptoStake = useCallback(
     (amount, tierId) => {
       const s = stateRef.current;
       if (amount <= 0 || s.crypto.balance < amount) {
-        audio.play("error", 0.15);
-        toast("Solde CRMB insuffisant", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       const tier = getTier(tierId);
@@ -648,9 +708,8 @@ export default function CookieCraze() {
           ],
         },
       }));
-      toast(`${fmtCrmb(amount)} CRMB bloqués — ${tier.name}`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, refuse, stateRef]
   );
 
   const cryptoUnstake = useCallback(
@@ -660,7 +719,7 @@ export default function CookieCraze() {
       const position = s.crypto.positions.find((p) => p.id === positionId);
       if (!position) return;
       if (now < (position.unlockAt || 0)) {
-        toast(`Position verrouillée encore ${fmtDuration(position.unlockAt - now)}`, "warn");
+        refuse();
         return;
       }
       audio.play("buy", 0.3);
@@ -672,9 +731,8 @@ export default function CookieCraze() {
           positions: prev.crypto.positions.filter((p) => p.id !== positionId),
         },
       }));
-      toast(`${fmtCrmb(position.amount)} CRMB récupérés`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, refuse, stateRef]
   );
 
   const buyMiner = useCallback(
@@ -683,8 +741,7 @@ export default function CookieCraze() {
       const owned = s.crypto.miners?.[minerId] || 0;
       const cost = minerCost(minerId, owned);
       if (s.cookies < cost) {
-        audio.play("error", 0.15);
-        toast("Pas assez de cookies…", "warn", { ms: 1600 });
+        refuse();
         return;
       }
       audio.play("bigBuy", 0.45);
@@ -695,9 +752,9 @@ export default function CookieCraze() {
         stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + cost },
         crypto: { ...prev.crypto, miners: { ...prev.crypto.miners, [minerId]: owned + 1 } },
       }));
-      toast(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success", { ms: 2000 });
+      notify.event(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, notify, refuse, stateRef]
   );
 
   // --- Prestige ------------------------------------------------------------
@@ -734,8 +791,8 @@ export default function CookieCraze() {
         unlocked: prev.unlocked,
       };
     });
-    toast(`Renaissance céleste ✨ +${gain} chips`, "success", { ms: 4000 });
-  }, [audio, toast, stateRef]);
+    notify.major(`Renaissance céleste — +${gain} chips`, "gold");
+  }, [audio, notify, stateRef]);
 
   const buyPrestigeNode = useCallback(
     (nodeId) => {
@@ -746,7 +803,7 @@ export default function CookieCraze() {
       if (level >= node.maxLevel) return;
       const cost = upgradeCost(nodeId, level);
       if (availableChips(s) < cost) {
-        toast("Pas assez de chips célestes", "warn", { ms: 1800 });
+        refuse();
         return;
       }
       audio.play("golden", 0.4);
@@ -759,9 +816,9 @@ export default function CookieCraze() {
           upgrades: { ...prev.prestige.upgrades, [nodeId]: level + 1 },
         },
       }));
-      toast(`${node.emoji} ${node.name} niveau ${level + 1}`, "success", { ms: 2200 });
+      notify.event(`${node.emoji} ${node.name} niveau ${level + 1}`, "success");
     },
-    [audio, toast, stateRef]
+    [audio, notify, refuse, stateRef]
   );
 
   // --- Cookie croqué -------------------------------------------------------
@@ -784,11 +841,11 @@ export default function CookieCraze() {
       cookieBites: [],
       fx: { ...prev.fx, banner: { title: "Cookie croqué !", sub: `+${fmt(bonus)}`, until: Date.now() + 2200 } },
     }));
-    toast(`🍪 Cookie croqué ! +${fmt(bonus)}`, "success");
+    notify.major(`Cookie croqué — +${fmt(bonus)}`, "gold");
 
     // Un cookie sur deux fait apparaître un doré en récompense
     if (count % 2 === 0) events.forceGolden();
-  }, [audio, events, toast, stateRef]);
+  }, [audio, events, notify, stateRef]);
 
   // Les morsures sont suivies par CookieBiteMask à partir du compteur de clics:
   // les dupliquer dans l'état global provoquait un second rendu par clic.
@@ -804,11 +861,11 @@ export default function CookieCraze() {
       a.download = `cookiecraze-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast("Sauvegarde exportée", "success");
+      notify.banner("Sauvegarde exportée", "success");
     } catch {
-      toast("Export impossible", "warn");
+      notify.banner("Export impossible", "warn");
     }
-  }, [toast, stateRef]);
+  }, [notify, stateRef]);
 
   const importSave = useCallback(
     (file) => {
@@ -816,16 +873,16 @@ export default function CookieCraze() {
       reader.onload = () => {
         const parsed = parseSave(reader.result);
         if (!parsed) {
-          toast("Fichier de sauvegarde invalide", "warn");
+          notify.banner("Fichier de sauvegarde invalide", "warn");
           return;
         }
         setState(parsed);
-        toast("Sauvegarde importée", "success");
+        notify.banner("Sauvegarde importée", "success");
       };
-      reader.onerror = () => toast("Lecture du fichier impossible", "warn");
+      reader.onerror = () => notify.banner("Lecture du fichier impossible", "warn");
       reader.readAsText(file);
     },
-    [toast]
+    [notify]
   );
 
   const hardReset = useCallback(
@@ -856,9 +913,9 @@ export default function CookieCraze() {
       setOfflineReport(null);
       setTab("shop");
       setState(createResetState(payload));
-      toast(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
+      notify.banner(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
     },
-    [toast, stateRef, combo]
+    [notify, stateRef, combo]
   );
 
   // ==========================================================================
@@ -892,7 +949,9 @@ export default function CookieCraze() {
       id="game-area"
       className={`${state.ui.highContrast ? "high-contrast " : ""}min-h-screen w-full bg-bakery text-amber-950 select-none`}
     >
-      <div className="mx-auto max-w-7xl px-3 py-4 md:px-6 md:py-6">
+      {/* La marge basse réserve la place de la navigation fixe: aucun bouton de
+          la boutique ne peut finir caché dessous. */}
+      <div className="mx-auto max-w-7xl px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
         {/* ---------- En-tête ---------- */}
         <header className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">
@@ -1072,10 +1131,19 @@ export default function CookieCraze() {
             </div>
           </section>
 
-          {/* --- Panneau latéral --- */}
-          <section className="rounded-3xl glass-warm shadow-xl overflow-hidden flex flex-col max-h-[75vh] lg:max-h-[80vh]">
+          {/* --- Panneau latéral ---
+              Sur mobile il n'y a pas de « côté »: le panneau suit le cookie et
+              la navigation descend sous le pouce, en barre fixe. Le lecteur
+              d'écran, lui, ne voit qu'un seul jeu d'onglets — celui d'en bas. */}
+          <section className="rounded-3xl glass-warm shadow-xl overflow-hidden flex flex-col lg:max-h-[80vh]">
+            {/* Une seule barre d'onglets, deux positions.
+                Sous `lg` elle se détache en bas de l'écran, sous le pouce, avec
+                la marge de sécurité iOS; au-dessus, elle reprend sa place en
+                tête du panneau. En dupliquer une par format donnerait deux
+                `tablist` à un lecteur d'écran — et deux onglets « Prestige ». */}
             <nav
-              className="shrink-0 flex flex-wrap gap-1 p-2 border-b border-amber-200/60 bg-white/50"
+              className="fixed inset-x-0 bottom-0 z-40 flex border-t border-amber-200 bg-white/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]
+                         lg:static lg:z-auto lg:shrink-0 lg:flex-wrap lg:gap-1 lg:p-2 lg:border-t-0 lg:border-b lg:border-amber-200/60 lg:bg-white/50 lg:pb-2 lg:backdrop-blur-none"
               role="tablist"
               aria-label="Sections du jeu"
             >
@@ -1085,20 +1153,24 @@ export default function CookieCraze() {
                   type="button"
                   role="tab"
                   aria-selected={tab === t.id}
-                  // Le libellé texte disparaît sur petit écran: sans ça, un
-                  // lecteur d'écran n'annoncerait que l'emoji.
                   aria-label={t.label}
                   onClick={() => setTab(t.id)}
-                  className={`relative px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                    tab === t.id
-                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md"
-                      : "bg-amber-100/60 text-amber-800 hover:bg-amber-200/70"
-                  }`}
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500
+                    lg:flex-none lg:flex-row lg:gap-1 lg:px-2.5 lg:py-1.5 lg:rounded-xl lg:text-xs lg:font-semibold ${
+                      tab === t.id
+                        ? "text-orange-600 lg:text-white lg:bg-gradient-to-r lg:from-amber-500 lg:to-orange-500 lg:shadow-md"
+                        : "text-amber-700/70 lg:text-amber-800 lg:bg-amber-100/60 lg:hover:bg-amber-200/70"
+                    }`}
                 >
-                  <span aria-hidden="true">{t.icon}</span>
-                  <span className="ml-1 hidden md:inline lg:hidden xl:inline">{t.label}</span>
+                  <span className="text-xl leading-none lg:text-sm" aria-hidden="true">
+                    {t.icon}
+                  </span>
+                  <span className="text-[10px] font-semibold leading-none xl:inline lg:hidden">{t.label}</span>
+                  {tab === t.id && (
+                    <span className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-orange-500 lg:hidden" aria-hidden="true" />
+                  )}
                   {t.id === "quests" && questAlert > 0 && tab !== "quests" && (
-                    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold grid place-items-center">
+                    <span className="absolute top-1 right-1/4 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[9px] font-bold grid place-items-center lg:-top-1 lg:-right-1">
                       {questAlert}
                     </span>
                   )}
@@ -1106,10 +1178,12 @@ export default function CookieCraze() {
               ))}
             </nav>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain p-3 md:p-4 scrollbar-thin">
+            <div className="flex-1 lg:overflow-y-auto overscroll-contain p-3 md:p-4 scrollbar-thin">
               {tab === "shop" && (
                 <>
-                  <div className="mb-2 flex flex-wrap items-center gap-1">
+                  {/* Filtres et quantité restent collés en haut du panneau: sur
+                      mobile la liste défile sous eux, ils ne disparaissent jamais. */}
+                  <div className="sticky top-0 z-10 -mx-3 md:-mx-4 px-3 md:px-4 pb-2 pt-0.5 bg-gradient-to-b from-amber-50 via-amber-50/95 to-transparent flex items-center gap-2">
                     <div className="flex gap-1" role="group" aria-label="Filtrer les bâtiments">
                       {[
                         ["all", "Tout"],
@@ -1121,10 +1195,10 @@ export default function CookieCraze() {
                           type="button"
                           onClick={() => setShopFilter(id)}
                           aria-pressed={shopFilter === id}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                             shopFilter === id
                               ? "bg-amber-500 text-white shadow"
-                              : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
+                              : "bg-white/80 text-amber-800 border border-amber-200"
                           }`}
                         >
                           {label}
@@ -1132,19 +1206,19 @@ export default function CookieCraze() {
                       ))}
                     </div>
                     <div className="ml-auto flex gap-1" role="group" aria-label="Quantité d'achat">
-                      {[1, 10, 100].map((q) => (
+                      {[1, 10, "max"].map((q) => (
                         <button
                           key={q}
                           type="button"
                           onClick={() => setBuyQty(q)}
                           aria-pressed={buyQty === q}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                             buyQty === q
                               ? "bg-orange-500 text-white shadow"
-                              : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
+                              : "bg-white/80 text-amber-800 border border-amber-200"
                           }`}
                         >
-                          ×{q}
+                          {q === "max" ? "Max" : `×${q}`}
                         </button>
                       ))}
                     </div>
@@ -1258,32 +1332,7 @@ export default function CookieCraze() {
         </button>
       ))}
 
-      {/* Bas-gauche sur grand écran: le panneau de droite reste lisible pendant
-          qu'une notification s'affiche. Centré en bas sur mobile. */}
-      <div className="fixed inset-x-3 bottom-3 z-50 flex flex-col items-center gap-2 lg:inset-x-auto lg:left-4 lg:items-start lg:max-w-sm">
-        <AnimatePresence initial={false}>
-          {state.toasts.map((t) => (
-            <motion.div
-              key={t.id}
-              layout
-              initial={{ opacity: 0, y: 16, scale: 0.92 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.92 }}
-              transition={{ type: "spring", stiffness: 380, damping: 28 }}
-              role="status"
-              className={`px-4 py-2.5 rounded-2xl text-sm font-medium shadow-xl border backdrop-blur-sm ${
-                t.tone === "success"
-                  ? "bg-emerald-600/95 border-emerald-400 text-white"
-                  : t.tone === "warn"
-                    ? "bg-red-600/95 border-red-400 text-white"
-                    : "bg-stone-800/95 border-stone-600 text-white"
-              }`}
-            >
-              {t.msg}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <Notice notice={state.notice} reducedMotion={reducedMotion} />
 
       <AnimatePresence>
         {offlineReport && <OfflineModal report={offlineReport} onClose={() => setOfflineReport(null)} />}

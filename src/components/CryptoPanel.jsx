@@ -124,7 +124,9 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
         <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded-lg bg-white/70 border border-cyan-200 px-2 py-1.5">
             <div className="text-cyan-700">Portefeuille</div>
-            <div className="font-bold text-cyan-950 tabular-nums">{fmtCrmb(crypto.balance || 0)} CRMB</div>
+            <div data-testid="crmb-solde" className="font-bold text-cyan-950 tabular-nums">
+              {fmtCrmb(crypto.balance || 0)} CRMB
+            </div>
           </div>
           <div className="rounded-lg bg-white/70 border border-cyan-200 px-2 py-1.5">
             <div className="text-cyan-700">Valeur</div>

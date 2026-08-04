@@ -1,15 +1,14 @@
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import { CLICKERS, MINER_ITEMS, LABELS } from "../data/items.js";
-import { costOf, buyQuantity, deriveStats, timeToAfford, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
+import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
 import { fmt, fmtDuration, LOCALE } from "../utils/format.js";
+import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
 // La valeur propre s'écrit en toutes lettres — « +100 000 /s », pas « +100K ».
 // C'est le nombre rond de la fiche: le compacter lui ferait perdre sa raison
 // d'être. Il ne dépasse jamais 100 000, il tient donc toujours sur la ligne.
 const valeurPropre = (n) => n.toLocaleString(LOCALE, { maximumFractionDigits: 2 });
-import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
-// Compteur de vente flash isolé: seul ce petit composant se rafraîchit
 const FlashTimer = memo(function FlashTimer({ until }) {
   const left = useTimeLeft(until, 250);
   if (left <= 0) return null;
@@ -17,19 +16,17 @@ const FlashTimer = memo(function FlashTimer({ until }) {
 });
 
 /**
- * Une ligne de boutique dit trois choses, jamais mélangées:
+ * Une carte de boutique, pensée pour le pouce.
  *
- *  1. la valeur propre du bâtiment — le nombre rond, celui de la fiche
- *     (« +0,25 /clic de base »), qui ne bouge jamais;
- *  2. le gain réel actuel — ce que cet achat ajoute vraiment ici et maintenant,
- *     paliers, chips et staking compris (« +60 /clic »). Un Mineur en a deux,
- *     dans deux unités différentes: sa production et la part qu'il reverse au
- *     clic. Les additionner n'aurait aucun sens, ils restent séparés;
- *  3. l'avant → après (« 329,97K → 330,03K »), qui situe le gain dans l'échelle
- *     du moment — et devient illisible tout seul quand l'empire est énorme,
- *     d'où la ligne 2.
+ * Fermée, elle ne dit que ce qu'il faut pour décider: quoi, combien j'en ai,
+ * ce que ça rapporte, ce que ça coûte. L'ancienne version affichait en
+ * permanence « 404,08K → 404,14K », deux nombres presque identiques qui
+ * remplissaient la carte sans rien apprendre.
+ *
+ * Ouverte — un appui sur la carte — elle montre le détail: valeur propre,
+ * avant/après, et le second gain des Mineurs.
  */
-const ItemRow = memo(function ItemRow({
+const ItemCard = memo(function ItemCard({
   item,
   owned,
   price,
@@ -44,114 +41,165 @@ const ItemRow = memo(function ItemRow({
   gainClick,
   unit,
   eta,
+  progress,
+  ouverte,
+  onToggle,
 }) {
-  const label = `${item.name}, ${owned} possédés, coût ${fmt(price)} cookies, gain ${fmt(gainMain)} ${unit}${
-    gainClick ? ` et ${fmt(gainClick)} par clic` : ""
-  }, fait passer de ${fmt(before)} à ${fmt(after)} ${unit}`;
+  const achetable = affordable || isFree;
+  const clic = item.mode === "click";
 
   return (
-    <button
-      type="button"
-      onClick={onBuy}
-      disabled={!affordable && !isFree}
-      aria-label={label}
-      className={`group relative w-full text-left p-3 rounded-2xl border flex items-center gap-3 transition-all duration-150 ${
-        affordable || isFree
-          ? "bg-white/80 border-amber-200 hover:border-amber-400 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0"
-          : "bg-stone-100/60 border-stone-200 opacity-65 cursor-not-allowed"
+    <div
+      className={`rounded-2xl border overflow-hidden transition-colors ${
+        achetable ? "bg-white/85 border-amber-200" : "bg-stone-100/70 border-stone-200"
       }`}
     >
-      {flash && (
-        <span className="absolute -top-2 -right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white shadow-lg animate-pulse">
-          -{Math.round(flash.discount * 100)} % <FlashTimer until={flash.until} />
-        </span>
-      )}
-
-      <span className="text-2xl shrink-0 transition-transform duration-150 group-hover:scale-110" aria-hidden="true">
-        {item.emoji}
-      </span>
-
-      <span className="flex-1 min-w-0">
-        {/* Nom · possédés · prix */}
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="min-w-0 flex items-baseline gap-1.5">
-            <span className="font-semibold text-amber-950 truncate">{item.name}</span>
-            <span className="text-xs text-amber-700 tabular-nums shrink-0">×{owned}</span>
-          </span>
+      <div className="flex items-stretch">
+        {/* Zone d'information: ouvre le détail. Large, donc facile à viser. */}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={ouverte}
+          aria-label={`Détail de ${item.name}`}
+          className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left active:bg-amber-50/60"
+        >
           <span
-            className={`text-sm font-bold tabular-nums shrink-0 ${
-              isFree ? "text-emerald-600" : affordable ? "text-amber-700" : "text-stone-500"
-            }`}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-2xl ${
+              clic ? "bg-amber-100" : "bg-emerald-100"
+            } ${achetable ? "" : "grayscale opacity-70"}`}
+            aria-hidden="true"
           >
-            {isFree ? "OFFERT" : fmt(price)}
-            {qty > 1 && !isFree && <span className="text-[10px] font-normal text-amber-600"> ×{qty}</span>}
+            {item.emoji}
           </span>
-        </span>
 
-        {/* 1. Valeur propre: le nombre rond, identique du premier au millionième. */}
-        <span className="mt-0.5 block text-[11px] text-amber-800/70 tabular-nums">
-          +{valeurPropre(item.value)} {unit} de base{qty > 1 && ` × ${qty}`}
-        </span>
-
-        {/* 2. Gain réel actuel, une unité par gain. */}
-        <span className="mt-0.5 flex items-baseline gap-2 text-[11px] tabular-nums">
-          <span className="text-amber-900/60">Gain réel</span>
-          <span className="font-bold text-emerald-700">
-            +{fmt(gainMain)} {unit}
-          </span>
-          {gainClick > 0 && (
-            <span className="font-bold text-sky-700">+{fmt(gainClick)} {LABELS.click.unit}</span>
-          )}
-        </span>
-
-        {/* 3. Avant → après. */}
-        <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] tabular-nums">
-          <span className="text-amber-800/70">
-            {fmt(before)} <span aria-hidden="true">→</span>{" "}
-            <span className="font-semibold text-amber-950">
-              {fmt(after)} {unit}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline gap-1.5">
+              <span className="font-bold text-amber-950 truncate">{item.name}</span>
+              {owned > 0 && (
+                <span className="shrink-0 text-xs font-semibold text-amber-600 tabular-nums">×{owned}</span>
+              )}
+            </span>
+            {/* Le gain réel, en gros: c'est la seule chose qui décide l'achat. */}
+            <span className={`block text-sm font-bold tabular-nums ${clic ? "text-amber-700" : "text-emerald-700"}`}>
+              +{fmt(gainMain)} {unit}
             </span>
           </span>
-          {!affordable && !isFree && eta != null && isFinite(eta) && (
-            <span className="text-[10px] text-amber-600/90 shrink-0">dans ~{fmtDuration(eta)}</span>
-          )}
-        </span>
-      </span>
-    </button>
-  );
-});
+        </button>
 
-const Section = memo(function Section({ label, total, unit, rows, qty, onBuy }) {
-  if (!rows.length) return null;
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2 pt-1">
-        <h4 className="text-sm font-bold text-amber-900">
-          {label.icon} {label.many}
-        </h4>
-        <span className="text-[11px] text-amber-700 tabular-nums">
-          {label.axis} : <b>{fmt(total)}</b> {unit}
-        </span>
+        {/* Bouton d'achat séparé: on n'ouvre jamais le détail par erreur en
+            voulant acheter, ni l'inverse. */}
+        <button
+          type="button"
+          onClick={onBuy}
+          disabled={!achetable}
+          aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmt(price)} cookies`}
+          className={`relative w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
+            achetable
+              ? "border-amber-200 bg-gradient-to-b from-amber-400 to-orange-500 text-white active:from-amber-500 active:to-orange-600"
+              : "border-stone-200 bg-stone-200/60 text-stone-500 cursor-not-allowed"
+          }`}
+        >
+          {flash && (
+            <span className="absolute -top-0.5 right-1 px-1.5 rounded-full text-[9px] font-bold bg-red-600 text-white shadow">
+              -{Math.round(flash.discount * 100)} % <FlashTimer until={flash.until} />
+            </span>
+          )}
+          <span className="text-[10px] font-semibold uppercase tracking-wide opacity-90">
+            {isFree ? "Offert" : qty > 1 ? `Acheter ×${qty}` : "Acheter"}
+          </span>
+          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmt(price)}</span>
+          {!achetable && eta != null && isFinite(eta) && (
+            <span className="text-[9px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
+          )}
+        </button>
       </div>
-      {rows.map((r) => (
-        <ItemRow key={r.item.id} {...r} qty={qty} onBuy={(e) => onBuy(r.item.id, buyQuantity(e))} />
-      ))}
+
+      {/* Barre de progression vers l'achat: le prochain objectif est toujours
+          visible, même quand on ne peut pas encore se l'offrir. */}
+      {!achetable && (
+        <div className="h-1 bg-stone-200" aria-hidden="true">
+          <div
+            className="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-[width] duration-300"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+      )}
+
+      {ouverte && (
+        <div className="px-3 pb-3 pt-1 text-[11px] tabular-nums border-t border-amber-100 bg-amber-50/50">
+          <p className="text-amber-800/80 mb-1.5 not-italic">{item.desc}</p>
+          <dl className="space-y-1">
+            <div className="flex justify-between gap-2">
+              <dt className="text-amber-900/60">Valeur de base</dt>
+              <dd className="font-semibold text-amber-900">
+                +{valeurPropre(item.value)} {unit}
+              </dd>
+            </div>
+            {gainClick > 0 && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-amber-900/60">Aussi, en puissance de clic</dt>
+                <dd className="font-semibold text-sky-700">
+                  +{fmt(gainClick)} {LABELS.click.unit}
+                </dd>
+              </div>
+            )}
+            <div className="flex justify-between gap-2">
+              <dt className="text-amber-900/60">{LABELS[item.mode].axis}</dt>
+              <dd className="text-amber-900">
+                {fmt(before)} <span aria-hidden="true">→</span>{" "}
+                <span className="font-bold text-emerald-700">
+                  {fmt(after)} {unit}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
     </div>
   );
 });
 
-function Shop({ state, filter = "all", onBuy, qty, stats }) {
-  // Les remises temporaires expirent: l'horloge partagée rafraîchit les prix
-  // sans que le rendu ait à lire l'heure lui-même.
+const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ouverte, onToggle }) {
+  if (!rows.length) return null;
+  return (
+    <section className="space-y-2">
+      <header className="flex items-baseline justify-between gap-2 px-0.5">
+        <h4 className="text-sm font-bold text-amber-900">
+          {label.icon} {label.many}
+        </h4>
+        <span className="text-[11px] text-amber-700 tabular-nums">
+          <b>{fmt(total)}</b> {unit}
+        </span>
+      </header>
+      {rows.map((r) => (
+        <ItemCard
+          key={r.item.id}
+          {...r}
+          qty={qty}
+          ouverte={ouverte === r.item.id}
+          onToggle={() => onToggle(r.item.id)}
+          onBuy={() => onBuy(r.item.id, qty)}
+        />
+      ))}
+    </section>
+  );
+});
+
+function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
   const now = useClock(500);
+  const [ouverte, setOuverte] = useState(null);
+  const toggle = useCallback((id) => setOuverte((v) => (v === id ? null : id)), []);
 
   const build = useCallback(
     (list) => {
       const base = deriveStats(state, now, 0);
       return list.map((item) => {
         const owned = state.items[item.id] || 0;
-        const price = costOf(state, item.id, qty, now);
-        const next = deriveStats({ ...state, items: { ...state.items, [item.id]: owned + qty } }, now, 0);
+        // « Max » achète tout ce que la banque permet, au moins un exemplaire
+        // pour que le prix affiché reste celui d'un achat possible.
+        const n = qty === "max" ? Math.max(1, maxAffordable(state, item.id, 1000, now)) : qty;
+        const price = costOf(state, item.id, n, now);
+        const next = deriveStats({ ...state, items: { ...state.items, [item.id]: owned + n } }, now, 0);
 
         const isClick = item.mode === "click";
         const before = isClick ? base.perClickNoCombo : base.mining;
@@ -178,6 +226,7 @@ function Shop({ state, filter = "all", onBuy, qty, stats }) {
           isFree: price === 0,
           affordable: state.cookies >= price,
           eta: timeToAfford(state, price, base, REF_CLICKS_PER_SECOND),
+          progress: price > 0 ? Math.min(1, (state.cookies || 0) / price) : 1,
         };
       });
     },
@@ -188,7 +237,7 @@ function Shop({ state, filter = "all", onBuy, qty, stats }) {
   const mineRows = useMemo(() => (filter === "click" ? [] : build(MINER_ITEMS)), [build, filter]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Section
         label={LABELS.click}
         total={stats.perClickNoCombo}
@@ -196,6 +245,8 @@ function Shop({ state, filter = "all", onBuy, qty, stats }) {
         rows={clickRows}
         qty={qty}
         onBuy={onBuy}
+        ouverte={ouverte}
+        onToggle={toggle}
       />
       <Section
         label={LABELS.mine}
@@ -204,6 +255,8 @@ function Shop({ state, filter = "all", onBuy, qty, stats }) {
         rows={mineRows}
         qty={qty}
         onBuy={onBuy}
+        ouverte={ouverte}
+        onToggle={toggle}
       />
     </div>
   );

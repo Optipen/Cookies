@@ -1,3 +1,4 @@
+import { onGrid } from "../utils/grid.js";
 import { describe, it, expect } from "vitest";
 import {
   CRMB,
@@ -85,8 +86,8 @@ describe("minage", () => {
 
   it("additionne les débits du matériel", () => {
     expect(miningRate({})).toBe(0);
-    expect(miningRate({ cpu: 2 })).toBeCloseTo(MINERS[0].rate * 2);
-    expect(miningRate({ cpu: 1, gpu: 1 })).toBeCloseTo(MINERS[0].rate + MINERS[1].rate);
+    expect(miningRate({ cpu: 2 })).toBeCloseTo(MINERS[0].perHour / 3600 * 2);
+    expect(miningRate({ cpu: 1, gpu: 1 })).toBeCloseTo(MINERS[0].perHour / 3600 + MINERS[1].perHour / 3600);
   });
 });
 
@@ -96,13 +97,24 @@ describe("staking", () => {
     expect(stakedTotal([{ amount: 1 }, { amount: 0.5 }])).toBe(1.5);
   });
 
-  it("applique des rendements décroissants", () => {
+  it("monte par paliers propres, jamais en continu", () => {
     const one = stakingBoost([{ amount: 1, tierId: "flex" }]);
     const hundred = stakingBoost([{ amount: 100, tierId: "flex" }]);
-    expect(one).toBeGreaterThan(1);
+    expect(one).toBe(1.25); // premier palier franchi: +0,25 pile
     expect(hundred).toBeGreaterThan(one);
     // 100× la mise ne doit pas donner 100× le bonus
     expect(hundred - 1).toBeLessThan((one - 1) * 100);
+    // Et toute valeur intermédiaire reste sur la grille
+    for (const amount of [0, 0.5, 1, 2, 3, 7, 42, 1000]) {
+      expect(onGrid(stakingBoost([{ amount, tierId: "flex" }]))).toBe(true);
+    }
+  });
+
+  it("ne bouge pas entre deux paliers", () => {
+    // Entre 1 et 2,5 CRMB le multiplicateur est identique: c'est la barre de
+    // progression qui montre l'avancée, pas un chiffre qui glisse.
+    expect(stakingBoost([{ amount: 1, tierId: "flex" }])).toBe(stakingBoost([{ amount: 2.4, tierId: "flex" }]));
+    expect(stakingBoost([{ amount: 2.5, tierId: "flex" }])).toBe(1.5);
   });
 
   it("récompense les paliers longs", () => {
@@ -116,10 +128,11 @@ describe("staking", () => {
     expect(stakingYieldPerSecond([])).toBe(0);
   });
 
-  it("calcule un rendement annuel cohérent", () => {
+  it("calcule un rendement journalier cohérent", () => {
+    // Le rendement s'exprime par jour, pas par an: une partie dure une semaine,
+    // un taux annuel ne voulait rien dire à l'échelle du jeu.
     const perSecond = stakingYieldPerSecond([{ amount: 100, tierId: "flex" }]);
-    const perYear = perSecond * 365 * 24 * 3600;
-    expect(perYear).toBeCloseTo(100 * getTier("flex").apr, 4);
+    expect(perSecond * 86_400).toBeCloseTo(100 * getTier("flex").perDay, 6);
   });
 
   it("respecte le verrou temporel", () => {

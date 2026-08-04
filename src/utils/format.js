@@ -38,6 +38,20 @@ export const fmtInt = (n) => {
   return value.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
 };
 
+/**
+ * Multiplicateur de la grille: 1 · 1,25 · 1,50 · 1,75 · 2 · 2,25 …
+ *
+ * Un entier s'écrit nu — « ×2 », pas « ×2,00 ». Une fraction garde ses deux
+ * décimales pour que ×1,50 et ×1,75 s'alignent à l'œil. Les valeurs étant
+ * choisies sur la grille, ce formatage n'arrondit jamais rien de visible.
+ */
+export const fmtMult = (n) => {
+  if (!isFinite(n)) return "∞";
+  return Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 // Pourcentage lisible: +12 % · -5,5 %
 export const fmtPct = (ratio, digits = 0) => {
   if (!isFinite(ratio)) return "∞";

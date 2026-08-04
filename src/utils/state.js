@@ -73,7 +73,7 @@ export function createFreshState(now = Date.now()) {
       volume: 0.6,
     },
 
-    toasts: [],
+    notice: null,
     unlocked: {},
     fx: { banner: null, shakeUntil: 0, tag: null },
 
@@ -157,7 +157,7 @@ export function migrate(savedState, now = Date.now()) {
 
     // --- Champs toujours reconstruits ---
     merged.version = STATE_VERSION;
-    merged.toasts = [];
+    merged.notice = null;
     merged.fx = { banner: null, shakeUntil: 0, tag: null };
     merged.items = isObj(savedState.items) ? { ...savedState.items } : {};
     // Les améliorations sont générées: on écarte les identifiants qui ne
@@ -197,7 +197,12 @@ export function migrate(savedState, now = Date.now()) {
       name: CRMB.name,
       symbol: CRMB.symbol,
       balance: Math.max(0, num(oldCrypto.balance)),
-      mintedUnits: Math.max(0, num(oldCrypto.mintedUnits)),
+      // `mintedUnits`, `perCookies` et `perAmount` pilotaient le faucet, qui
+      // n'existe plus: les garder ferait croire à une source de CRMB disparue.
+      mintedUnits: undefined,
+      perCookies: undefined,
+      perAmount: undefined,
+      totalEarned: Math.max(0, num(oldCrypto.totalEarned)),
       price: num(oldCrypto.price, CRMB.basePrice),
       priceHistory: Array.isArray(oldCrypto.priceHistory) && oldCrypto.priceHistory.length
         ? oldCrypto.priceHistory.filter((p) => isFinite(p)).slice(-CRMB.historyLength)
