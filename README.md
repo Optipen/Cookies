@@ -360,6 +360,33 @@ répartition des achats ; et l'écart entre la meilleure et la pire stratégie
 d'achat reste **sous un facteur 1 000** sur six heures de jeu simulé, contre un
 facteur 18 000 mesuré avant cette refonte.
 
+### Notifications : une file, pas une trappe
+
+L'ancienne version **écartait** ce qui arrivait pendant le silence. Un joueur
+qui décrochait trois succès d'affilée n'en voyait qu'un : les deux autres
+n'existaient plus. Elle est remplacée par une vraie file
+([`src/utils/notices.js`](src/utils/notices.js)), écrite en fonctions pures —
+c'est ce qui permet de **mesurer** ce qu'une session produit au lieu de
+l'estimer.
+
+| Règle | Valeur | Pourquoi |
+| --- | --- | --- |
+| Silence entre deux ordinaires | 11 s | Une notification qu'on n'a pas le temps de lire n'informe personne |
+| File bornée | 6 entrées | Une file sans limite ne supprime pas l'avalanche, elle la reporte |
+| Péremption | 90 s | Passé ce délai, le message parle d'une partie qu'on ne joue plus |
+| Déduplication | 30 s | Le même texte ne revient pas coup sur coup |
+| Regroupement | 1 s | Dix succès simultanés font **une** ligne, avec « ×10 » |
+| Écart entre majeurs | 2,5 s | Une renaissance passe devant, mais pas en rafale |
+| **Plafond des majeurs** | **6 / minute glissante** | Même un bug qui en déclencherait soixante ne peut pas saturer l'écran |
+
+Mesuré sur une session type (quêtes toutes les 45 s, succès toutes les 90 s,
+dorés toutes les 70 s, une renaissance toutes les 30 min) : **moins de 6
+notifications par minute** sur le premier quart d'heure comme sur une heure
+entière, et aucun identifiant réaffiché deux fois.
+
+Un achat ordinaire ne notifie rien : le chiffre monte sur sa propre carte. Un
+achat refusé ne notifie rien non plus — le bouton tremble, c'est tout.
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs

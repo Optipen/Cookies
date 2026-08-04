@@ -57,7 +57,7 @@ export function useQuests(state, setState, notify, onCelebrate) {
           finies.length === 1
             ? `${finies[0].icon || "✅"} ${finies[0].daily ? "Quête du jour" : "Quête"} terminée`
             : `✅ ${finies.length} quêtes terminées`;
-        notifyRef.current.event(parts.length ? `${titre} · ${parts.join(" · ")}` : titre, "success");
+        notifyRef.current.event(parts.length ? `${titre} · ${parts.join(" · ")}` : titre, "success", { group: "quete" });
         for (const ev of finies) celebrateRef.current?.(ev);
       }
     }, TICK_MS);

@@ -70,7 +70,7 @@ export function useAchievements(state, setState, notify, onUnlock) {
       const parts = [];
       if (totalReward > 0) parts.push(`+${fmt(totalReward)}`);
       if (totalCrmb > 0) parts.push(`+${totalCrmb} CRMB`);
-      notifyRef.current.event(parts.length ? `${titre} · ${parts.join(" · ")}` : titre, "success");
+      notifyRef.current.event(parts.length ? `${titre} · ${parts.join(" · ")}` : titre, "success", { group: "succes" });
       unlockRef.current?.(newly);
     }, CHECK_MS);
 

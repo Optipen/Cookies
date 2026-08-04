@@ -319,6 +319,13 @@ const Notice = memo(function Notice({ notice, reducedMotion }) {
             } ${grand ? "px-5 py-3.5 text-base font-black" : "px-4 py-2.5 text-sm font-semibold"}`}
           >
             {notice.msg}
+            {/* Regroupement: dix succès simultanés font une ligne, avec le
+                nombre. Dix lignes recouvraient la moitié de l'écran. */}
+            {notice.count > 1 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/25 text-[11px] font-bold tabular-nums">
+                ×{notice.count}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -801,7 +808,7 @@ export default function CookieCraze() {
         stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + upgrade.cost },
         fx: { ...prev.fx, banner: { title: "Amélioration", sub: upgrade.name, until: Date.now() + 2000 } },
       }));
-      notify.event(`${upgrade.emoji} ${upgrade.name}`, "success");
+      notify.event(`${upgrade.emoji} ${upgrade.name}`, "success", { group: "amelioration" });
     },
     [audio, notify, refuse, stateRef]
   );
@@ -963,7 +970,7 @@ export default function CookieCraze() {
         stats: { ...prev.stats, totalSpent: (prev.stats.totalSpent || 0) + cost },
         crypto: { ...prev.crypto, miners: { ...prev.crypto.miners, [minerId]: owned + 1 } },
       }));
-      notify.event(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success");
+      notify.event(`${MINERS.find((m) => m.id === minerId)?.name} installé`, "success", { group: "materiel" });
     },
     [audio, notify, refuse, stateRef]
   );
@@ -1109,7 +1116,7 @@ export default function CookieCraze() {
         },
       }));
       audio.play("buy", 0.5);
-      notify.event(`${track.emoji} ${track.name} niveau ${niveau + 1}`, "success");
+      notify.event(`${track.emoji} ${track.name} niveau ${niveau + 1}`, "success", { group: "voute" });
     },
     [audio, notify, refuse, stateRef]
   );
@@ -1136,7 +1143,7 @@ export default function CookieCraze() {
           upgrades: { ...prev.prestige.upgrades, [nodeId]: level + 1 },
         },
       }));
-      notify.event(`${node.emoji} ${node.name} niveau ${level + 1}`, "success");
+      notify.event(`${node.emoji} ${node.name} niveau ${level + 1}`, "success", { group: "arbre" });
     },
     [audio, notify, refuse, stateRef]
   );
