@@ -33,6 +33,7 @@ import {
   comboProgress,
 } from "../utils/selectors.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
+import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
 import { STEP, snap } from "../utils/grid.js";
 import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
@@ -385,6 +386,56 @@ const OfflineModal = memo(function OfflineModal({ report, onClose }) {
   );
 });
 
+/**
+ * Vérification humaine.
+ *
+ * Elle n'apparaît JAMAIS parce que le joueur est inactif — ne pas cliquer est
+ * une façon légitime de jouer, le minage tourne tout seul. Elle n'apparaît
+ * qu'après un comportement réellement suspect, et elle ne retire rien: le
+ * minage continue, la sauvegarde est intacte, seuls les nouveaux gains
+ * manuels attendent la réponse.
+ *
+ * Un seul geste, trois cibles, du texte que lit un lecteur d'écran, et le
+ * clavier fonctionne: on demande une décision, pas une épreuve.
+ */
+const VerificationModal = memo(function VerificationModal({ defi, onReussite, onEchec }) {
+  if (!defi) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="verif-title"
+      data-testid="verification"
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-6 shadow-2xl text-center">
+        <div className="text-4xl mb-2" aria-hidden="true">
+          🤖
+        </div>
+        <h2 id="verif-title" className="text-lg font-black text-amber-950">
+          Une seconde
+        </h2>
+        <p className="text-sm text-amber-800/80 mt-1">{defi.question}</p>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {defi.options.map((valeur, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => (i === defi.reponse ? onReussite() : onEchec())}
+              className="min-h-[3rem] rounded-2xl bg-white border-2 border-amber-300 text-xl font-black text-amber-900 tabular-nums active:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              {valeur}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-[11px] text-amber-700/70">
+          Ton minage continue et ta partie est intacte. Rien n&apos;a été retiré.
+        </p>
+      </div>
+    </div>
+  );
+});
+
 const HeaderStat = memo(function HeaderStat({ label, value, tone = "amber", title }) {
   const tones = {
     amber: "bg-amber-100/80 text-amber-900 border-amber-200",
@@ -418,7 +469,10 @@ export default function CookieCraze() {
   const particlesRef = useRef(null);
   const bootedRef = useRef(false);
   // Dernier clic effectivement crédité: sert de garde-fou anti-automatisation.
-  const lastCreditedClickRef = useRef(0);
+  // Le garde-fou anti-automatisation. Créé une seule fois: il a sa propre
+  // mémoire du geste et la reconstruire à chaque rendu l'effacerait.
+  const [guard] = useState(createGuard);
+  const [defi, setDefi] = useState(null);
   // Les systèmes pilotés par minuterie lisent l'état ici plutôt que par
   // fermeture: ça évite de reconstruire leurs intervalles à chaque rendu.
   const stateRef = useLatestRef(state);
@@ -597,55 +651,68 @@ export default function CookieCraze() {
   // Actions
   // ==========================================================================
 
-  const onCookieClick = useCallback(() => {
-    const maintenant = Date.now();
-    // Un clic crédité au plus toutes les 40 ms, soit 25 par seconde.
-    //
-    // Ce n'est pas un plafond de progression: un joueur rapide monte à 12 ou
-    // 15 clics/s à deux pouces et n'atteindra jamais ce seuil. C'est une borne
-    // contre l'automatisation — mesuré, un autoclicker à 50 clics/s obtenait un
-    // rapport actif/passif de 23× là où un joueur très actif plafonne à 3,5×,
-    // et 200 fois plus de cookies en cinq minutes. Le clic répond quand même
-    // visuellement: on refuse le gain, pas le geste.
-    const credite = maintenant - lastCreditedClickRef.current >= 40;
-    if (credite) lastCreditedClickRef.current = maintenant;
+  const onCookieClick = useCallback(
+    (event) => {
+      const maintenant = Date.now();
 
-    audio.play("crunch", 0.3);
-    clickRate.register(maintenant);
-    // Le combo est enregistré d'abord: le clic courant profite déjà du palier
-    // qu'il vient d'atteindre.
-    combo.register();
-    const streak = combo.streakRef.current;
-    const derived = deriveStats(stateRef.current, maintenant, streak);
-    const gain = credite ? derived.cpc : 0;
+      // Le garde-fou décide seul si le clic est crédité: seau à jetons pour la
+      // cadence, score de suspicion pour la forme du geste. Il ne retire jamais
+      // rien et ne bannit personne — voir `utils/anticheat.js` pour ce qu'il
+      // peut et ne peut pas faire.
+      const verdict = guard.enregistrer(maintenant, {
+        trusted: event?.isTrusted,
+        hidden: typeof document !== "undefined" && document.visibilityState === "hidden",
+        touches: event?.touches?.length,
+      });
 
-    if (!credite) {
-      if (isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstCrumbs(2);
-      return;
-    }
-
-    setState((s) => ({
-      ...s,
-      cookies: s.cookies + gain,
-      lifetime: s.lifetime + gain,
-      stats: {
-        ...s.stats,
-        clicks: (s.stats.clicks || 0) + 1,
-        handmade: (s.stats.handmade || 0) + gain,
-        bestCombo: Math.max(s.stats.bestCombo || 1, derived.combo),
-      },
-    }));
-
-    if (isFeatureEnabled("ENABLE_PARTICLES")) {
-      particlesRef.current?.burstText(1, `+${fmt(gain)}`);
-      particlesRef.current?.burstCrumbs(derived.combo >= COMBO.max ? 5 : 3);
-      // Gerbe dorée à chaque cran franchi, pour rendre la montée lisible. Calée
-      // sur les crans réels: un multiple de dix ne tombait sur aucun d'eux.
-      if (streak > 0 && streak <= COMBO.clicksToMax && streak % COMBO.clicksPerStep === 0) {
-        particlesRef.current?.burstGold(10);
+      if (verdict.verification && !defi) {
+        setDefi(fabriquerDefi(maintenant));
+        combo.reset();
+        clickRate.reset();
+        return;
       }
-    }
-  }, [audio, combo, clickRate, stateRef]);
+
+      audio.play("crunch", 0.3);
+      // Le combo est enregistré d'abord: le clic courant profite déjà du palier
+      // qu'il vient d'atteindre. Un clic non crédité ne le fait pas monter —
+      // sinon un autoclicker garderait le multiplicateur plein gratuitement.
+      if (!verdict.credite) {
+        if (isFeatureEnabled("ENABLE_PARTICLES")) particlesRef.current?.burstCrumbs(2);
+        return;
+      }
+
+      // La cadence affichée ne compte que les clics crédités: c'est ce que le
+      // joueur doit pouvoir multiplier par son « par clic ».
+      clickRate.register(maintenant);
+      combo.register();
+      const streak = combo.streakRef.current;
+      const derived = deriveStats(stateRef.current, maintenant, streak);
+      const gain = derived.cpc;
+
+      setState((s) => ({
+        ...s,
+        cookies: s.cookies + gain,
+        lifetime: s.lifetime + gain,
+        stats: {
+          ...s.stats,
+          clicks: (s.stats.clicks || 0) + 1,
+          handmade: (s.stats.handmade || 0) + gain,
+          bestCombo: Math.max(s.stats.bestCombo || 1, derived.combo),
+        },
+      }));
+
+      if (isFeatureEnabled("ENABLE_PARTICLES")) {
+        particlesRef.current?.burstText(1, `+${fmt(gain)}`);
+        particlesRef.current?.burstCrumbs(derived.combo >= COMBO.max ? 5 : 3);
+        // Gerbe dorée à chaque cran franchi, pour rendre la montée lisible. Calée
+        // sur les crans réels: un multiple de dix ne tombait sur aucun d'eux.
+        if (streak > 0 && streak <= COMBO.clicksToMax && streak % COMBO.clicksPerStep === 0) {
+          particlesRef.current?.burstGold(10);
+        }
+      }
+    },
+    [audio, combo, clickRate, stateRef, defi, guard]
+  );
 
   const buy = useCallback(
     (itemId, quantite = 1) => {
@@ -1482,6 +1549,16 @@ export default function CookieCraze() {
 
       <AnimatePresence>
         {offlineReport && <OfflineModal report={offlineReport} onClose={() => setOfflineReport(null)} />}
+        <VerificationModal
+          defi={defi}
+          onReussite={() => {
+            guard.resoudre();
+            setDefi(null);
+          }}
+          // Mauvaise réponse: on repose la question, on ne punit pas. Un joueur
+          // qui se trompe de bouton n'est pas un tricheur.
+          onEchec={() => setDefi(fabriquerDefi(Date.now() + 7))}
+        />
       </AnimatePresence>
     </div>
   );

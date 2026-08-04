@@ -200,6 +200,58 @@ mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la réduction du
 prestige (×0,95) et une remise générale (×0,75) se cumulaient. Trois cookies,
 mais c'est un écart que rien n'annonce et qui grandit avec le lot.
 
+### Automatisation : ce qui est protégé, et ce qui ne peut pas l'être
+
+**Cette protection est entièrement côté client, et elle ne prétend pas être
+inviolable.** Le jeu n'a pas de serveur : la partie vit dans le `localStorage`
+du navigateur et tout le code tourne sur la machine du joueur. Quelqu'un qui
+veut vraiment tricher peut modifier la sauvegarde dans les outils de
+développement, appeler les fonctions du jeu depuis la console, ou recompiler le
+bundle sans [`src/utils/anticheat.js`](src/utils/anticheat.js). Rien de ce qui
+suit ne l'en empêche, et rien ne le pourrait sans validation serveur. Une
+vérification qui tombe est aussi contournable par un simple rechargement : elle
+n'est pas persistée, précisément pour qu'un bug ne puisse enfermer personne.
+
+Ce qui est réellement traité : l'autoclicker **ordinaire**, celui qu'on installe
+en extension ou qu'on branche sur la souris. C'est la triche que rencontrent
+99 % des joueurs, parce qu'elle ne demande aucune compétence.
+
+Deux mécanismes, qui ne font pas la même chose :
+
+**Le seau à jetons** borne ce que le jeu crédite : quinze clics par seconde en
+régime établi, plus une réserve de huit pour les rafales. Il ne juge personne,
+il compte. Un joueur rapide ne le touche jamais — mesuré, tout passe jusqu'à
+douze clics/s avec une gigue humaine. Un autoclicker s'y heurte en permanence.
+
+| Cadence brute | Cadence créditée | Rapport actif/passif à 30 j |
+| --- | --- | --- |
+| 7 clics/s (joueur très actif) | 7 | 3,27× |
+| 15 clics/s | 15 | 5,92× |
+| 50 clics/s | 15 | 5,92× |
+| 1 000 clics/s | 15 | 5,92× |
+
+L'autoclicker reste devant — la borne n'est pas une punition — mais son avantage
+est **plafonné à 1,8× un joueur très actif**, contre 12× avant ce lot.
+
+**Le score de suspicion** observe la *forme* du geste : régularité des
+intervalles, cadence surhumaine soutenue, clics reçus onglet caché, absence
+totale de pause sur dix minutes, nombre de doigts impossible, rafales à la même
+fréquence exacte. Aucun signal ne suffit seul, et **chaque signal ne compte
+qu'une fois toutes les dix secondes** : compté par clic, un joueur dont
+l'extension d'accessibilité produit des événements non fiables atteignait le
+seuil en quinze secondes sans rien avoir fait de mal. Le score retombe d'un
+point par seconde, donc jouer normalement suffit à revenir à zéro.
+
+Au-delà du seuil, le jeu demande **une vérification humaine d'un seul geste** :
+trois nombres, on appuie sur celui que l'énoncé nomme. Pendant ce temps, le
+minage continue, la sauvegarde est intacte, rien n'est retiré, et une mauvaise
+réponse repose simplement la question. **Aucun bannissement, jamais** : sans
+preuve serveur, punir sur un soupçon calculé chez le joueur, c'est punir des
+innocents.
+
+Une vérification **n'apparaît jamais parce que le joueur est inactif**. Ne pas
+cliquer est une façon légitime de jouer — le minage tourne tout seul.
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs
