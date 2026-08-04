@@ -458,22 +458,39 @@ Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
 
 ### Le rythme
 
-Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs
-sont simulés sur quatre-vingt-dix jours
-([`src/data/tuning.json`](src/data/tuning.json) tient les réglages) :
+Le chiffre exact de cookies compte moins que la cadence. Sept objectifs, mesurés
+sur une partie complète à cinq clics par seconde :
 
-| Profil | Premier achat | Premier palier | Premier prestige | Nouveau bâtiment |
-| --- | --- | --- | --- | --- |
-| Occasionnel (3 clics/s) | 20 s | 32 min | 105 min | ~5 min |
-| **Normal (5 clics/s)** | **9 s** | **17 min** | **81 min** | **~3 min** |
-| Très actif (7 clics/s) | 6 s | 11 min | 51 min | ~2 min |
-| Minage surtout | 80 s | 26 min | 84 min | ~33 min |
-| Achats au hasard | 10 s | 23 min | 89 min | ~3 min |
-| Optimiseur | 6 s | 10 min | 41 min | ~2 min |
+| Objectif | Cible | Mesuré | |
+| --- | --- | --- | --- |
+| Premier achat payé | 5–15 s | **6,5 s** | ✓ |
+| Achats marquants, 1re minute | 2–6 | **2** | ✓ |
+| Écart entre marquants, 0–5 min | 20–40 s | 73 s | ✗ |
+| Premier vrai palier de bâtiment | 10–20 min | **19,5 min** | ✓ |
+| Premier prestige | 60–120 min | **85 min** | ✓ |
+| Première ascension | 5–20 j | **10,1 j** | ✓ |
+| Dernière nouveauté du jeu | 7–60 j | **28 j** | ✓ |
 
-Cinq minutes de jeu donnent **24 000 cookies cuits** pour un joueur normal, là
-où la version précédente en donnait 100 000 — et le premier prestige demandait
-une demi-heure au lieu d'une heure et demie.
+Le seuil de prestige a été choisi **par mesure** : une recherche par dichotomie
+sur la production totale donne 29 min à 5 millions de cookies cuits, 61 min à
+100 millions, 79 min à 250 millions et 116 min à 1 milliard. À cinq millions —
+la valeur précédente — la première renaissance tombait à 29 minutes, avant même
+le premier palier de bâtiment. Elle rapporte désormais 63 chips au lieu de 17 :
+une première fois qui ne rapporte presque rien n'apprend rien.
+
+### Les vagues de contenu
+
+Ce qui apparaît, et quand, pour un joueur normal :
+
+| Vague | Ce qui arrive |
+| --- | --- |
+| Première session | Four offert (0 s), Curseur (7 s), Boulangerie (1 min), Mamie (2 min), Ferme et Gant (5 min) |
+| Première heure | Usine et Bras robotisé (13 min), premier bonus global et premier palier (19 min), Banque et Exosquelette (28 min), Temple (53 min) |
+| Premières 24 h | Premier prestige (85 min), IA de frappe (1,2 h), Laboratoire (1,9 h), Machine à Temps (2 h), Portail et Singularité (3,9 h) |
+| Jours 2–7 | L'arbre céleste se remplit, les paliers de bâtiment doublent, le Registre s'ouvre |
+| Jours 7–30 | **Première ascension (10 j)**, puis huit bâtiments qui n'existaient pas : Colonie et Essaim (10,4 j), Sphère de Dyson et Volonté pure (13,6 j), Nébuleuse et Impact stellaire (17 j), Big Bake et Doigt du monde (28 j) |
+| Après J30 | Éclat et Écho sans fin, contrats du Registre, paliers de bâtiment sur les nouveaux rangs |
+| Après J90 | Plus de contenu neuf : seuls l'Éclat, l'Écho et les paliers continuent. **C'est la limite connue de cette refonte.** |
 
 ### Calibration : 5 clics/seconde, combo moyen ×1,50
 
