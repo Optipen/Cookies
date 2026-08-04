@@ -561,6 +561,23 @@ un joueur posé avant même d'avoir acheté quoi que ce soit, et le multiplicate
 écrasait tout le reste de l'économie. Une sauvegarde qui contient un record
 hérité de l'ancienne échelle est ramenée au nouveau maximum.
 
+### Console, mémoire, rendus
+
+Mesuré dans un vrai navigateur avec
+[`scripts/console.mjs`](scripts/console.mjs), sur une session de 1 600 clics
+mêlant achats et changements d'onglet :
+
+| | Résultat |
+| --- | --- |
+| Erreurs console | **0** |
+| Avertissements console | **0** |
+| Nœuds du document | 377, stable |
+| Tas mémoire (ramasse-miettes forcé) | 5,4 Mo → 7,7 Mo |
+
+Le ramasse-miettes est **forcé avant chaque mesure**. Sans cela, le même test
+affichait 5 → 22 Mo — les déchets pas encore collectés, pas une fuite. C'est la
+différence entre « mesuré » et « supposé ».
+
 ## Ce qui reste imparfait
 
 Écrit ici plutôt que dans un coin, parce qu'un projet qui prétend n'avoir aucun
@@ -589,8 +606,11 @@ défaut n'a simplement pas été mesuré.
    dorés, ni les gains hors-ligne.** Les colonnes CRMB des tableaux ne comptent
    donc que le prestige : la vraie économie CRMB est plus généreuse.
 6. **La mémoire n'a été mesurée que sur des sessions de quelques minutes.**
-   Aucune erreur console, aucun avertissement, mais une session de plusieurs
-   heures n'a pas été observée.
+   Mille six cents clics, achats et changements d'onglet compris : zéro erreur
+   console, zéro avertissement, 377 nœuds de document, et un tas qui passe de
+   5,4 à 7,7 Mo **une fois le ramasse-miettes forcé**. Sans le forcer, le même
+   test affichait 5 → 22 Mo : c'étaient les déchets pas encore collectés, pas
+   une fuite. Une session de plusieurs heures n'a pas été observée.
 
 ## Le jeu
 
