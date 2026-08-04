@@ -232,8 +232,19 @@ douze clics/s avec une gigue humaine. Un autoclicker s'y heurte en permanence.
 | 50 clics/s | 15 | 5,92× |
 | 1 000 clics/s | 15 | 5,92× |
 
-L'autoclicker reste devant — la borne n'est pas une punition — mais son avantage
-est **plafonné à 1,8× un joueur très actif**, contre 12× avant ce lot.
+Le profil « autoclicker 50/s » et le profil « 15 clics/s » produisent des
+tableaux **rigoureusement identiques**, chiffre pour chiffre, sur les onze
+horizons. C'est la preuve la plus directe que la borne tient.
+
+**Ce que la borne fait, et ce qu'elle ne fait pas.** Elle plafonne le rapport
+actif/passif à **1,8× celui d'un joueur très actif** en régime établi (6,13×
+contre 3,47× au trois-cent-soixante-cinquième jour). Elle ne supprime pas
+l'avantage : sur un an, la production totale d'un autoclicker borné reste
+environ **dix fois** supérieure, parce que l'avance se compose à travers les
+renaissances et les ascensions. Et sur la première heure, avant que l'économie
+ne se stabilise, le rapport monte à 12,3× contre 3,8×. Borner la cadence
+transforme un écart illimité en écart fini — ce n'est pas la même chose que de
+le supprimer, et prétendre le contraire serait faux.
 
 **Le score de suspicion** observe la *forme* du geste : régularité des
 intervalles, cadence surhumaine soutenue, clics reçus onglet caché, absence
@@ -651,6 +662,10 @@ défaut n'a simplement pas été mesuré.
    humaine se contourne même par un simple rechargement — elle n'est pas
    persistée, exprès, pour qu'un bug ne puisse enfermer personne. Rien de tout
    cela ne se règle sans validation serveur.
+   **Et même bornée, elle ne supprime pas l'avantage** : la production totale
+   d'un autoclicker sur un an reste environ dix fois celle d'un joueur très
+   actif, parce que l'avance se compose à travers les renaissances. La borne
+   rend l'écart fini ; elle ne l'annule pas.
 2. **La courbe s'aplatit encore entre le quatre-vingt-dixième et le
    trois-cent-soixante-cinquième jour** : ×2,6 seulement, une fois la voie
    Horizon complète. C'est bien mieux que le plateau d'avant, ce n'est pas une
@@ -755,11 +770,16 @@ cadence **créditée** est bornée à **15 clics/seconde**, par un seau à jeton
 laisse passer une réserve de huit pour les rafales humaines.
 
 Un joueur rapide tient 12 à 15 clics/s à deux pouces : mesuré, rien ne lui est
-refusé. Un autoclicker à 50 ou 1 000 clics/s obtient exactement la même chose
-qu'à 15 — son avantage tombe à **1,8× celui d'un joueur très actif**, contre 12×
-avant. Le clic répond quand même visuellement au-delà de la borne : on refuse le
-gain, pas le geste. Et le jeu **le dit** sous la barre de production, plutôt que
-de laisser croire qu'accélérer sert encore.
+refusé. Un autoclicker à 50 ou 1 000 clics/s obtient **exactement** la même
+chose qu'à 15 — les deux profils produisent des tableaux identiques chiffre pour
+chiffre sur onze horizons. Son rapport actif/passif tombe à 1,8× celui d'un
+joueur très actif, contre 12× avant ; sa production totale sur un an reste
+environ dix fois supérieure, parce que l'avance se compose à travers les
+renaissances. Borner la cadence rend l'écart **fini**, pas nul.
+
+Le clic répond quand même visuellement au-delà de la borne : on refuse le gain,
+pas le geste. Et le jeu **le dit** sous la barre de production, plutôt que de
+laisser croire qu'accélérer sert encore.
 
 Le détail complet — les six signaux comportementaux, la vérification humaine, et
 surtout **ce que cette protection ne peut pas faire** — est plus haut.
