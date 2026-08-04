@@ -21,9 +21,20 @@ import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
 import tuning from "../data/tuning.json";
 
-import { deriveStats, costOf, isEarlyWindow, timeToAfford, maxAffordable, COMBO, comboStep, comboProgress } from "../utils/selectors.js";
+import {
+  deriveStats,
+  productionStats,
+  costOf,
+  isEarlyWindow,
+  timeToAfford,
+  maxAffordable,
+  COMBO,
+  comboStep,
+  comboProgress,
+} from "../utils/selectors.js";
+import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { STEP, snap } from "../utils/grid.js";
-import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
+import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
   saveState,
@@ -141,40 +152,58 @@ const ComboMeter = memo(function ComboMeter({ display }) {
  * exactement ce qu'on veut montrer: sans les doigts, il ne reste que le minage.
  */
 const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
-  const actif = cadence > 0;
-  const prodClics = stats.perClickNoCombo * stats.combo * cadence;
-  const total = stats.mining + prodClics;
+  const c = productionStats(stats, cadence);
 
   return (
     <div className="mt-2 mx-auto w-full max-w-sm rounded-2xl bg-white/60 border border-amber-200/80 px-2 py-1.5">
       <div className="grid grid-cols-3 gap-1 text-center">
         <div>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Par clic</div>
-          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight">
-            {fmt(stats.perClick)}
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-par-clic">
+            {fmt(c.parClic)}
           </div>
         </div>
-        <div className={actif ? "" : "opacity-40"}>
+        <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Cadence</div>
-          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight">
-            {actif ? `≈${fmtMult(snap(cadence))}` : "—"}
+          <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-cadence">
+            {/* Arrondie au quart: annoncer « 4,3333 clics/s » sur une moyenne
+                glissante serait faussement précis. Le « ≈ » le dit. */}
+            {c.actif ? fmtApprox(snap(c.creditee)) : "—"}
             <span className="text-[10px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
-        <div className={actif ? "" : "opacity-40"}>
+        <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
-          <div className="text-sm font-black text-amber-700 tabular-nums leading-tight">
-            {actif ? fmt(prodClics) : "0"}
+          <div className="text-sm font-black text-amber-700 tabular-nums leading-tight" data-testid="stat-clics">
+            {fmt(c.prodClics)}
             <span className="text-[10px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
       </div>
-      <div className="mt-1 pt-1 border-t border-amber-200/70 flex items-baseline justify-center gap-2 text-[11px] tabular-nums">
-        <span className="text-emerald-700 font-semibold">⛏️ {fmt(stats.mining)}/s</span>
+      {/* La cadence créditée est bornée. On le dit quand on y touche, plutôt
+          que de laisser croire qu'accélérer rapporte encore. */}
+      {c.bornee && (
+        <p className="mt-1 text-center text-[10px] font-semibold text-orange-700">
+          Cadence créditée limitée à {CREDIT_MAX_CPS} clics/s
+        </p>
+      )}
+      <div className="mt-1 pt-1 border-t border-amber-200/70 flex items-baseline justify-center gap-1.5 text-[11px] tabular-nums">
+        <span className="text-emerald-700 font-semibold">
+          <span aria-hidden="true">⛏️ </span>
+          <span className="sr-only">Minage </span>
+          <span data-testid="stat-minage">{fmt(c.minage)}</span>/s
+        </span>
         <span className="text-amber-400" aria-hidden="true">+</span>
-        <span className="text-amber-700 font-semibold">👆 {fmt(prodClics)}/s</span>
+        <span className="text-amber-700 font-semibold">
+          <span aria-hidden="true">👆 </span>
+          <span className="sr-only">Clics </span>
+          {fmt(c.prodClics)}/s
+        </span>
         <span className="text-amber-400" aria-hidden="true">=</span>
-        <span className="font-black text-amber-950">{fmt(total)}/s</span>
+        <span className="font-black text-amber-950">
+          <span className="sr-only">Total </span>
+          <span data-testid="stat-total">{fmt(c.total)}</span>/s
+        </span>
       </div>
     </div>
   );

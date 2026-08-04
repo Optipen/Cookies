@@ -11,6 +11,7 @@ import { prestigeEffects } from "../data/prestige.js";
 import { stakingTier, miningRate, stakingYieldPerSecond } from "./crypto.js";
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
+import { creditedRate } from "./rate.js";
 import { lisible } from "./grid.js";
 import tuning from "../data/tuning.json";
 
@@ -183,6 +184,51 @@ export function activeRatio(state, clicksPerSecond = REF_CLICKS_PER_SECOND, now 
   const mining = deriveStats(state, now).mining;
   if (mining <= 0) return Infinity;
   return activeIncome(state, clicksPerSecond, now, combo) / mining;
+}
+
+/**
+ * Les cinq chiffres de l'écran, calculés en un seul endroit.
+ *
+ *      Par clic × Cadence  =  Clics
+ *                            + Minage
+ *                            ─────────
+ *                            = Total
+ *
+ * Trois règles, et elles se tiennent:
+ *
+ * · **La cadence affichée ne compte que les clics CRÉDITÉS.** Afficher la
+ *   cadence brute ferait multiplier deux nombres qui ne se multiplient pas:
+ *   « 50 /s » × « 12 par clic » ne donnerait pas la production annoncée. Le
+ *   joueur lit donc au plus quinze — et on lui dit pourquoi (`bornee`) plutôt
+ *   que de le laisser croire qu'accélérer sert encore.
+ * · **La production annoncée découle de cette même cadence.** Annoncer
+ *   « 50 clics/s de production » quand la banque n'en crédite que quinze serait
+ *   une promesse que le solde ne tient pas.
+ * · **Au repos, le total vaut le minage EXACTEMENT.** Pas « à peu près »: si la
+ *   colonne du milieu s'éteint, la somme doit s'éteindre avec elle.
+ *
+ * Le minage n'est jamais compté deux fois. La part reversée fait qu'un Mineur
+ * augmente aussi la puissance de clic, mais c'est un gain versé À CHAQUE CLIC,
+ * dans une autre unité — il disparaît intégralement dès que la cadence tombe à
+ * zéro, ce qu'aucun double comptage ne ferait.
+ */
+export function productionStats(stats, cadence = 0) {
+  const brute = Number(cadence);
+  const mesuree = Number.isFinite(brute) && brute > 0 ? brute : 0;
+  const creditee = creditedRate(mesuree);
+  const prodClics = creditee > 0 ? stats.perClickNoCombo * stats.combo * creditee : 0;
+  return {
+    parClic: stats.perClick,
+    cadence: mesuree,
+    creditee,
+    prodClics,
+    minage: stats.mining,
+    total: stats.mining + prodClics,
+    actif: creditee > 0,
+    // La cadence est bornée: le joueur doit pouvoir comprendre pourquoi
+    // accélérer encore ne change plus rien.
+    bornee: mesuree > creditee,
+  };
 }
 
 // === Prix ===

@@ -139,12 +139,24 @@ le compteur :
      ⛏️ 1 330/s  +  👆 1 720/s  =  3 050/s
 ```
 
-La **cadence est mesurée**, pas supposée: moyenne glissante sur trois secondes,
+La **cadence est mesurée**, pas supposée : moyenne glissante sur trois secondes,
 publiée à 5 Hz, éteinte après une seconde et demie sans clic. Elle s'affiche
 arrondie au quart et préfixée de « ≈ » — c'est une moyenne, la donner au
-millième serait faussement précis. Quand on arrête de cliquer, la colonne du
-milieu s'éteint et le total retombe au minage seul : c'est exactement ce qu'on
-veut montrer.
+millième serait faussement précis.
+
+Elle ne compte que les **clics crédités**. Sinon l'écran afficherait « ≈50 /s »
+à côté de « 12 par clic » et le joueur multiplierait deux nombres qui ne se
+multiplient pas : la banque n'en crédite que quinze. Quand la cadence brute
+dépasse cette borne, le jeu le dit sous la barre au lieu de laisser croire
+qu'accélérer sert encore.
+
+Les cinq chiffres sont calculés dans **un seul endroit**, `productionStats`, et
+non dans le composant : c'est ce qui permet de prouver par test qu'au repos le
+total vaut le minage **exactement**, et que le minage n'est jamais compté deux
+fois. La part reversée fait bien qu'un Mineur augmente aussi la puissance de
+clic — mais c'est un gain versé *à chaque clic*, dans une autre unité, et il
+disparaît intégralement dès que la cadence tombe à zéro. Aucun double comptage
+ne ferait cela.
 
 ### Un nombre affiché est le nombre calculé
 
