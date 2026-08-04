@@ -684,24 +684,25 @@ une monnaie qu'on gagne sans effort ne récompense plus rien.
 
 | Source | Montant | Fréquence |
 | --- | --- | --- |
-| Quêtes | +1, +2 ou +5 | 10 quêtes sur 26 en donnent — **≈ 4 CRMB par heure** de jeu actif |
+| Quêtes | +1, +2 ou +5 | 10 quêtes sur 26 en donnent |
 | Succès Or | +1 | 15 succès |
 | Succès Platine | +2 | 9 succès |
 | Succès Légendaire | +5 | 4 succès |
 | Prestige | +5 | à chaque renaissance |
 | Matériel de minage | 0,05 à 25 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
 
-Les 53 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
+Les 55 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
 un revenu. Toutes les récompenses sont des entiers — le bonus de quête de
 l'arbre céleste ne s'applique qu'aux cookies, sinon il rendrait « 1,25 CRMB ».
 
 Et il y a de quoi les dépenser :
 
+- **Le Registre** — un puits sans fond : +0,25 sur les **deux** axes,
+  définitivement, à 10 · 25 · 50 · 100 · 250 · 500 CRMB…
 - **Staking** — bloquer du CRMB fait franchir des paliers de production
   (+0,25 chacun) et rapporte 1 à 10 % **par jour** selon la durée du verrou.
-  Premier palier après un quart d'heure, ×2 après deux heures et demie.
-- **Les deux dernières apparences** ne s'achètent qu'en CRMB : 10 et 25, soit
-  plusieurs sessions d'écart.
+  Contrairement au Registre, le bonus est prêté : il repart au retrait.
+- **Les deux dernières apparences** ne s'achètent qu'en CRMB : 10 et 25.
 - **Le marché**, avec 2 % de frais dans les deux sens.
 
 ### Une seule notification, en haut, rarement
@@ -718,20 +719,27 @@ pleine en permanence — et, sur téléphone, posée pile sur la boutique.
 | Prestige, cookie doré | Une grande animation, jamais écartée |
 
 Un seul emplacement, **en haut** : la boutique et la navigation vivent sous le
-pouce et rien ne les recouvre. Au plus **un bandeau ordinaire toutes les dix
-secondes** ; ce qui arrive trop tôt est écarté, pas mis en file — une file ne
-fait que retarder l'avalanche. Mesuré : 7 bandeaux par minute au maximum.
+pouce et rien ne les recouvre. Au plus **une notification ordinaire toutes les
+onze secondes**, et ce qui arrive trop tôt **attend son tour** dans une file
+bornée à six entrées — écarté, il n'existait plus. Même les événements majeurs
+sont plafonnés à six par minute glissante. Mesuré sur une session type : moins
+de six notifications par minute, sur un quart d'heure comme sur une heure.
 
 ### Cliquer vite paie, automatiser non
 
-Le rapport actif/passif suit la cadence sans plafond, comme voulu. Mais un
-appui n'est crédité qu'une fois toutes les 40 ms, soit **25 clics/seconde**.
+Le rapport actif/passif suit la cadence sans plafond, comme voulu. Mais la
+cadence **créditée** est bornée à **15 clics/seconde**, par un seau à jetons qui
+laisse passer une réserve de huit pour les rafales humaines.
 
-Un joueur rapide tient 12 à 15 clics/s à deux pouces : il ne touche jamais cette
-borne. Un autoclicker à 50 clics/s, lui, obtenait cinq fois plus de cookies en
-cinq minutes qu'un joueur très actif et un rapport de 24× ; il tombe à 12×, et
-son avance sur un an est divisée par trois. Le clic répond quand même
-visuellement au-delà de la borne : on refuse le gain, pas le geste.
+Un joueur rapide tient 12 à 15 clics/s à deux pouces : mesuré, rien ne lui est
+refusé. Un autoclicker à 50 ou 1 000 clics/s obtient exactement la même chose
+qu'à 15 — son avantage tombe à **1,8× celui d'un joueur très actif**, contre 12×
+avant. Le clic répond quand même visuellement au-delà de la borne : on refuse le
+gain, pas le geste. Et le jeu **le dit** sous la barre de production, plutôt que
+de laisser croire qu'accélérer sert encore.
+
+Le détail complet — les six signaux comportementaux, la vérification humaine, et
+surtout **ce que cette protection ne peut pas faire** — est plus haut.
 
 ### Pensé pour le pouce
 
@@ -751,12 +759,12 @@ visuellement au-delà de la borne : on refuse le gain, pas le geste.
 
 Le gain marginal du N+1-ième exemplaire, tous bâtiments déjà possédés à N :
 
-| N | Curseur | Singularité | Four | Portail |
-| --- | --- | --- | --- | --- |
-| 0 | +0,25 /clic | +10 000 /clic | +2 /s · +0,10 /clic | +100 000 /s · +5 000 /clic |
-| 10³ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
-| 10⁶ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
-| 10⁹ | +0,25 | +10 000 | +2 · +0,10 | +100 000 · +5 000 |
+| N | Curseur | Singularité | Four | Portail | Big Bake |
+| --- | --- | --- | --- | --- | --- |
+| 0 | +0,25 /clic | +10 000 /clic | +2 /s · +0,12 /clic | +80 000 /s · +4 800 /clic | +40 M /s · +2,4 M /clic |
+| 10³ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
+| 10⁶ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
+| 10⁹ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
 
 Le gain ne décroît jamais. Au-delà de 10¹² exemplaires **de chaque bâtiment**,
 un +0,25 passe sous la précision d'un flottant 64 bits ; cet état est de toute
@@ -806,7 +814,9 @@ Aucune image ne déclenche de rendu React.
 Le réglage de l'équilibrage vit dans [`src/data/tuning.json`](src/data/tuning.json) :
 `balance` (part reversée, écart de prix, cadence et combo de référence), fenêtre
 de début de partie, fréquence des événements, cadence des boucles, rendement
-hors-ligne. Recalibrer le jeu ne demande donc pas de toucher au code.
+hors-ligne. Recalibrer le jeu ne demande donc pas de toucher au code — et un
+test vérifie qu'aucune clé de `balance` n'est morte, pour qu'aucun réglage ne
+fasse croire à un levier qui ne fait rien.
 
 ## Montée en charge
 
@@ -828,10 +838,15 @@ Ce qui est en place pour ça :
 
 ## Sauvegardes
 
-La partie est stockée sous la clé `cookieCrazeSaveV5`. Les sauvegardes des
-versions 1 à 4 sont migrées automatiquement au chargement : fusion profonde
+La partie est stockée sous la clé `cookieCrazeSaveV6`. Les sauvegardes des
+versions 1 à 5 sont migrées automatiquement au chargement : fusion profonde
 avec l'état par défaut, valeurs aberrantes assainies, ancien staking converti
-en position flexible, champs morts supprimés.
+en position flexible, champs morts supprimés, record de combo ramené sur la
+nouvelle échelle, Ascension et Registre ajoutés à zéro.
+
+Les anciennes clés **ne sont jamais effacées** : un joueur qui reviendrait sur
+une version antérieure du jeu doit retrouver sa partie. Une sauvegarde illisible
+est archivée sous `cookieCrazeSaveV6_corrupted_<horodatage>`, pas supprimée.
 
 Export et import se font depuis ⚙️ → *Exporter / Importer la sauvegarde*.
 
