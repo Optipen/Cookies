@@ -86,7 +86,12 @@ function ligne(r, ms) {
 const ENTETE =
   "horizon    cuits total   dispo. par clic cadence prod.clics    minage     total  ratio achats bât. paliers prst asc.   chips étoil. CRMB  décision";
 
-function famille(titre, profils, fabrique) {
+// Un profil peut être sélectionné en argument pour paralléliser la mesure:
+// `npx vite-node scripts/simulations.mjs mecanique` ou `sessions`.
+const SEULEMENT = process.argv[2] || "";
+
+function famille(titre, cle, profils, fabrique) {
+  if (SEULEMENT && SEULEMENT !== cle) return;
   console.log(`\n\n${"=".repeat(110)}\n${titre}\n${"=".repeat(110)}`);
   for (const p of profils) {
     console.log(`\n--- ${p.nom} ---`);
@@ -98,12 +103,12 @@ function famille(titre, profils, fabrique) {
   }
 }
 
-famille("FAMILLE 1 — MÉCANIQUE CONTINUE (cadence tenue en permanence)", MECANIQUES, (p) => ({
+famille("FAMILLE 1 — MÉCANIQUE CONTINUE (cadence tenue en permanence)", "mecanique", MECANIQUES, (p) => ({
   clicksPerSecond: p.cps,
   strategy: p.strategy,
 }));
 
-famille("FAMILLE 2 — VRAIES SESSIONS (le reste du temps, seul le minage tourne)", SESSIONS, (p) => ({
+famille("FAMILLE 2 — VRAIES SESSIONS (le reste du temps, seul le minage tourne)", "sessions", SESSIONS, (p) => ({
   clicksPerSecond: p.cps,
   activeFraction: p.fraction,
   strategy: p.strategy,
@@ -111,6 +116,7 @@ famille("FAMILLE 2 — VRAIES SESSIONS (le reste du temps, seul le minage tourne
 }));
 
 // --- Objectifs de rythme ----------------------------------------------------
+if (SEULEMENT === "mecanique") process.exit(0);
 console.log(`\n\n${"=".repeat(110)}\nOBJECTIFS DE RYTHME (joueur normal, 5 clics/s)\n${"=".repeat(110)}`);
 const ref = play({ clicksPerSecond: 5, durationMs: 30 * J, strategy: "optimiser" });
 const cible = (nom, valeur, bas, haut, unite = "") => {

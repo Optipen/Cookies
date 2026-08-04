@@ -8,9 +8,12 @@
     "build": "vite build",
     "preview": "vite preview --port 4173",
     "test": "vitest run",
-    "lint": "eslint src public",
+    "lint": "eslint . --max-warnings=0",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "mobile": "vite-node scripts/mobile.mjs",
+    "simulations": "vite-node scripts/simulations.mjs",
+    "balance": "vite-node scripts/balance.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.0.0",

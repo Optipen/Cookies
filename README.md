@@ -559,6 +559,37 @@ un joueur posé avant même d'avoir acheté quoi que ce soit, et le multiplicate
 écrasait tout le reste de l'économie. Une sauvegarde qui contient un record
 hérité de l'ancienne échelle est ramenée au nouveau maximum.
 
+## Ce qui reste imparfait
+
+Écrit ici plutôt que dans un coin, parce qu'un projet qui prétend n'avoir aucun
+défaut n'a simplement pas été mesuré.
+
+1. **La protection anti-autoclicker est entièrement côté client.** Elle rend
+   inutile l'autoclicker ordinaire, pas la modification du `localStorage` ni
+   l'appel direct des fonctions du jeu depuis la console. Une vérification
+   humaine se contourne même par un simple rechargement — elle n'est pas
+   persistée, exprès, pour qu'un bug ne puisse enfermer personne. Rien de tout
+   cela ne se règle sans validation serveur.
+2. **La courbe s'aplatit encore entre le quatre-vingt-dixième et le
+   trois-cent-soixante-cinquième jour** : ×2,6 seulement, une fois la voie
+   Horizon complète. C'est bien mieux que le plateau d'avant, ce n'est pas une
+   courbe qui tient un an entier.
+3. **Le rythme des cinq premières minutes reste à 73 s entre deux achats
+   marquants**, contre 20 à 40 s visées. Le prix des paliers n'y change rien
+   (testé de 20 à 5 exemplaires : résultat identique), parce qu'un bâtiment bat
+   toujours un palier au rendement par cookie tant que le parc est petit. La
+   mesure ne voit d'ailleurs ni les quêtes, ni les succès, ni les cookies
+   dorés : le rythme réellement perçu est plus dense que ce chiffre.
+4. **Les simulations ne sont pas des tests humains.** Elles ne disent rien du
+   plaisir, de la lisibilité, du confort du pouce ni de l'envie de revenir. Un
+   nombre dans une fourchette n'est pas un jeu réussi.
+5. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
+   dorés, ni les gains hors-ligne.** Les colonnes CRMB des tableaux ne comptent
+   donc que le prestige : la vraie économie CRMB est plus généreuse.
+6. **La mémoire n'a été mesurée que sur des sessions de quelques minutes.**
+   Aucune erreur console, aucun avertissement, mais une session de plusieurs
+   heures n'a pas été observée.
+
 ## Le jeu
 
 - **16 bâtiments** : 8 Cliqueurs et 8 Mineurs, aux prix géométriques (×1,22 par
