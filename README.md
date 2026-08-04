@@ -289,6 +289,77 @@ convertir une fois pour toutes.
 Le bonus porte sur les **deux axes du même cran** : un puits qui ne pousserait
 que le minage déplacerait l'équilibre actif/passif à chaque achat.
 
+### L'Ascension : ce qu'il reste à faire après le quatrième jour
+
+Le problème, mesuré avant d'écrire une ligne :
+
+- **tout le contenu du jeu était découvert en 3 h 54.** Trois cent soixante
+  jours plus tard, il n'y avait toujours rien de neuf à attendre ;
+- la production passait de 1,07e9/s au trentième jour à 5,69e9/s au
+  trois-cent-soixante-cinquième — un facteur 5,3 en onze mois.
+
+Le prestige ne pouvait pas corriger ça, et pour une raison structurelle : les
+chips valent la **racine cubique** de la production totale, et leur bonus est
+**logarithmique** en chips. Le levier s'aplatit deux fois. Rendre les prestiges
+plus généreux n'aurait fait que déplacer le mur.
+
+Ce qu'il fallait, c'est du **contenu** — des bâtiments qui n'existaient pas.
+
+```
+clics → bâtiments → paliers → prestige (chips) → ASCENSION (étoiles)
+```
+
+Une ascension emporte la partie, les chips **et** l'arbre céleste. Elle garde
+les étoiles, la Voûte, le portefeuille CRMB, le Registre, les apparences et les
+succès. Elle s'ouvre à **5 000 chips** — autour du dixième jour, une fois que le
+prestige a donné ce qu'il avait.
+
+Trois voies, qui ne font pas la même chose :
+
+| Voie | Effet | Plafond | Coût |
+| --- | --- | --- | --- |
+| 🌅 **Horizon** | un nouveau rang de Cliqueur **et** de Mineur | 4 | 1 · 2 · 4 · 8 ⭐ |
+| ✨ **Éclat** | +0,25 sur les deux axes | aucun | 1 · 2 · 3 · 4 … ⭐ |
+| 🔔 **Écho** | +25 % de chips à la renaissance | 8 | 2 · 4 · 6 · 8 … ⭐ |
+
+Horizon est le cœur : il ouvre huit bâtiments qui n'existaient pas, de l'Essaim
+de mains au Big Bake, chacun avec ses propres paliers à conquérir. Les deux
+familles restent exactement parallèles jusqu'au dernier rang — un Mineur vaut
+toujours huit fois son Cliqueur. Et les anciens bâtiments ne deviennent jamais
+inutiles : un rang neuf coûte dix fois plus pour cinq fois plus par exemplaire,
+donc les anciens gardent le meilleur rendement par cookie tant qu'on n'en a pas
+beaucoup.
+
+**Résultat mesuré**, à cinq clics par seconde, stratégie « optimiser » :
+
+| Borne | Sommet atteint | Bâtiments | Prestiges | Ascensions | Étoiles |
+| --- | --- | --- | --- | --- | --- |
+| 1 h | 84 793/s | 8 | 2 | 0 | 0 |
+| 1 j | 1,60e8/s | 16 | 11 | 0 | 0 |
+| 7 j | 5,50e8/s | 16 | 14 | 0 | 0 |
+| **30 j** | **1,79e10/s** | **23** | 77 | 4 | 21 |
+| 90 j | 4,95e11/s | 24 | 100 | 5 | 33 |
+| 365 j | 1,29e12/s | 24 | 127 | 6 | 51 |
+
+Du trentième au trois-cent-soixante-cinquième jour, la production est
+multipliée par **72** au lieu de 5,3. Et la dernière nouveauté du jeu — le Big
+Bake — arrive au **trentième jour** au lieu de la quatrième heure.
+
+Ce qui reste imparfait : entre le quatre-vingt-dixième et le
+trois-cent-soixante-cinquième jour, la production n'est plus multipliée que par
+2,6. Horizon est complet à ce stade, et seuls l'Éclat et l'Écho continuent.
+C'est mieux qu'un plateau, ce n'est pas une courbe qui tient un an.
+
+### Rattraper une mauvaise partie
+
+Un joueur qui a tout mis au mauvais endroit ne doit pas être condamné. Trois
+choses le rattrapent, et elles sont mesurées : le prestige et l'ascension
+remettent le parc à zéro en gardant les bonus permanents ; l'Éclat, le Registre
+et les chips poussent les **deux** axes du même cran, quelle que soit la
+répartition des achats ; et l'écart entre la meilleure et la pire stratégie
+d'achat reste **sous un facteur 1 000** sur six heures de jeu simulé, contre un
+facteur 18 000 mesuré avant cette refonte.
+
 ### Le rythme
 
 Le chiffre exact de cookies compte moins que la cadence. Six profils de joueurs

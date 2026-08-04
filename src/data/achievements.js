@@ -1,4 +1,4 @@
-import { ITEMS } from "./items.js";
+import { ITEMS, BASE_ITEMS } from "./items.js";
 import { MINERS } from "../utils/crypto.js";
 import { COMBO } from "../utils/combo.js";
 import { fmtMult } from "../utils/format.js";
@@ -40,7 +40,7 @@ export const ACHIEVEMENTS = [
   { id: "grandma_100", tier: 3, cat: "empire", name: "Comité des mamies", desc: "100 Mamies.", cond: (s) => (s.items?.grandma || 0) >= 100 },
   { id: "cursor_50", tier: 1, cat: "empire", name: "Pieuvre", desc: "50 Curseurs.", cond: (s) => (s.items?.cursor || 0) >= 50 },
   { id: "portal_1", tier: 4, cat: "empire", name: "Ailleurs", desc: "Ouvrir un Portail.", cond: (s) => (s.items?.portal || 0) >= 1 },
-  { id: "diverse", tier: 3, cat: "empire", name: "Portefeuille équilibré", desc: "Posséder les 16 types de Cliqueurs et Mineurs.", cond: (s) => ITEMS.every((it) => (s.items?.[it.id] || 0) > 0) },
+  { id: "diverse", tier: 3, cat: "empire", name: "Portefeuille équilibré", desc: "Posséder les 16 types de Cliqueurs et Mineurs.", cond: (s) => BASE_ITEMS.every((it) => (s.items?.[it.id] || 0) > 0) },
   { id: "upgrades_5", tier: 1, cat: "empire", name: "Bricoleur", desc: "5 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 5 },
   { id: "upgrades_25", tier: 2, cat: "empire", name: "Ingénieur", desc: "25 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 25 },
   { id: "upgrades_75", tier: 3, cat: "empire", name: "Optimiseur", desc: "75 améliorations achetées.", cond: (s) => Object.keys(s.upgrades || {}).length >= 75 },

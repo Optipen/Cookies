@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
-import { CLICKERS, MINER_ITEMS, LABELS } from "../data/items.js";
+import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
 import { fmt, fmtExact, fmtDuration } from "../utils/format.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
@@ -188,7 +188,10 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
   const build = useCallback(
     (list) => {
       const base = deriveStats(state, now, 0);
-      return list.map((item) => {
+      // Les rangs que l'Ascension n'a pas ouverts n'apparaissent pas du tout:
+      // une carte grisée qu'on ne peut pas débloquer n'est pas un objectif,
+      // c'est un mur.
+      return list.filter((item) => itemUnlocked(item, state)).map((item) => {
         const owned = state.items[item.id] || 0;
         // « Max » achète tout ce que la banque permet, au moins un exemplaire
         // pour que le prix affiché reste celui d'un achat possible.

@@ -146,7 +146,15 @@ export function prestigeEffects(state) {
  * la production totale, qui redonne des chips. En racine carrée cette boucle
  * divergeait — soixante prestiges et 6,5e13 chips en une semaine simulée.
  */
-export const chipsFor = (lifetime) => Math.floor(Math.cbrt(Math.max(0, lifetime) / 1_000));
+export const chipsFor = (lifetime, chipMult = 1) => {
+  const vie = Number(lifetime);
+  const m = Number(chipMult);
+  const base = Number.isFinite(vie) && vie > 0 ? Math.cbrt(vie / 1_000) : 0;
+  // Un multiplicateur absent ou aberrant vaut 1: il ne doit jamais faire
+  // BAISSER les chips, ni les rendre non finis.
+  const mult = Number.isFinite(m) && m > 1 ? m : 1;
+  return Math.floor(base * mult);
+};
 
 /**
  * Seuil minimal pour que le prestige soit proposé.

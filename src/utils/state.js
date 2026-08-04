@@ -1,6 +1,7 @@
 import { defaultCryptoState, CRMB, addCrmb } from "./crypto.js";
 import { clampBestCombo } from "./combo.js";
 import { getUpgrade } from "../data/upgrades.js";
+import { TRACK_BY_ID } from "../data/ascension.js";
 import { ITEM_BY_ID } from "../data/items.js";
 
 // === Feature flags ===
@@ -66,6 +67,9 @@ export function createFreshState(now = Date.now()) {
     buffs: { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" },
 
     prestige: { chips: 0, spent: 0, upgrades: {} },
+    // L'Ascension se place au-dessus du prestige: elle survit à tout, sauf à
+    // une remise à zéro complète demandée par le joueur.
+    ascension: { stars: 0, spent: 0, tracks: {}, count: 0 },
 
     ui: {
       sounds: true,
@@ -204,6 +208,26 @@ export function migrate(savedState, now = Date.now()) {
     // Un `spent` supérieur aux chips gagnés viendrait d'une sauvegarde trafiquée
     if (merged.prestige.spent > merged.prestige.chips) merged.prestige.spent = merged.prestige.chips;
 
+    // --- Ascension: arrive après la v5, absente de toutes les sauvegardes
+    //     existantes. Les valeurs par défaut la rendent simplement inactive.
+    const oldAsc = isObj(savedState.ascension) ? savedState.ascension : {};
+    const tracks = {};
+    if (isObj(oldAsc.tracks)) {
+      for (const id of Object.keys(oldAsc.tracks)) {
+        // Un niveau négatif ou fractionnaire donnerait un rang de bâtiment
+        // fantôme et un multiplicateur global hors grille.
+        const n = Math.floor(num(oldAsc.tracks[id]));
+        if (n > 0 && TRACK_BY_ID[id]) tracks[id] = Math.min(n, TRACK_BY_ID[id].maxLevel);
+      }
+    }
+    merged.ascension = {
+      stars: Math.max(0, Math.floor(num(oldAsc.stars))),
+      spent: Math.max(0, Math.floor(num(oldAsc.spent))),
+      tracks,
+      count: Math.max(0, Math.floor(num(oldAsc.count))),
+    };
+    if (merged.ascension.spent > merged.ascension.stars) merged.ascension.spent = merged.ascension.stars;
+
     // --- Crypto: v4 n'avait que balance/staked/mintedUnits ---
     const oldCrypto = isObj(savedState.crypto) ? savedState.crypto : {};
     merged.crypto = {
@@ -299,6 +323,7 @@ export const isFeatureEnabled = (name) => FEATURES[name] ?? false;
 export function createResetState({
   preservePrestige = true,
   prestige = null,
+  ascension = null,
   sounds = true,
   // Un joueur qui relance une partie a déjà vu l'écran d'accueil: le lui
   // réimposer n'apporte rien. Seule une toute première partie l'affiche.
@@ -311,6 +336,15 @@ export function createResetState({
       chips: Math.max(0, num(prestige.chips)),
       spent: Math.max(0, num(prestige.spent)),
       upgrades: isObj(prestige.upgrades) ? { ...prestige.upgrades } : {},
+    };
+  }
+  // L'Ascension survit au prestige: c'est la couche du dessus.
+  if (ascension) {
+    s.ascension = {
+      stars: Math.max(0, Math.floor(num(ascension.stars))),
+      spent: Math.max(0, Math.floor(num(ascension.spent))),
+      tracks: isObj(ascension.tracks) ? { ...ascension.tracks } : {},
+      count: Math.max(0, Math.floor(num(ascension.count))),
     };
   }
   s.ui.sounds = !!sounds;

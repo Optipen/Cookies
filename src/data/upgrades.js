@@ -1,4 +1,4 @@
-import { ITEMS, BALANCE } from "./items.js";
+import { ITEMS, BALANCE, itemUnlocked } from "./items.js";
 import { fmtExact } from "../utils/format.js";
 
 // === Améliorations ===
@@ -153,6 +153,7 @@ export function availableUpgrades(state) {
   const list = [];
 
   for (const item of ITEMS) {
+    if (!itemUnlocked(item, state)) continue;
     const count = state.items?.[item.id] || 0;
     for (let n = 0; n < 80; n++) {
       const up = makeTierUpgrade(item, n);
@@ -177,6 +178,7 @@ export function availableUpgrades(state) {
 export function nextMilestone(state) {
   let best = null;
   for (const item of ITEMS) {
+    if (!itemUnlocked(item, state)) continue;
     const count = state.items?.[item.id] || 0;
     for (let n = 0; n < 80; n++) {
       const up = makeTierUpgrade(item, n);

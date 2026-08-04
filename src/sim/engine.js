@@ -15,6 +15,7 @@ import { creditedRate } from "../utils/rate.js";
 import { ITEMS } from "../data/items.js";
 import { availableUpgrades } from "../data/upgrades.js";
 import { chipsFor, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
+import { ascensionEffects, canAscend, starsFor, trackCost, trackLevel } from "../data/ascension.js";
 
 const SECOND = 1000;
 export const HORIZONS = [
@@ -81,19 +82,22 @@ export function income(state, clicksPerSecond, combo, now) {
  * rien pour qui ne clique pas, et c'est voulu. C'est ce qui fait qu'un même
  * catalogue produit des parties différentes selon la façon de jouer.
  */
-function candidates(state, cps, combo, now) {
+function candidates(state, cps, combo, now, portee = Infinity) {
   const base = income(state, cps, combo, now);
   const out = [];
 
+  // On écarte d'abord ce qui est hors de portée, PUIS on calcule les gains: le
+  // gain coûte un `deriveStats` complet, et un Big Bake à 10^13 cookies n'a
+  // aucune raison d'être évalué pendant la première heure de jeu.
   for (const item of ITEMS) {
     const price = costOf(state, item.id, 1, now);
-    if (!isFinite(price)) continue;
+    if (!isFinite(price) || price > portee) continue;
     const next = { ...state, items: { ...state.items, [item.id]: (state.items[item.id] || 0) + 1 } };
     out.push({ kind: "item", id: item.id, item, price, gain: income(next, cps, combo, now) - base });
   }
 
   for (const up of availableUpgrades(state)) {
-    if (!up.unlock(state)) continue;
+    if (up.cost > portee || !up.unlock(state)) continue;
     const next = { ...state, upgrades: { ...state.upgrades, [up.id]: true } };
     out.push({ kind: "upgrade", id: up.id, price: up.cost, gain: income(next, cps, combo, now) - base });
   }
@@ -189,6 +193,8 @@ export function play({
   durationMs = 3600 * SECOND,
   burstS = 60,
   prestige = true,
+  ascension = true,
+  ordreVoies = ["horizon", "echo", "eclat"],
   patienceS = 600,
   maxSteps = 200_000,
 } = {}) {
@@ -203,6 +209,7 @@ export function play({
   let now = 0;
   let achats = 0;
   let prestiges = 0;
+  let ascensions = 0;
   let crmb = 0;
   const decisions = []; // horodatage de chaque achat, pour mesurer le rythme
   const jalons = {}; // première fois qu'un contenu apparaît
@@ -211,14 +218,17 @@ export function play({
   // sans que l'équilibre ait bougé: c'est la médiane sur la période qui décrit
   // ce que le joueur vit.
   const releves = [];
+  // Production maximale atteinte au cours de la partie. Sur une partie qui
+  // renaît, un relevé unique à l'horizon tombe souvent juste après une remise à
+  // zéro et décrit un parc vide: le sommet dit ce que le joueur a réellement
+  // construit.
+  let sommet = 0;
 
   const jalon = (nom) => {
     if (jalons[nom] === undefined) jalons[nom] = now;
   };
 
   for (let step = 0; step < maxSteps && now < durationMs; step++) {
-    const tous = candidates(state, cpsEffectif, combo, now).filter((c) => c.gain > 0 && isFinite(c.price));
-
     // Horizon d'épargne. Un joueur se fixe un objectif et attend de pouvoir se
     // l'offrir, mais il n'attend pas indéfiniment: au-delà de dix minutes
     // d'attente il se rabat sur quelque chose de plus proche. Sans cette borne,
@@ -226,9 +236,16 @@ export function play({
     // et la simulation décrirait un joueur qui n'existe pas.
     const parSeconde = income(state, cpsEffectif, combo, now);
     const portee = state.cookies + parSeconde * patienceS;
-    const liste = tous.filter((c) => c.price <= portee);
+    const liste = candidates(state, cpsEffectif, combo, now, portee).filter((c) => c.gain > 0);
 
-    const cible = (liste.length ? choisir(liste, step) : null) || pick(tous, (c) => -c.price);
+    // Rien à portée: on regarde alors tout le catalogue pour trouver l'objectif
+    // le moins cher, quitte à épargner plus longtemps.
+    const cible =
+      (liste.length ? choisir(liste, step) : null) ||
+      pick(
+        candidates(state, cpsEffectif, combo, now).filter((c) => c.gain > 0),
+        (c) => -c.price
+      );
 
     // Plus rien à acheter qui rapporte: on laisse simplement tourner le temps.
     if (!cible) {
@@ -272,23 +289,63 @@ export function play({
       const d = deriveStats(state, now, 0);
       const pc = d.perClickNoCombo * combo * creditedRate(cpsEffectif);
       releves.push({ t: now, ratio: d.mining > 0 ? (d.mining + pc) / d.mining : Infinity });
+      sommet = Math.max(sommet, d.mining + pc);
     }
 
     // Prestige: quand la renaissance rapporterait au moins la moitié des chips
     // déjà possédées, c'est le moment où elle cesse d'être anecdotique.
     if (prestige && state.lifetime >= PRESTIGE_MIN_LIFETIME) {
-      const gagne = chipsFor(state.lifetime);
+      const gagne = chipsFor(state.lifetime, ascensionEffects(state).chipMult);
       const actuels = state.prestige.chips;
       if (gagne >= Math.max(1, actuels * 1.5)) {
         const garde = state.prestige;
+        const asc = state.ascension;
         Object.assign(state, createFreshState(now), {
           createdAt: 0,
           prestige: { chips: gagne, spent: garde.spent, upgrades: { ...garde.upgrades } },
+          ascension: asc,
         });
         state.ui.introSeen = true;
         prestiges++;
         crmb += CRMB_PAR_PRESTIGE;
         jalon("prestige");
+      }
+    }
+
+    // Ascension. On ne la prend pas dès qu'elle est possible: comme le
+    // prestige, elle ne vaut le coup que si la moisson est notable au regard de
+    // ce qu'on possède déjà. Ascendre pour une étoile quand on en a cinquante,
+    // c'est perdre son parc pour rien.
+    if (ascension && canAscend(state) && starsFor(state.prestige.chips) >= Math.max(1, (state.ascension?.stars || 0) * 0.5)) {
+      const etoiles = starsFor(state.prestige.chips);
+      const asc = {
+        stars: (state.ascension?.stars || 0) + etoiles,
+        spent: state.ascension?.spent || 0,
+        tracks: { ...(state.ascension?.tracks || {}) },
+        count: (state.ascension?.count || 0) + 1,
+      };
+      Object.assign(state, createFreshState(now), { createdAt: 0, ascension: asc });
+      state.ui.introSeen = true;
+      ascensions++;
+      jalon("ascension");
+
+      // Dépense: on ouvre l'Horizon en priorité — c'est le seul levier qui
+      // apporte du CONTENU — puis on alterne Écho et Éclat.
+      let libres = asc.stars - asc.spent;
+      let progresse = true;
+      while (libres > 0 && progresse) {
+        progresse = false;
+        for (const t of ordreVoies) {
+          const niveau = trackLevel(state, t);
+          const prix = trackCost(t, niveau);
+          if (isFinite(prix) && prix <= libres) {
+            state.ascension.tracks[t] = niveau + 1;
+            state.ascension.spent += prix;
+            libres -= prix;
+            progresse = true;
+            jalon(`voie:${t}`);
+          }
+        }
       }
     }
   }
@@ -300,6 +357,8 @@ export function play({
     state,
     achats,
     prestiges,
+    ascensions,
+    sommet,
     crmb,
     decisions,
     releves,
@@ -317,6 +376,8 @@ export function play({
       batiments: ITEMS.filter((i) => (state.items[i.id] || 0) > 0).length,
       paliers: Object.keys(state.upgrades).length,
       chips: state.prestige.chips,
+      etoiles: state.ascension?.stars || 0,
+      voies: { ...(state.ascension?.tracks || {}) },
     },
   };
 }

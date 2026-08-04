@@ -19,6 +19,15 @@ import { ITEMS } from "../data/items.js";
 import { nextMilestone, tierThreshold } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
+import {
+  ascensionEffects,
+  availableStars,
+  canAscend,
+  starsFor,
+  trackCost,
+  trackLevel,
+  TRACK_BY_ID,
+} from "../data/ascension.js";
 import tuning from "../data/tuning.json";
 
 import {
@@ -989,7 +998,7 @@ export default function CookieCraze() {
 
   const doPrestige = useCallback(() => {
     const s = stateRef.current;
-    const potential = chipsFor(s.lifetime);
+    const potential = chipsFor(s.lifetime, ascensionEffects(s).chipMult);
     const gain = potential - (s.prestige?.chips || 0);
     if (gain <= 0 || s.lifetime < PRESTIGE_MIN_LIFETIME) return;
     if (!window.confirm(`Renaître et gagner ${gain} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`)) {
@@ -1003,6 +1012,7 @@ export default function CookieCraze() {
       const fresh = createResetState({
         preservePrestige: true,
         prestige: { chips: potential, spent: prev.prestige?.spent || 0, upgrades: prev.prestige?.upgrades || {} },
+        ascension: prev.ascension,
         sounds: prev.ui.sounds,
       });
       const eff = prestigeEffects(fresh);
@@ -1029,6 +1039,80 @@ export default function CookieCraze() {
     });
     notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
   }, [audio, notify, stateRef]);
+
+  /**
+   * Ascension.
+   *
+   * Une renaissance de renaissance: elle emporte la partie, les chips ET
+   * l'arbre céleste, et rend des étoiles. Ce qui survit: les étoiles déjà
+   * gagnées et la Voûte, le portefeuille CRMB et le Registre, les apparences,
+   * les succès.
+   */
+  const doAscend = useCallback(() => {
+    const s = stateRef.current;
+    if (!canAscend(s)) return;
+    const gagne = starsFor(s.prestige?.chips || 0);
+    if (
+      !window.confirm(
+        `Ascension : gagner ${gagne} étoile${gagne > 1 ? "s" : ""} ?\n\n` +
+          `Tu perds ta partie, tes chips célestes et ton arbre céleste.\n` +
+          `Tu gardes tes étoiles, la Voûte, ton CRMB, le Registre, tes apparences et tes succès.`
+      )
+    ) {
+      return;
+    }
+
+    audio.play("golden", 0.7);
+    particlesRef.current?.burstGold(90);
+
+    setState((prev) => {
+      const fresh = createResetState({
+        preservePrestige: false,
+        ascension: {
+          stars: (prev.ascension?.stars || 0) + gagne,
+          spent: prev.ascension?.spent || 0,
+          tracks: prev.ascension?.tracks || {},
+          count: (prev.ascension?.count || 0) + 1,
+        },
+        sounds: prev.ui.sounds,
+      });
+      return {
+        ...fresh,
+        ui: { ...prev.ui, introSeen: true },
+        stats: { ...fresh.stats, prestigeCount: prev.stats?.prestigeCount || 0 },
+        crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
+        unlocked: prev.unlocked,
+        skin: prev.skin,
+        skinsOwned: prev.skinsOwned,
+      };
+    });
+    notify.major(`Ascension — +${gagne} étoile${gagne > 1 ? "s" : ""}`, "gold");
+  }, [audio, notify, stateRef]);
+
+  const buyTrack = useCallback(
+    (trackId) => {
+      const s = stateRef.current;
+      const track = TRACK_BY_ID[trackId];
+      if (!track) return;
+      const niveau = trackLevel(s, trackId);
+      const prix = trackCost(trackId, niveau);
+      if (!isFinite(prix) || availableStars(s) < prix) {
+        refuse();
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        ascension: {
+          ...prev.ascension,
+          spent: (prev.ascension?.spent || 0) + prix,
+          tracks: { ...prev.ascension?.tracks, [trackId]: niveau + 1 },
+        },
+      }));
+      audio.play("buy", 0.5);
+      notify.event(`${track.emoji} ${track.name} niveau ${niveau + 1}`, "success");
+    },
+    [audio, notify, refuse, stateRef]
+  );
 
   const buyPrestigeNode = useCallback(
     (nodeId) => {
@@ -1489,7 +1573,9 @@ export default function CookieCraze() {
                   />
                 )}
                 {tab === "prestige" && (
-                  <PrestigePanel state={state} effects={effects} onPrestige={doPrestige} onBuyNode={buyPrestigeNode} />
+                  <PrestigePanel state={state} effects={effects} onPrestige={doPrestige}
+                    onAscend={doAscend}
+                    onBuyTrack={buyTrack} onBuyNode={buyPrestigeNode} />
                 )}
                 {tab === "profile" && (
                   <>

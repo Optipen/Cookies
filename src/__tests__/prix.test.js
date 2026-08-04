@@ -113,10 +113,37 @@ describe("les prix restent lisibles et strictement croissants", () => {
   it("rend un prix entier, jamais nul, jamais négatif", () => {
     for (const item of ITEMS) {
       for (const owned of [0, 1, 17, 250]) {
-        const s = partie((x) => (x.items = { [item.id]: owned }));
+        const s = partie((x) => {
+          x.items = { [item.id]: owned };
+          // On ouvre toutes les voies d'Horizon: on teste ici la formule de
+          // prix, pas le verrouillage.
+          x.ascension = { stars: 99, spent: 0, tracks: { horizon: 4 }, count: 1 };
+        });
         const p = costOf(s, item.id, 1, LATER);
         expect(Number.isInteger(p), `${item.name}`).toBe(true);
         expect(p).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("ne met aucun prix sur un rang que l'Ascension n'a pas ouvert", () => {
+    // Un rang verrouillé n'est pas cher: il n'est pas à vendre. Rendre un prix
+    // fini laisserait la boutique proposer un achat impossible, et « Max »
+    // pourrait vider la banque dessus.
+    const ferme = partie();
+    for (const item of ITEMS.filter((i) => i.horizon > 0)) {
+      expect(costOf(ferme, item.id, 1, LATER), `${item.name}`).toBe(Infinity);
+      expect(maxAffordable({ ...ferme, cookies: 1e30 }, item.id, 1000, LATER)).toBe(0);
+    }
+    // Une fois la voie montée, les rangs correspondants s'ouvrent un par un.
+    for (let niveau = 1; niveau <= 4; niveau++) {
+      const s = partie((x) => {
+        x.cookies = 1e30;
+        x.ascension = { stars: 99, spent: 0, tracks: { horizon: niveau }, count: 1 };
+      });
+      for (const item of ITEMS.filter((i) => i.horizon > 0)) {
+        const ouvert = item.horizon <= niveau;
+        expect(Number.isFinite(costOf(s, item.id, 1, LATER)), `${item.name} à Horizon ${niveau}`).toBe(ouvert);
       }
     }
   });

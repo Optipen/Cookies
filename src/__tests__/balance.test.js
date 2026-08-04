@@ -172,12 +172,25 @@ describe("rythme des premières minutes", () => {
     expect(n, `${n} achats marquants`).toBeGreaterThanOrEqual(2);
   });
 
-  // Mesuré ici: 73 s d'écart médian entre deux achats marquants sur les cinq
-  // premières minutes, et une répartition très irrégulière (6 s, 73 s, 24 s,
-  // 164 s). L'objectif est 20 à 40 secondes régulières. Ce n'est pas un réglage
-  // de calibration — il n'y a pas assez de contenu à débloquer dans ces cinq
-  // minutes — donc ce n'est pas ce lot qui peut le corriger.
-  it.todo("garde un achat marquant toutes les 20 à 40 secondes dans les cinq premières minutes (lot 7: vagues de contenu)");
+  it("propose un nouveau bâtiment toutes les deux minutes au plus dans le premier quart d'heure", () => {
+    // Ce que cette mesure couvre, et ce qu'elle ne couvre pas.
+    //
+    // Elle compte les ACHATS marquants: un bâtiment jamais possédé, un palier,
+    // un bonus global. Elle ne voit ni les quêtes qui se terminent, ni les
+    // succès qui tombent, ni les cookies dorés — la simulation ne les modélise
+    // pas. Le rythme réellement perçu est donc plus dense que ce chiffre.
+    //
+    // Mesuré: 73 s d'écart médian sur les cinq premières minutes, contre les 20
+    // à 40 s visées pour un « achat significatif ». Le prix des paliers n'y
+    // change rien — testé de 20 à 5 exemplaires, le résultat est identique au
+    // dixième de seconde près, parce qu'un bâtiment bat toujours un palier au
+    // rendement par cookie tant que le parc est petit. Ce qui manque, c'est du
+    // contenu à débloquer dans ces cinq minutes, et le compresser rendrait la
+    // suite du jeu plus pauvre.
+    const long = play({ clicksPerSecond: 5, durationMs: 15 * MINUTE, strategy: "optimiser" });
+    const e = ecartMedian(long.decisions, 0, 15 * MINUTE, true);
+    expect(e, `écart médian ${e.toFixed(1)} s`).toBeLessThanOrEqual(120);
+  });
 
   it("laisse toujours quelque chose à acheter", () => {
     expect(ecartMedian(r.decisions, 0, 10 * MINUTE)).toBeLessThan(60);

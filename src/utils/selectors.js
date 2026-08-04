@@ -4,10 +4,11 @@
 // noms internes gardent parfois « cpc » / « cps »; l'interface, elle, ne parle
 // que de « puissance de clic » et de « minage ».
 
-import { ITEMS, ITEM_BY_ID, BALANCE } from "../data/items.js";
+import { ITEMS, ITEM_BY_ID, BALANCE, itemUnlocked } from "../data/items.js";
 import { getUpgrade, SHARE_BASE } from "../data/upgrades.js";
 import { miningFrom, clickPowerFrom, computePerItemMult, globalBonus } from "./calc.js";
 import { prestigeEffects } from "../data/prestige.js";
+import { ascensionEffects } from "../data/ascension.js";
 import { stakingTier, miningRate, stakingYieldPerSecond, ledgerSteps } from "./crypto.js";
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
@@ -100,8 +101,10 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   // Les contrats du Registre apportent des crans permanents aux deux axes: ils
   // s'additionnent à ceux de l'arbre céleste, comme toutes les autres sources.
   const registre = ledgerSteps(state.crypto?.ledger);
-  const mineSteps = prestige.mineSteps + registre;
-  const clickSteps = prestige.clickSteps + registre;
+  const ascension = ascensionEffects(state);
+  const permanents = registre + ascension.eclatSteps;
+  const mineSteps = prestige.mineSteps + permanents;
+  const clickSteps = prestige.clickSteps + permanents;
 
   const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, mineSteps);
   const mining = baseMining * buffMine;
@@ -145,6 +148,7 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     mineMult: globalBonus(chips, stakeTier.steps, mineSteps),
     clickMult: globalBonus(chips, stakeTier.steps, clickSteps),
     ledger: registre,
+    ascension,
     prestige,
     buffActive,
     buffCps: buffMine,
@@ -322,6 +326,9 @@ function premierOffert(state, item, now) {
 export function costOf(state, itemId, count = 1, now = Date.now()) {
   const item = ITEM_BY_ID[itemId];
   if (!item) return Infinity;
+  // Un rang que l'Ascension n'a pas encore ouvert n'a pas de prix: il n'est pas
+  // cher, il n'est pas à vendre.
+  if (!itemUnlocked(item, state)) return Infinity;
 
   const n = Math.min(MAX_BULK, Math.max(0, Math.floor(count)));
   if (n === 0) return 0;
