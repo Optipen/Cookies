@@ -1,9 +1,17 @@
-// Rapport de simulation complet: deux familles de profils, onze horizons.
-// Usage: npx vite-node scripts/simulations.mjs
+// Rapport de simulation complet: quatre familles de profils, onze horizons.
+// Usage: npx vite-node scripts/simulations.mjs [mecanique|sessions|complet|fermetures]
 //
 // Ce n'est PAS un test humain. Il ne dit rien du plaisir, de la lisibilité ni
 // du ressenti. Il mesure des nombres, avec les vraies formules du jeu.
-import { play, ratioMedian, ecartMedian, marquantsEntre, premierAchatPaye } from "../src/sim/engine.js";
+import {
+  play,
+  playFermetures,
+  ratioMedian,
+  ecartMedian,
+  ecartMomentsInteressants,
+  marquantsEntre,
+  premierAchatPaye,
+} from "../src/sim/engine.js";
 
 const MIN = 60e3;
 const H = 3600e3;
@@ -115,17 +123,83 @@ famille("FAMILLE 2 — VRAIES SESSIONS (le reste du temps, seul le minage tourne
   burstS: p.burst,
 }));
 
+// --- Famille 3: partie complète — quêtes, dorés, pluie, succès, CRMB --------
+// Ce que le simulateur précédent ne voyait pas. Les quêtes et les succès
+// tournent sur leur VRAI moteur; les événements aléatoires passent en
+// espérance, avec un taux d'attrapage par profil. Les quêtes chronométrées
+// échouent souvent ici (les tranches dépassent leur chrono): un joueur simulé
+// qui les ignore. Le trading CRMB n'est pas modélisé: marche centrée et 2 % de
+// frais par sens, l'espérance de tout aller-retour est négative.
+const COMPLETS = [
+  { nom: "normal + événements", cps: 5, strategy: "equilibre", dores: 0.6, pluie: 0.5 },
+  { nom: "chasseur d'événements", cps: 5, strategy: "equilibre", dores: 0.95, pluie: 0.9 },
+  { nom: "ignore les événements", cps: 5, strategy: "equilibre", dores: 0.05, pluie: 0 },
+  { nom: "optimiseur + événements", cps: 5, strategy: "optimiser", dores: 0.6, pluie: 0.5 },
+];
+famille("FAMILLE 3 — PARTIE COMPLÈTE (quêtes réelles, événements en espérance, CRMB)", "complet", COMPLETS, (p) => ({
+  clicksPerSecond: p.cps,
+  strategy: p.strategy,
+  decisionS: 10,
+  evenements: { graine: 7, dores: p.dores, pluie: p.pluie },
+}));
+
+// --- Famille 4: l'onglet FERMÉ — sessions + vrais gains hors-ligne ----------
+if (!SEULEMENT || SEULEMENT === "fermetures") {
+  console.log(`\n\n${"=".repeat(110)}\nFAMILLE 4 — ONGLET FERMÉ (sessions réelles, puis la vraie fonction hors-ligne entre elles)\n${"=".repeat(110)}`);
+  const FERMETURES = [
+    { nom: "2 × 15 min/j", sessionsParJour: 2, sessionMin: 15 },
+    { nom: "3 × 10 min/j", sessionsParJour: 3, sessionMin: 10 },
+    { nom: "1 × 30 min/j", sessionsParJour: 1, sessionMin: 30 },
+  ];
+  for (const p of FERMETURES) {
+    console.log(`\n--- ${p.nom} ---`);
+    console.log("horizon    cuits total   hors-ligne   part h-l   sessions   CRMB   prestiges");
+    for (const [nom, ms] of HORIZONS.filter(([, m]) => m >= J)) {
+      const r = playFermetures({ durationMs: ms, sessionsParJour: p.sessionsParJour, sessionMin: p.sessionMin, decisionS: 10, evenements: { graine: 11 } });
+      const part = r.produitTotal > 0 ? ((r.horsLigneCookies / r.produitTotal) * 100).toFixed(1) + " %" : "—";
+      console.log(
+        `${nom.padEnd(9)} ${f(r.produitTotal).padStart(11)} ${f(r.horsLigneCookies).padStart(12)} ${part.padStart(9)} ` +
+          `${String(r.sessions).padStart(9)} ${f(r.crmbDetail.solde).padStart(6)} ${String(r.prestiges).padStart(9)}`
+      );
+    }
+  }
+}
+
+// --- Économie CRMB par horizon (§ demandé: gains ET dépenses par profil) ----
+if (!SEULEMENT || SEULEMENT === "complet") {
+  console.log(`\n\n${"=".repeat(110)}\nÉCONOMIE CRMB — gains par source et par horizon (joueur normal + événements, 5 clics/s)\n${"=".repeat(110)}`);
+  console.log("horizon    prestige   quêtes   succès   extraction    solde");
+  for (const [nom, ms] of [["10 min", 600e3], ["30 min", 1800e3], ["1 h", H], ["1 j", J], ["7 j", 7 * J], ["30 j", 30 * J]]) {
+    const r = play({ clicksPerSecond: 5, strategy: "equilibre", durationMs: ms, decisionS: 10, evenements: { graine: 7 } });
+    const c = r.crmbDetail;
+    console.log(
+      `${nom.padEnd(9)} ${String(c.prestige).padStart(8)} ${String(c.quetes).padStart(8)} ${String(c.succes).padStart(8)} ` +
+        `${String(c.extraction).padStart(11)} ${String(Math.round(c.solde * 100) / 100).padStart(8)}`
+    );
+  }
+}
+
 // --- Objectifs de rythme ----------------------------------------------------
+//
+// Le rythme se mesure DEUX fois: sur les seuls achats marquants — l'ancienne
+// mesure, aveugle aux quêtes et aux dorés — et sur tous les MOMENTS
+// INTÉRESSANTS (achat marquant, quête rendue, doré attrapé, succès), qui est
+// ce que le joueur vit réellement. La stratégie est « equilibre »: un humain,
+// pas un optimiseur parfait.
 if (SEULEMENT === "mecanique") process.exit(0);
-console.log(`\n\n${"=".repeat(110)}\nOBJECTIFS DE RYTHME (joueur normal, 5 clics/s)\n${"=".repeat(110)}`);
-const ref = play({ clicksPerSecond: 5, durationMs: 30 * J, strategy: "optimiser" });
+console.log(`\n\n${"=".repeat(110)}\nOBJECTIFS DE RYTHME (joueur normal, 5 clics/s, équilibre, événements réels)\n${"=".repeat(110)}`);
+const ref = play({ clicksPerSecond: 5, durationMs: 30 * J, strategy: "equilibre", decisionS: 10, evenements: { graine: 7 } });
+const refSans = play({ clicksPerSecond: 5, durationMs: 5 * MIN, strategy: "equilibre", decisionS: 10 });
 const cible = (nom, valeur, bas, haut, unite = "") => {
   const ok = valeur >= bas && valeur <= haut;
-  console.log(`${ok ? "  OK " : "  !! "} ${nom.padEnd(46)} ${String(valeur).padStart(10)}${unite}   cible ${bas}–${haut}${unite}`);
+  console.log(`${ok ? "  OK " : "  !! "} ${nom.padEnd(52)} ${String(valeur).padStart(10)}${unite}   cible ${bas}–${haut}${unite}`);
 };
 cible("premier achat payé (s)", +(premierAchatPaye(ref.decisions) / 1000).toFixed(1), 5, 15, " s");
-cible("achats marquants dans la 1re minute", marquantsEntre(ref.decisions, 0, MIN), 2, 6);
-cible("écart médian entre marquants, 0–5 min (s)", +ecartMedian(ref.decisions, 0, 5 * MIN, true).toFixed(1), 20, 40, " s");
+cible("achats marquants dans la 1re minute", marquantsEntre(ref.decisions, 0, MIN), 2, 4);
+cible("écart médian entre MOMENTS intéressants, 0–5 min (s)", +ecartMomentsInteressants(ref, 0, 5 * MIN).toFixed(1), 20, 45, " s");
+console.log(
+  `       (mémoire: le même écart sur les seuls achats marquants, sans événements: ${ecartMedian(refSans.decisions, 0, 5 * MIN, true).toFixed(1)} s — l'ancienne mesure du défaut connu)`
+);
 cible("premier vrai palier (min)", +((ref.jalons["amélioration:tier"] ?? Infinity) / MIN).toFixed(1), 10, 20, " min");
 cible("premier prestige (min)", +((ref.jalons.prestige ?? Infinity) / MIN).toFixed(1), 60, 120, " min");
 cible("première ascension (j)", +((ref.jalons.ascension ?? Infinity) / J).toFixed(1), 5, 20, " j");

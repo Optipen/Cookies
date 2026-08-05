@@ -227,7 +227,9 @@ function avancerEvenements(state, now, trancheMs, ev, cpsCredite, revenuParSecon
     const attrapes = (trancheMs / 1000 / cadenceSpawnS) * ev.dores * (prestigeEffects(state).goldenRate || 1);
     bonus += attrapes * esperanceDore(state, d, revenuParSeconde);
     state.stats.goldenClicks = (state.stats.goldenClicks || 0) + Math.round(attrapes);
+    const avantDores = Math.floor(compteurs.dores);
     compteurs.dores += attrapes;
+    for (let k = avantDores; k < Math.floor(compteurs.dores); k++) compteurs.moments.push(now);
   }
   if (trancheMs > 0 && ev.pluie > 0) {
     const p = CFG_EVENEMENTS.rain || {};
@@ -248,6 +250,7 @@ function avancerEvenements(state, now, trancheMs, ev, cpsCredite, revenuParSecon
       for (const e of resultat.events) {
         if (e.type !== "completed") continue;
         compteurs.quetes += 1;
+        compteurs.moments.push(now);
         compteurs.crmbQuetes += e.reward?.crmb || 0;
         // Le buff de la récompense expirerait pendant le prochain saut de
         // temps: on le convertit en son espérance de cookies, tout de suite.
@@ -279,6 +282,7 @@ function avancerEvenements(state, now, trancheMs, ev, cpsCredite, revenuParSecon
           compteurs.crmbSucces += crmb;
         }
         compteurs.succes += 1;
+        compteurs.moments.push(now);
       }
     }
   }
@@ -336,6 +340,11 @@ export function play({
   ordreVoies = ["horizon", "echo", "eclat"],
   patienceS = 600,
   maxSteps = 200_000,
+  // Temps de DÉCISION entre deux achats, en secondes. Un humain repère la
+  // carte, lit le prix, tape — huit à quinze secondes au téléphone. Sans ce
+  // délai, le simulateur convertit chaque récompense en production à vitesse
+  // infinie et décrit une borne supérieure théorique, pas un joueur.
+  decisionS = 0,
   // Couche d'événements (quêtes, dorés, pluie, succès, CRMB). Opt-in pour que
   // la famille « mécanique » historique reste comparable d'un audit à l'autre.
   evenements = null,
@@ -353,7 +362,10 @@ export function play({
 
   // Les compteurs de la couche d'événements, et son générateur semé: une
   // simulation se rejoue à l'identique, événements compris.
-  const compteurs = { quetes: 0, succes: 0, dores: 0, miettes: 0, machines: 0, crmbQuetes: 0, crmbSucces: 0, crmbExtraction: 0 };
+  // `moments` horodate chaque battement intéressant hors achat — une quête
+  // rendue, un doré attrapé, un succès — pour mesurer le rythme VÉCU, pas
+  // seulement le rythme des achats.
+  const compteurs = { quetes: 0, succes: 0, dores: 0, miettes: 0, machines: 0, crmbQuetes: 0, crmbSucces: 0, crmbExtraction: 0, moments: [] };
   let ev = null;
   if (evenements) {
     let graine = (evenements.graine ?? 1) >>> 0;
@@ -370,6 +382,10 @@ export function play({
   let prestiges = 0;
   let ascensions = 0;
   let crmb = 0;
+  // Production cumulée à TRAVERS les renaissances: `lifetime` est remis à zéro
+  // par chaque prestige, ce cumul ne l'est jamais. C'est lui qui permet de
+  // comparer des sources de cookies (hors-ligne, événements) à la partie entière.
+  let produitTotal = 0;
   const decisions = []; // horodatage de chaque achat, pour mesurer le rythme
   const jalons = {}; // première fois qu'un contenu apparaît
   // Le rapport actif/passif relevé APRÈS chaque achat. Un relevé unique à
@@ -474,12 +490,30 @@ export function play({
       sommet = Math.max(sommet, d.mining + pc);
     }
 
+    // Le temps de décision: la production tourne pendant que le joueur
+    // repère son prochain achat — huit à quinze secondes chez un humain.
+    if (decisionS > 0 && now < durationMs) {
+      const pause = Math.min(decisionS * SECOND, durationMs - now);
+      const revenu = income(state, cpsEffectif, combo, now);
+      state.cookies += (revenu * pause) / 1000;
+      state.lifetime += (revenu * pause) / 1000;
+      now += pause;
+      if (ev) {
+        const bonus = avancerEvenements(state, now, pause, ev, cpsCredite, revenu, compteurs);
+        if (bonus > 0) {
+          state.cookies += bonus;
+          state.lifetime += bonus;
+        }
+      }
+    }
+
     // Prestige: quand la renaissance rapporterait au moins la moitié des chips
     // déjà possédées, c'est le moment où elle cesse d'être anecdotique.
     if (prestige && state.lifetime >= PRESTIGE_MIN_LIFETIME) {
       const gagne = chipsFor(state.lifetime, ascensionEffects(state).chipMult);
       const actuels = state.prestige.chips;
       if (gagne >= Math.max(1, actuels * 1.5)) {
+        produitTotal += state.lifetime;
         const garde = state.prestige;
         const asc = state.ascension;
         // Comme dans le jeu: le portefeuille CRMB, le matériel, le Registre et
@@ -506,6 +540,7 @@ export function play({
     // ce qu'on possède déjà. Ascendre pour une étoile quand on en a cinquante,
     // c'est perdre son parc pour rien.
     if (ascension && canAscend(state) && starsFor(state.prestige.chips) >= Math.max(1, (state.ascension?.stars || 0) * 0.5)) {
+      produitTotal += state.lifetime;
       const etoiles = starsFor(state.prestige.chips);
       const asc = {
         stars: (state.ascension?.stars || 0) + etoiles,
@@ -557,6 +592,7 @@ export function play({
     ascensions,
     sommet,
     crmb,
+    produitTotal: produitTotal + state.lifetime,
     compteurs,
     crmbDetail: {
       prestige: prestiges * CRMB_PAR_PRESTIGE,
@@ -630,6 +666,28 @@ export const marquantsEntre = (decisions, depuis, jusqu) =>
   decisions.filter((d) => d.marquant && d.t >= depuis && d.t <= jusqu).length;
 
 /**
+ * Écart médian entre deux MOMENTS INTÉRESSANTS: un achat marquant, une quête
+ * rendue, un doré attrapé, un succès décroché. C'est la définition élargie du
+ * rythme vécu — un joueur ne vit pas que d'achats.
+ */
+export function ecartMomentsInteressants(r, depuis = 0, jusqu = Infinity) {
+  // Trois récompenses dans la même seconde se VIVENT comme un seul moment
+  // (le jeu les regroupe d'ailleurs en une notification): on déduplique à la
+  // seconde avant de mesurer les écarts.
+  const temps = [
+    ...new Set(
+      [...r.decisions.filter((d) => d.marquant).map((d) => d.t), ...(r.compteurs?.moments || [])]
+        .filter((t) => t >= depuis && t <= jusqu)
+        .map((t) => Math.round(t / 1000))
+    ),
+  ].sort((a, b) => a - b);
+  if (temps.length < 2) return Infinity;
+  const ecarts = [];
+  for (let i = 1; i < temps.length; i++) ecarts.push(temps[i] - temps[i - 1]);
+  return mediane(ecarts);
+}
+
+/**
  * Le joueur qui FERME l'onglet: sessions réelles, et entre elles la vraie
  * fonction de retour hors-ligne du jeu — pas un minage continu idéalisé.
  *
@@ -644,6 +702,7 @@ export function playFermetures({
   sessionsParJour = 3,
   sessionMin = 10,
   burstS = 30,
+  decisionS = 10,
   evenements = { graine: 1 },
 } = {}) {
   const sessionMs = sessionMin * 60 * SECOND;
@@ -654,18 +713,24 @@ export function playFermetures({
   let horsLigneCrmb = 0;
   let sessions = 0;
   let dernier = null;
+  // Production des SESSIONS, cumulée à travers prestiges et fermetures — le
+  // seul dénominateur honnête pour « quelle part vient du hors-ligne ».
+  let produitSessions = 0;
 
   while (horloge < durationMs) {
     const duree = Math.min(sessionMs, durationMs - horloge);
+    const entrant = etat ? etat.lifetime : 0;
     dernier = play({
       clicksPerSecond,
       strategy,
       durationMs: duree,
       burstS,
+      decisionS,
       evenements: evenements ? { ...evenements, graine: (evenements.graine ?? 1) + sessions } : null,
       etatInitial: etat,
     });
     etat = dernier.state;
+    produitSessions += dernier.produitTotal - entrant;
     horloge += duree;
     sessions += 1;
     if (horloge >= durationMs) break;
@@ -681,5 +746,13 @@ export function playFermetures({
     horloge += gapMs;
   }
 
-  return { ...dernier, sessions, horsLigneCookies, horsLigneCrmb, now: horloge };
+  return {
+    ...dernier,
+    sessions,
+    horsLigneCookies,
+    horsLigneCrmb,
+    produitSessions,
+    produitTotal: produitSessions + horsLigneCookies,
+    now: horloge,
+  };
 }
