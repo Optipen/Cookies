@@ -137,7 +137,9 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
           </div>
           <div className="rounded-lg bg-white/70 border border-cyan-200 px-2 py-1.5">
             <div className="text-cyan-700">Valeur</div>
-            <div className="font-bold text-cyan-950 tabular-nums">{fmt((crypto.balance || 0) * price)}</div>
+            {/* centimes × cours entier peut rendre un demi-cookie: la valeur
+                indicative s'affiche en entier plancher, comme toute estimation. */}
+            <div className="font-bold text-cyan-950 tabular-nums">{fmt(Math.floor((crypto.balance || 0) * price))}</div>
           </div>
         </div>
 

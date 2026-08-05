@@ -76,7 +76,9 @@ function StatsPanel({ state, stats }) {
           <Stat label="Temps de jeu" value={fmtDuration(state.stats?.playtimeMs || 0)} />
           <Stat
             label="Actif / passif"
-            value={`≈${fmtMult(snap(activeRatio(state)))}×`}
+            // Sans le moindre Mineur le rapport est infini: « — » dit mieux
+            // « pas encore de passif à comparer » que « ≈∞× ».
+            value={Number.isFinite(activeRatio(state)) ? `≈${fmtMult(snap(activeRatio(state)))}×` : "—"}
             hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${fmtMult(REF_COMBO)}`}
           />
         </div>

@@ -203,14 +203,18 @@ console.log("— nombres limites —");
 await scene("limite-9975", { width: 1440, height: 980 }, SAVE_9975, async (page, shot) => {
   await attendre(800);
   await shot("par-clic-99-75");
-  // Un Curseur de plus: le par-clic franchit cent.
-  const acheter = page.locator("[data-shop] button[aria-label^='Acheter Curseur']:enabled").first();
-  if (await acheter.isVisible().catch(() => false)) {
-    await acheter.click();
-    await attendre(600);
+});
+// Le 396e Curseur coûte 75 × 1,22³⁹⁵ — on ne l'achète pas, on le POSSÈDE:
+// même scène, un Curseur de plus, et la barre doit passer aux entiers.
+await scene(
+  "limite-100",
+  { width: 1440, height: 980 },
+  { ...SAVE_9975, items: { cursor: 396 } },
+  async (page, shot) => {
+    await attendre(800);
     await shot("par-clic-passe-100");
   }
-});
+);
 await scene(
   "limite-grands-nombres",
   { width: 1440, height: 980 },

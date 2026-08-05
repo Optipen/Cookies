@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { QUEST_BY_ID, questTitle, questDesc, CATEGORY_STYLE } from "../quests/catalog.js";
-import { fmt, fmtCrmb, fmtClock, fmtDuration } from "../utils/format.js";
+import { fmt, fmtInt, fmtCrmb, fmtClock, fmtDuration } from "../utils/format.js";
 import { useTimeLeft, useClock } from "../hooks/useClock.js";
 
 // Chronomètre isolé: se rafraîchit 5×/s sans re-rendre le reste du plateau
@@ -110,7 +110,9 @@ const QuestCard = memo(function QuestCard({ entry, state, ctx, onReroll, daily }
         <div className="flex items-center justify-between text-[11px] text-amber-700 mb-1">
           <span className="capitalize">{quest.category}</span>
           <span className="tabular-nums font-semibold">
-            {fmt(entry.progress)} / {fmt(entry.target)}
+            {/* La progression est un compteur qui accumule des tics: « 817,42 »
+                n'apprend rien de plus que « 817 », et sort de la règle. */}
+            {fmtInt(entry.progress)} / {fmt(entry.target)}
           </span>
         </div>
         <div
