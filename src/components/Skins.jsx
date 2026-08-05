@@ -50,7 +50,7 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
             type="button"
             onClick={() => onEquip(skin.id)}
             disabled={equipped}
-            className={`w-full px-3 py-2 rounded-xl border text-sm font-bold transition-colors ${
+            className={`w-full min-h-11 px-3 rounded-xl border text-sm font-bold transition-colors ${
               equipped
                 ? "bg-emerald-500/20 border-emerald-400 text-emerald-800 cursor-default"
                 : "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
@@ -63,7 +63,7 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
             type="button"
             onClick={() => onBuy(skin.id)}
             disabled={!affordable}
-            className={`w-full px-3 py-2 rounded-xl border text-sm font-bold transition-colors ${
+            className={`w-full min-h-11 px-3 rounded-xl border text-sm font-bold transition-colors ${
               affordable
                 ? "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
                 : "bg-stone-100 border-stone-200 text-stone-500 cursor-not-allowed"

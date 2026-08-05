@@ -96,7 +96,7 @@ const QuestCard = memo(function QuestCard({ entry, state, ctx, onReroll, daily }
                 onClick={() => onReroll(entry.questId)}
                 title="Remplacer cette quête"
                 aria-label={`Remplacer la quête ${questTitle(quest, entry.meta)}`}
-                className="shrink-0 text-xs text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-md px-1.5 py-0.5 transition-colors"
+                className="shrink-0 min-h-11 min-w-11 grid place-items-center text-base text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-md transition-colors"
               >
                 ↻
               </button>

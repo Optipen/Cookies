@@ -13,7 +13,7 @@ import {
   isUnlocked,
   ledgerCost,
 } from "../utils/crypto.js";
-import { fmt, fmtCrmb, fmtMult, fmtPct, fmtDuration } from "../utils/format.js";
+import { fmt, fmtPrix, fmtCrmb, fmtMult, fmtPct, fmtDuration } from "../utils/format.js";
 import { useClock } from "../hooks/useClock.js";
 
 // --- Graphique de cours en SVG pur (aucune dépendance) ---------------------
@@ -71,7 +71,7 @@ const StakePosition = memo(function StakePosition({ position, onUnstake }) {
         type="button"
         onClick={() => onUnstake(position.id)}
         disabled={!unlocked}
-        className={`shrink-0 text-xs px-2.5 py-1.5 rounded-lg border font-semibold transition-colors ${
+        className={`shrink-0 text-xs min-h-11 px-2.5 rounded-lg border font-semibold transition-colors ${
           unlocked
             ? "bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-50"
             : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
@@ -149,7 +149,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
               key={a}
               type="button"
               onClick={() => setTradeAmount(a)}
-              className={`flex-1 text-[11px] py-1 rounded-md border font-semibold transition-colors ${
+              className={`flex-1 text-xs min-h-11 rounded-md border font-semibold transition-colors ${
                 tradeAmount === a ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white/70 border-cyan-200 text-cyan-800 hover:bg-cyan-50"
               }`}
             >
@@ -170,7 +170,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             }`}
           >
             Acheter
-            <span className="block text-[11px] font-normal tabular-nums opacity-90">{fmt(buyCost)} 🍪</span>
+            <span className="block text-[11px] font-normal tabular-nums opacity-90">{fmtPrix(buyCost)} 🍪</span>
           </button>
           <button
             type="button"
@@ -183,7 +183,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             }`}
           >
             Vendre
-            <span className="block text-[11px] font-normal tabular-nums opacity-90">+{fmt(sellGain)} 🍪</span>
+            <span className="block text-[11px] font-normal tabular-nums opacity-90">+{fmtPrix(sellGain)} 🍪</span>
           </button>
         </div>
         <p className="mt-1.5 text-[11px] text-cyan-700/80">
@@ -215,7 +215,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
               key={t.id}
               type="button"
               onClick={() => setTierId(t.id)}
-              className={`text-left px-2 py-1.5 rounded-lg border transition-colors ${
+              className={`text-left px-2 py-1.5 min-h-11 rounded-lg border transition-colors ${
                 tierId === t.id ? "bg-violet-600 border-violet-700 text-white" : "bg-white/70 border-violet-200 text-violet-900 hover:bg-violet-50"
               }`}
             >
@@ -235,12 +235,12 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             value={stakeAmount}
             onChange={(e) => setStakeAmount(Math.max(0, Number(e.target.value) || 0))}
             aria-label="Montant à bloquer"
-            className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-violet-200 bg-white/80 text-violet-950 tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="flex-1 min-w-0 min-h-11 text-sm px-2 rounded-lg border border-violet-200 bg-white/80 text-violet-950 tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
           <button
             type="button"
             onClick={() => setStakeAmount(crypto.balance || 0)}
-            className="text-xs px-2 rounded-lg border border-violet-200 bg-white/70 text-violet-800 hover:bg-violet-50"
+            className="text-xs min-h-11 min-w-11 px-2 rounded-lg border border-violet-200 bg-white/70 text-violet-800 hover:bg-violet-50"
           >
             Max
           </button>
@@ -248,7 +248,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             type="button"
             onClick={() => onStake(stakeAmount, tierId)}
             disabled={!canStake}
-            className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition-colors ${
+            className={`px-3 min-h-11 rounded-lg text-sm font-bold border transition-colors ${
               canStake
                 ? "bg-violet-600 border-violet-700 text-white hover:bg-violet-500"
                 : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
@@ -325,7 +325,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
                 type="button"
                 onClick={() => onBuyMiner(m.id)}
                 disabled={!affordable}
-                className={`w-full flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all ${
+                className={`w-full min-h-11 flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all ${
                   affordable
                     ? "bg-white/80 border-slate-200 hover:border-slate-400 hover:shadow-md hover:-translate-y-0.5"
                     : "bg-stone-100/60 border-stone-200 opacity-60 cursor-not-allowed"

@@ -1425,7 +1425,7 @@ export default function CookieCraze() {
                           onChange={(e) =>
                             setState((s) => ({ ...s, ui: { ...s.ui, volume: Number(e.target.value) } }))
                           }
-                          className="w-full accent-amber-500"
+                          className="w-full min-h-11 accent-amber-500"
                         />
                       </div>
                     )}
@@ -1438,7 +1438,7 @@ export default function CookieCraze() {
                       onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, reducedMotion: !s.ui.reducedMotion } }))}
                     />
                     <MenuToggle label="💾 Exporter la sauvegarde" onClick={exportSave} />
-                    <label className="block w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 cursor-pointer transition-colors border-b border-amber-100">
+                    <label className="block w-full min-h-11 content-center text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 cursor-pointer transition-colors border-b border-amber-100">
                       📥 Importer une sauvegarde
                       <input
                         type="file"
@@ -1451,7 +1451,7 @@ export default function CookieCraze() {
                       type="button"
                       role="menuitem"
                       onClick={hardReset}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="w-full min-h-11 text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       ♻️ Réinitialiser
                       <span className="block text-[11px] text-red-400">Maj + clic : effacer aussi le prestige</span>
@@ -1745,7 +1745,7 @@ export default function CookieCraze() {
           key={crumb.id}
           onClick={() => events.clickCrumb(crumb.id)}
           aria-label="Attraper une miette"
-          className="fixed z-30 h-9 w-9 rounded-full bg-gradient-to-br from-amber-300 to-amber-600 border-2 border-amber-100 shadow-lg text-lg grid place-items-center animate-rain"
+          className="fixed z-30 h-11 w-11 rounded-full bg-gradient-to-br from-amber-300 to-amber-600 border-2 border-amber-100 shadow-lg text-lg grid place-items-center animate-rain"
           style={{
             left: crumb.x,
             top: -50,
@@ -1807,7 +1807,7 @@ const MenuToggle = memo(function MenuToggle({ label, onClick }) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 transition-colors border-b border-amber-100"
+      className="w-full min-h-11 text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 transition-colors border-b border-amber-100"
     >
       {label}
     </button>

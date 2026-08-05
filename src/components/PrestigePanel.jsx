@@ -61,7 +61,7 @@ const NodeCard = memo(function NodeCard({ node, level, cost, affordable, maxed, 
         type="button"
         onClick={() => onBuy(node.id)}
         disabled={maxed || !affordable}
-        className={`mt-2 w-full px-3 py-1.5 rounded-xl text-sm font-bold border transition-colors ${
+        className={`mt-2 w-full min-h-11 px-3 rounded-xl text-sm font-bold border transition-colors ${
           maxed
             ? "bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-800 cursor-default"
             : affordable

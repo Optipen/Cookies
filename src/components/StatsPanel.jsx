@@ -107,7 +107,7 @@ function StatsPanel({ state, stats }) {
               role="tab"
               aria-selected={filter === cat}
               onClick={() => setFilter(cat)}
-              className={`shrink-0 text-[11px] px-2.5 py-1 rounded-lg font-semibold capitalize transition-colors ${
+              className={`shrink-0 text-xs min-h-11 px-2.5 rounded-lg font-semibold capitalize transition-colors ${
                 filter === cat ? "bg-amber-500 text-white" : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
               }`}
             >
