@@ -203,7 +203,22 @@ jouée deux fois → résultat identique, sauvegarde illisible archivée sous
 
 ## 17. Tests
 
-<!-- TESTS -->
+**Validation sur copie propre** (clone frais du dépôt, branche de travail):
+
+| Étape | Résultat |
+| --- | --- |
+| `npm ci` | propre, **0 vulnérabilité** |
+| `npm test` | **25 fichiers, 461 tests, tous verts** (405 au départ de la passe) |
+| `npm run lint` | **zéro erreur, zéro avertissement**, dépôt entier (harnais QA compris) |
+| `npm run build` | ✓ en ~4 s |
+| `npm audit` (complet et `--omit=dev`) | **0 vulnérabilité** |
+
+56 tests ajoutés par cette passe, chacun né ROUGE avant sa correction :
+`grille-magnitudes` (9), `format-compact` (10), `cadence-quart` (8),
+`crmb-centimes` (9), `gains-evenements` (4), `quetes-contexte` (3),
+`anticheat-cadences` (12), plus les specs historiques réécrites là où
+l'ancienne règle était codée en dur (compact `1,23M`, `roundCrmb` au
+millionième, gain unitaire `+0,25` à toute échelle).
 
 ## 18. Simulations longues
 
