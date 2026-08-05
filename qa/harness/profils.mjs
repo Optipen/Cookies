@@ -617,11 +617,20 @@ async function sauvegardesV4V5(page, o, rnd) {
   await o.onglet("Boutique");
   await boucleOrdinaire(page, o, rnd, { cps: [3.5, 4.5], dureeS: 300, rafaleS: [10, 18], pauseS: [1.5, 3.5] });
 
-  // Deuxième vie: il repart d'une sauvegarde v5.
-  o.note("bascule", "on repart d'une sauvegarde v5");
-  await page.evaluate((sauvegarde) => {
+  // Deuxième vie: il repart d'une sauvegarde v5. La bascule doit se faire AU
+  // PROCHAIN CHARGEMENT, avant le code du jeu: un simple clear() + reload ne
+  // suffit pas, l'autosauvegarde de `pagehide` réécrit la clé V6 après le
+  // clear et le jeu — correctement — reprend la partie en cours. (C'est
+  // exactement ce que la campagne 1 a mesuré.)
+  o.note("bascule", "on repart d'une sauvegarde v5 (bascule one-shot au chargement)");
+  await page.context().addInitScript(() => {
+    const demande = localStorage.getItem("__basculeV5");
+    if (!demande) return;
     localStorage.clear();
-    localStorage.setItem("cookieCrazeSaveV5", JSON.stringify(sauvegarde));
+    localStorage.setItem("cookieCrazeSaveV5", demande);
+  });
+  await page.evaluate((sauvegarde) => {
+    localStorage.setItem("__basculeV5", JSON.stringify(sauvegarde));
   }, SAVE_V5);
   await page.reload({ waitUntil: "networkidle" }).catch(() => {});
   await attendre(1800);
