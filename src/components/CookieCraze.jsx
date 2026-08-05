@@ -42,8 +42,9 @@ import {
 } from "../utils/selectors.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
+import { gainCroque } from "../utils/gains.js";
 import { offlineGains } from "../utils/offline.js";
-import { STEP, snap } from "../utils/grid.js";
+import { STEP } from "../utils/grid.js";
 import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
@@ -56,7 +57,7 @@ import {
   LEGACY_KEYS,
   PENDING_RESET_KEY,
 } from "../utils/state.js";
-import { buyPrice, sellPrice, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
+import { coutAchatCrmb, gainVenteCrmb, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
 
 import { useAudio } from "../hooks/useAudio.js";
@@ -176,16 +177,19 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Cadence</div>
           <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-cadence">
-            {/* Arrondie au quart: annoncer « 4,3333 clics/s » sur une moyenne
-                glissante serait faussement précis. Le « ≈ » le dit. */}
-            {c.actif ? fmtApprox(snap(c.creditee)) : "—"}
+            {/* Arrondie au quart — ≈4 · ≈4,25 · ≈4,50 — parce que c'est une
+                moyenne glissante et que le quart est la précision de toute la
+                grille. Elle ne compte que les clics crédités. */}
+            {c.actif ? fmtApprox(c.cadenceAffichee) : "—"}
             <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
         <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
           <div className="text-sm font-black text-amber-700 tabular-nums leading-tight" data-testid="stat-clics">
-            {fmt(c.prodClics)}
+            {/* Estimée depuis la cadence affichée — le joueur peut refaire
+                « par clic × cadence » de tête — donc « ≈ » elle aussi. */}
+            {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}
             <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
@@ -207,12 +211,12 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <span className="text-amber-700 font-semibold">
           <span aria-hidden="true">👆 </span>
           <span className="sr-only">Clics </span>
-          {fmt(c.prodClics)}/s
+          {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}/s
         </span>
         <span className="text-amber-400" aria-hidden="true">=</span>
         <span className="font-black text-amber-950">
           <span className="sr-only">Total </span>
-          <span data-testid="stat-total">{fmt(c.total)}</span>/s
+          <span data-testid="stat-total">{c.actif ? fmtApprox(c.total) : fmt(c.total)}</span>/s
         </span>
       </div>
     </div>
@@ -452,6 +456,53 @@ const VerificationModal = memo(function VerificationModal({ defi, onReussite, on
   );
 });
 
+/**
+ * Confirmation en jeu d'un geste irréversible.
+ *
+ * `window.confirm` affichait une boîte système: hors charte, boutons dans la
+ * langue du navigateur, et invisible pour les tests. Ici: un vrai dialogue,
+ * Annuler d'abord (le geste sûr), l'action nommée par son verbe.
+ */
+const ConfirmDialog = memo(function ConfirmDialog({ demande, onConfirmer, onAnnuler }) {
+  if (!demande) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      data-testid="confirmation"
+      onClick={onAnnuler}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-6 shadow-2xl text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="confirm-title" className="text-lg font-black text-amber-950">
+          {demande.titre}
+        </h2>
+        <p className="text-sm text-amber-800/80 mt-2">{demande.corps}</p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onAnnuler}
+            className="min-h-[3rem] rounded-2xl bg-white border-2 border-amber-300 font-bold text-amber-900 active:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmer}
+            className="min-h-[3rem] rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 border-2 border-orange-600 font-bold text-white active:from-amber-400 active:to-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+          >
+            {demande.libelle}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const HeaderStat = memo(function HeaderStat({ label, value, tone = "amber", title }) {
   const tones = {
     amber: "bg-amber-100/80 text-amber-900 border-amber-200",
@@ -489,6 +540,10 @@ export default function CookieCraze() {
   // mémoire du geste et la reconstruire à chaque rendu l'effacerait.
   const [guard] = useState(createGuard);
   const [defi, setDefi] = useState(null);
+  // Confirmation en jeu des gestes irréversibles. `window.confirm` affichait
+  // une boîte système — hors de la charte, hors du français garanti, et
+  // impossible à couvrir par les tests. { titre, corps, libelle, action }.
+  const [confirmation, setConfirmation] = useState(null);
   // Les systèmes pilotés par minuterie lisent l'état ici plutôt que par
   // fermeture: ça évite de reconstruire leurs intervalles à chaque rendu.
   const stateRef = useLatestRef(state);
@@ -843,8 +898,10 @@ export default function CookieCraze() {
   const cryptoBuy = useCallback(
     (amount) => {
       const s = stateRef.current;
-      const cost = buyPrice(s.crypto.price) * amount;
-      if (amount <= 0 || s.cookies < cost) {
+      // Chaque jambe dans sa règle: le CRMB en centimes, les cookies en entier.
+      const montant = roundCrmb(amount);
+      const cost = coutAchatCrmb(s.crypto.price, montant);
+      if (montant <= 0 || s.cookies < cost) {
         refuse();
         return;
       }
@@ -854,8 +911,8 @@ export default function CookieCraze() {
         cookies: prev.cookies - cost,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, amount),
-          totalBought: addCrmb(prev.crypto.totalBought, amount),
+          balance: addCrmb(prev.crypto.balance, montant),
+          totalBought: addCrmb(prev.crypto.totalBought, montant),
           realizedPnl: (prev.crypto.realizedPnl || 0) - cost,
         },
       }));
@@ -866,11 +923,12 @@ export default function CookieCraze() {
   const cryptoSell = useCallback(
     (amount) => {
       const s = stateRef.current;
-      if (amount <= 0 || s.crypto.balance < amount) {
+      const montant = roundCrmb(amount);
+      if (montant <= 0 || s.crypto.balance < montant) {
         refuse();
         return;
       }
-      const gain = sellPrice(s.crypto.price) * amount;
+      const gain = gainVenteCrmb(s.crypto.price, montant);
       audio.play("buy", 0.35);
       setState((prev) => ({
         ...prev,
@@ -878,8 +936,8 @@ export default function CookieCraze() {
         lifetime: prev.lifetime + gain,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, -amount),
-          totalSold: addCrmb(prev.crypto.totalSold, amount),
+          balance: addCrmb(prev.crypto.balance, -montant),
+          totalSold: addCrmb(prev.crypto.totalSold, montant),
           realizedPnl: (prev.crypto.realizedPnl || 0) + gain,
         },
       }));
@@ -890,7 +948,10 @@ export default function CookieCraze() {
   const cryptoStake = useCallback(
     (amount, tierId) => {
       const s = stateRef.current;
-      if (amount <= 0 || s.crypto.balance < amount) {
+      // Posé en centimes AVANT toute comparaison: un « 7,499 » saisi au champ
+      // deviendrait sinon une position plus grosse que ce que le solde couvre.
+      const montant = roundCrmb(amount);
+      if (montant <= 0 || s.crypto.balance < montant) {
         refuse();
         return;
       }
@@ -901,12 +962,12 @@ export default function CookieCraze() {
         ...prev,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, -amount),
+          balance: addCrmb(prev.crypto.balance, -montant),
           positions: [
             ...prev.crypto.positions,
             {
               id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-              amount: roundCrmb(amount),
+              amount: montant,
               tierId: tier.id,
               startedAt: now,
               unlockAt: now + tier.lockMs,
@@ -992,47 +1053,55 @@ export default function CookieCraze() {
   }, [audio, notify, refuse, stateRef]);
 
   const doPrestige = useCallback(() => {
-    const s = stateRef.current;
-    const potential = chipsFor(s.lifetime, ascensionEffects(s).chipMult);
-    const gain = potential - (s.prestige?.chips || 0);
-    if (gain <= 0 || s.lifetime < PRESTIGE_MIN_LIFETIME) return;
-    if (!window.confirm(`Renaître et gagner ${gain} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`)) {
-      return;
-    }
+    const demande = stateRef.current;
+    const apercu = chipsFor(demande.lifetime, ascensionEffects(demande).chipMult) - (demande.prestige?.chips || 0);
+    if (apercu <= 0 || demande.lifetime < PRESTIGE_MIN_LIFETIME) return;
+    setConfirmation({
+      titre: "Renaissance céleste",
+      corps: `Renaître et gagner ${apercu} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`,
+      libelle: "Renaître",
+      action: () => {
+        // Recalculé au moment du OUI: l'état a pu bouger pendant la lecture.
+        const s = stateRef.current;
+        const potential = chipsFor(s.lifetime, ascensionEffects(s).chipMult);
+        const gain = potential - (s.prestige?.chips || 0);
+        if (gain <= 0 || s.lifetime < PRESTIGE_MIN_LIFETIME) return;
 
-    audio.play("golden", 0.6);
-    particlesRef.current?.burstGold(60);
+        audio.play("golden", 0.6);
+        particlesRef.current?.burstGold(60);
 
-    setState((prev) => {
-      const fresh = createResetState({
-        preservePrestige: true,
-        prestige: { chips: potential, spent: prev.prestige?.spent || 0, upgrades: prev.prestige?.upgrades || {} },
-        ascension: prev.ascension,
-        sounds: prev.ui.sounds,
-      });
-      const eff = prestigeEffects(fresh);
-      // « Départ lancé » rend une fraction de la production de la partie qui s'achève
-      const head = Math.floor((prev.lifetime || 0) * eff.startFraction);
-      return {
-        ...fresh,
-        cookies: head,
-        lifetime: head,
-        ui: { ...prev.ui, introSeen: true },
-        stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
-        // Le portefeuille CRMB et le matériel survivent au prestige, et la
-        // renaissance elle-même en rapporte: c'était annoncé dans le README
-        // mais aucune ligne de code ne le faisait.
-        crypto: {
-          ...prev.crypto,
-          balance: addCrmb(prev.crypto?.balance, CRMB_PAR_PRESTIGE),
-          totalEarned: addCrmb(prev.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
-          lastMarketTs: Date.now(),
-          lastYieldTs: Date.now(),
-        },
-        unlocked: prev.unlocked,
-      };
+        setState((prev) => {
+          const fresh = createResetState({
+            preservePrestige: true,
+            prestige: { chips: potential, spent: prev.prestige?.spent || 0, upgrades: prev.prestige?.upgrades || {} },
+            ascension: prev.ascension,
+            sounds: prev.ui.sounds,
+          });
+          const eff = prestigeEffects(fresh);
+          // « Départ lancé » rend une fraction de la production de la partie qui s'achève
+          const head = Math.floor((prev.lifetime || 0) * eff.startFraction);
+          return {
+            ...fresh,
+            cookies: head,
+            lifetime: head,
+            ui: { ...prev.ui, introSeen: true },
+            stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
+            // Le portefeuille CRMB et le matériel survivent au prestige, et la
+            // renaissance elle-même en rapporte: c'était annoncé dans le README
+            // mais aucune ligne de code ne le faisait.
+            crypto: {
+              ...prev.crypto,
+              balance: addCrmb(prev.crypto?.balance, CRMB_PAR_PRESTIGE),
+              totalEarned: addCrmb(prev.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
+              lastMarketTs: Date.now(),
+              lastYieldTs: Date.now(),
+            },
+            unlocked: prev.unlocked,
+          };
+        });
+        notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
+      },
     });
-    notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
   }, [audio, notify, stateRef]);
 
   /**
@@ -1044,44 +1113,48 @@ export default function CookieCraze() {
    * les succès.
    */
   const doAscend = useCallback(() => {
-    const s = stateRef.current;
-    if (!canAscend(s)) return;
-    const gagne = starsFor(s.prestige?.chips || 0);
-    if (
-      !window.confirm(
-        `Ascension : gagner ${gagne} étoile${gagne > 1 ? "s" : ""} ?\n\n` +
-          `Tu perds ta partie, tes chips célestes et ton arbre céleste.\n` +
-          `Tu gardes tes étoiles, la Voûte, ton CRMB, le Registre, tes apparences et tes succès.`
-      )
-    ) {
-      return;
-    }
+    const demande = stateRef.current;
+    if (!canAscend(demande)) return;
+    const apercu = starsFor(demande.prestige?.chips || 0);
+    setConfirmation({
+      titre: "Ascension",
+      corps:
+        `Gagner ${apercu} étoile${apercu > 1 ? "s" : ""} ? ` +
+        `Tu perds ta partie, tes chips célestes et ton arbre céleste. ` +
+        `Tu gardes tes étoiles, la Voûte, ton CRMB, le Registre, tes apparences et tes succès.`,
+      libelle: "Ascendre",
+      action: () => {
+        const s = stateRef.current;
+        if (!canAscend(s)) return;
+        const gagne = starsFor(s.prestige?.chips || 0);
 
-    audio.play("golden", 0.7);
-    particlesRef.current?.burstGold(90);
+        audio.play("golden", 0.7);
+        particlesRef.current?.burstGold(90);
 
-    setState((prev) => {
-      const fresh = createResetState({
-        preservePrestige: false,
-        ascension: {
-          stars: (prev.ascension?.stars || 0) + gagne,
-          spent: prev.ascension?.spent || 0,
-          tracks: prev.ascension?.tracks || {},
-          count: (prev.ascension?.count || 0) + 1,
-        },
-        sounds: prev.ui.sounds,
-      });
-      return {
-        ...fresh,
-        ui: { ...prev.ui, introSeen: true },
-        stats: { ...fresh.stats, prestigeCount: prev.stats?.prestigeCount || 0 },
-        crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
-        unlocked: prev.unlocked,
-        skin: prev.skin,
-        skinsOwned: prev.skinsOwned,
-      };
+        setState((prev) => {
+          const fresh = createResetState({
+            preservePrestige: false,
+            ascension: {
+              stars: (prev.ascension?.stars || 0) + gagne,
+              spent: prev.ascension?.spent || 0,
+              tracks: prev.ascension?.tracks || {},
+              count: (prev.ascension?.count || 0) + 1,
+            },
+            sounds: prev.ui.sounds,
+          });
+          return {
+            ...fresh,
+            ui: { ...prev.ui, introSeen: true },
+            stats: { ...fresh.stats, prestigeCount: prev.stats?.prestigeCount || 0 },
+            crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
+            unlocked: prev.unlocked,
+            skin: prev.skin,
+            skinsOwned: prev.skinsOwned,
+          };
+        });
+        notify.major(`Ascension — +${gagne} étoile${gagne > 1 ? "s" : ""}`, "gold");
+      },
     });
-    notify.major(`Ascension — +${gagne} étoile${gagne > 1 ? "s" : ""}`, "gold");
   }, [audio, notify, stateRef]);
 
   const buyTrack = useCallback(
@@ -1142,7 +1215,9 @@ export default function CookieCraze() {
     const s = stateRef.current;
     const derived = deriveStats(s);
     const count = (s.cookieEatenCount || 0) + 1;
-    const bonus = Math.max(derived.perClick * (count % 5 === 0 ? 120 : 40), derived.mining * 45);
+    // Barème dans `utils/gains.js`, posé sur la règle des valeurs: le bandeau
+    // et le solde annoncent le même nombre propre.
+    const bonus = gainCroque(derived, count);
 
     audio.play("golden", 0.5);
     particlesRef.current?.burstGold(40);
@@ -1173,7 +1248,7 @@ export default function CookieCraze() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cookiecraze-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `crumbora-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       notify.banner("Sauvegarde exportée", "success");
@@ -1203,33 +1278,37 @@ export default function CookieCraze() {
   const hardReset = useCallback(
     (event) => {
       const full = event?.altKey || event?.shiftKey;
-      const message = full
-        ? "Tout effacer, y compris le prestige et l'arbre céleste ?"
-        : "Réinitialiser la partie ? (prestige et arbre céleste conservés)";
-      if (!window.confirm(message)) return;
+      setConfirmation({
+        titre: full ? "Tout effacer" : "Réinitialiser la partie",
+        corps: full
+          ? "Tout effacer, y compris le prestige et l'arbre céleste ? Il n'y a pas de retour en arrière."
+          : "Réinitialiser la partie ? Le prestige et l'arbre céleste sont conservés.",
+        libelle: full ? "Tout effacer" : "Réinitialiser",
+        action: () => {
+          const s = stateRef.current;
+          const payload = {
+            preservePrestige: !full,
+            prestige: full ? null : s.prestige,
+            sounds: !!s.ui.sounds,
+          };
 
-      const s = stateRef.current;
-      const payload = {
-        preservePrestige: !full,
-        prestige: full ? null : s.prestige,
-        sounds: !!s.ui.sounds,
-      };
+          try {
+            localStorage.removeItem(SAVE_KEY);
+            for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+          } catch {
+            // Stockage inaccessible: l'état en mémoire est réinitialisé quand même
+          }
 
-      try {
-        localStorage.removeItem(SAVE_KEY);
-        for (const key of LEGACY_KEYS) localStorage.removeItem(key);
-      } catch {
-        // Stockage inaccessible: l'état en mémoire est réinitialisé quand même
-      }
-
-      particlesRef.current?.clear();
-      combo.reset();
-      clickRate.reset();
-      setMenuOpen(false);
-      setOfflineReport(null);
-      setTab("shop");
-      setState(createResetState(payload));
-      notify.banner(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
+          particlesRef.current?.clear();
+          combo.reset();
+          clickRate.reset();
+          setMenuOpen(false);
+          setOfflineReport(null);
+          setTab("shop");
+          setState(createResetState(payload));
+          notify.banner(full ? "Tout a été remis à zéro." : "Partie réinitialisée.", "success");
+        },
+      });
     },
     [notify, stateRef, combo, clickRate]
   );
@@ -1275,12 +1354,18 @@ export default function CookieCraze() {
             une ligne: le titre rétrécit, et les deux chiffres que la barre de
             production répète mot pour mot disparaissent sous `sm`. */}
         <header className="flex items-center justify-between gap-2 flex-nowrap">
-          <div className="flex items-center gap-2 min-w-0">
+          {/* Le mot-marque ne cède JAMAIS sa place: `shrink-0` le protège du
+              flex — les pastilles de droite, elles, savent passer à la ligne.
+              Sans ça, Chips + CRMB réunies compressaient le nom en
+              « CRUMBO… » sur téléphone. */}
+          <div className="flex items-center gap-2 shrink-0">
             <span className="text-2xl sm:text-3xl drop-shadow-sm shrink-0" aria-hidden="true">
               🍪
             </span>
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-700 to-orange-600 truncate">
-              Cookie Craze
+            {/* Un seul mot, du four au cosmos — l'ambre du cookie file vers
+                le violet céleste, comme la partie elle-même. */}
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-700 via-orange-600 to-purple-700">
+              CRUMBORA
             </h1>
           </div>
 
@@ -1346,7 +1431,7 @@ export default function CookieCraze() {
                           onChange={(e) =>
                             setState((s) => ({ ...s, ui: { ...s.ui, volume: Number(e.target.value) } }))
                           }
-                          className="w-full accent-amber-500"
+                          className="w-full min-h-11 accent-amber-500"
                         />
                       </div>
                     )}
@@ -1359,7 +1444,7 @@ export default function CookieCraze() {
                       onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, reducedMotion: !s.ui.reducedMotion } }))}
                     />
                     <MenuToggle label="💾 Exporter la sauvegarde" onClick={exportSave} />
-                    <label className="block w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 cursor-pointer transition-colors border-b border-amber-100">
+                    <label className="block w-full min-h-11 content-center text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 cursor-pointer transition-colors border-b border-amber-100">
                       📥 Importer une sauvegarde
                       <input
                         type="file"
@@ -1372,7 +1457,7 @@ export default function CookieCraze() {
                       type="button"
                       role="menuitem"
                       onClick={hardReset}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="w-full min-h-11 text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       ♻️ Réinitialiser
                       <span className="block text-[11px] text-red-400">Maj + clic : effacer aussi le prestige</span>
@@ -1666,7 +1751,7 @@ export default function CookieCraze() {
           key={crumb.id}
           onClick={() => events.clickCrumb(crumb.id)}
           aria-label="Attraper une miette"
-          className="fixed z-30 h-9 w-9 rounded-full bg-gradient-to-br from-amber-300 to-amber-600 border-2 border-amber-100 shadow-lg text-lg grid place-items-center animate-rain"
+          className="fixed z-30 h-11 w-11 rounded-full bg-gradient-to-br from-amber-300 to-amber-600 border-2 border-amber-100 shadow-lg text-lg grid place-items-center animate-rain"
           style={{
             left: crumb.x,
             top: -50,
@@ -1683,6 +1768,7 @@ export default function CookieCraze() {
       <AnimatePresence>
         {offlineReport && <OfflineModal report={offlineReport} onClose={() => setOfflineReport(null)} />}
         <VerificationModal
+          key="verification"
           defi={defi}
           onReussite={() => {
             guard.resoudre();
@@ -1691,6 +1777,16 @@ export default function CookieCraze() {
           // Mauvaise réponse: on repose la question, on ne punit pas. Un joueur
           // qui se trompe de bouton n'est pas un tricheur.
           onEchec={() => setDefi(fabriquerDefi(Date.now() + 7))}
+        />
+        <ConfirmDialog
+          key="confirmation"
+          demande={confirmation}
+          onConfirmer={() => {
+            const faire = confirmation?.action;
+            setConfirmation(null);
+            if (faire) faire();
+          }}
+          onAnnuler={() => setConfirmation(null)}
         />
       </AnimatePresence>
     </div>
@@ -1717,7 +1813,7 @@ const MenuToggle = memo(function MenuToggle({ label, onClick }) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="w-full text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 transition-colors border-b border-amber-100"
+      className="w-full min-h-11 text-left px-4 py-2.5 text-sm text-amber-900 hover:bg-amber-50 transition-colors border-b border-amber-100"
     >
       {label}
     </button>

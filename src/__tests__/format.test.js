@@ -50,11 +50,13 @@ describe("un nombre affiché est le nombre calculé", () => {
     expect(fmt(1720)).not.toContain("K");
   });
 
-  it("reste compact pour les très grands nombres", () => {
-    expect(fmt(1_234_567)).toBe("1,23M");
-    expect(fmt(12_345_678)).toBe("12,3M");
+  it("reste compact pour les très grands nombres — sans décimale dans le suffixe", () => {
+    // Règle définitive: « 1 910K » plutôt que « 1,91M ». Une mantisse qui
+    // aurait une virgule descend d'un suffixe pour redevenir entière.
+    expect(esp(fmt(1_234_567))).toBe("1 230K");
+    expect(esp(fmt(12_345_678))).toBe("12 300K");
     expect(fmt(123_456_789)).toBe("123M");
-    expect(fmt(1.5e12)).toBe("1,5T");
+    expect(esp(fmt(1.5e12))).toBe("1 500B");
   });
 
   it("ne fabrique jamais « 1 000K » en arrondissant vers le haut", () => {
@@ -143,7 +145,7 @@ describe("seuil de compactage", () => {
 
   it("s'applique aussi au solde", () => {
     expect(esp(fmtInt(99_999))).toBe("99 999");
-    expect(fmtInt(1_234_567)).toBe("1,23M");
+    expect(esp(fmtInt(1_234_567))).toBe("1 230K");
     expect(fmtInt(0)).toBe("0");
     expect(fmtInt(-5)).toBe("0"); // un solde ne s'affiche jamais négatif
   });

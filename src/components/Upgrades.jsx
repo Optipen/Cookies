@@ -2,8 +2,9 @@ import React, { memo, useMemo } from "react";
 import { availableUpgrades } from "../data/upgrades.js";
 import { ITEM_BY_ID, LABELS } from "../data/items.js";
 import { deriveStats } from "../utils/selectors.js";
+import { snapDown } from "../utils/grid.js";
 import { useClock } from "../hooks/useClock.js";
-import { fmt } from "../utils/format.js";
+import { fmt, fmtPrix, fmtExact } from "../utils/format.js";
 
 const targetLabel = (upgrade) => {
   if (upgrade.target === "all") return "Cliqueurs et Mineurs";
@@ -44,7 +45,8 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
       type="button"
       disabled={!buyable}
       onClick={() => onBuy(upgrade)}
-      aria-label={`${upgrade.name}, ${unlocked ? `coût ${fmt(upgrade.cost)}` : upgrade.hint}`}
+      aria-label={`${upgrade.name}, ${unlocked ? `coût ${fmtPrix(upgrade.cost)}` : upgrade.hint}`}
+      title={unlocked ? `${fmtExact(upgrade.cost)} cookies` : undefined}
       className={`w-full p-3 rounded-2xl border text-left transition-all duration-150 ${
         buyable
           ? "bg-white/80 border-amber-300 hover:border-amber-400 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg"
@@ -71,7 +73,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
 
       {unlocked ? (
         <div className={`mt-1.5 text-sm font-bold tabular-nums ${affordable ? "text-amber-700" : "text-stone-500"}`}>
-          {fmt(upgrade.cost)} 🍪
+          {fmtPrix(upgrade.cost)} 🍪
         </div>
       ) : (
         <div className="mt-1.5">
@@ -107,11 +109,13 @@ function Upgrades({ state, stats, onBuy }) {
       } catch {
         // Une condition invalide laisse simplement l'amélioration verrouillée
       }
-      // Le gain annoncé est calculé avec la formule du jeu, pas approché.
+      // Le gain annoncé est calculé avec la formule du jeu, pas approché — et
+      // l'écart AFFICHÉ est plié sur la règle: « entier − quart » au passage
+      // de cent rendrait un 499,25 qui n'existe pas dans ce jeu.
       const next = deriveStats({ ...state, upgrades: { ...state.upgrades, [upgrade.id]: true } }, now, 0);
       const gain = {
-        mining: next.mining - base.mining,
-        click: next.perClickNoCombo - base.perClickNoCombo,
+        mining: snapDown(next.mining - base.mining),
+        click: snapDown(next.perClickNoCombo - base.perClickNoCombo),
       };
       return { upgrade, unlocked, progress, gain, affordable: state.cookies >= upgrade.cost };
     });

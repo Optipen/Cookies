@@ -66,9 +66,9 @@ function Intro({ onStart, soundsOn, onToggleSound }) {
           initial={{ scale: 0.85, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 120, damping: 14 }}
-          className="text-5xl md:text-7xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-300 drop-shadow-lg"
+          className="text-4xl sm:text-6xl md:text-7xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-200 to-violet-300 drop-shadow-lg"
         >
-          COOKIE CRAZE
+          CRUMBORA
         </motion.h1>
 
         <motion.p
@@ -87,7 +87,9 @@ function Intro({ onStart, soundsOn, onToggleSound }) {
           className="mt-6 grid grid-cols-2 gap-2 text-xs text-stone-300 max-w-sm w-full"
         >
           {[
-            ["🛍️", "15 bâtiments"],
+            // Seize dès la première partie: les huit rangs d'Ascension ne se
+            // promettent pas à quelqu'un qui n'a pas encore cliqué une fois.
+            ["🛍️", "16 bâtiments"],
             ["📜", "Quêtes & quotidiennes"],
             ["🪙", "Marché crypto"],
             ["✨", "Arbre céleste"],

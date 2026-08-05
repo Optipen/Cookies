@@ -19,7 +19,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("[Cookie Craze] Erreur non rattrapée :", error, info?.componentStack);
+    console.error("[Crumbora] Erreur non rattrapée :", error, info?.componentStack);
   }
 
   downloadSave = () => {
@@ -29,7 +29,7 @@ export default class ErrorBoundary extends React.Component {
       const url = URL.createObjectURL(new Blob([raw], { type: "application/json" }));
       const a = document.createElement("a");
       a.href = url;
-      a.download = "cookiecraze-secours.json";
+      a.download = "crumbora-secours.json";
       a.click();
       URL.revokeObjectURL(url);
     } catch {

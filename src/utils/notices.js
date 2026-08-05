@@ -24,17 +24,23 @@
 //     devant, mais un bug qui en déclencherait soixante par minute ne doit pas
 //     pouvoir saturer l'écran.
 
-/** Délai minimal entre deux notifications ordinaires. */
-export const QUIET_MS = 11_000;
+/**
+ * Délai minimal entre deux notifications ordinaires.
+ *
+ * Seize secondes. À onze, les profils les plus actifs recevaient une
+ * notification toutes les cinq à sept secondes en cumulant les majeurs —
+ * un rythme qui fatigue avant d'informer.
+ */
+export const QUIET_MS = 16_000;
 
 /** Écart minimal entre deux événements majeurs. */
-export const MAJOR_MIN_GAP_MS = 2_500;
+export const MAJOR_MIN_GAP_MS = 6_000;
 
 /** Plafond dur d'événements majeurs par minute glissante. */
-export const MAJOR_PER_MINUTE = 6;
+export const MAJOR_PER_MINUTE = 3;
 
 /** Un même message ne se répète pas avant ce délai. */
-export const DEDUPE_MS = 30_000;
+export const DEDUPE_MS = 45_000;
 
 /** Capacité de la file. Au-delà, le plus ancien ordinaire est abandonné. */
 export const MAX_QUEUE = 6;

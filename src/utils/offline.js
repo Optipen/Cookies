@@ -11,6 +11,7 @@
 
 import { deriveStats } from "./selectors.js";
 import { prestigeEffects } from "../data/prestige.js";
+import { snapDown } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 const cfg = () => tuning?.[tuning?.mode || "standard"]?.offline || {};
@@ -54,9 +55,11 @@ export function offlineGains(state, awayMs, now = Date.now()) {
   };
 
   // Aucun montant non fini ne sort d'ici. Un état corrompu doit rendre zéro,
-  // jamais un NaN qui contaminerait la banque.
-  const cookies = Number.isFinite(brut.cookies) && brut.cookies > 0 ? brut.cookies : 0;
-  const crmb = Number.isFinite(brut.crmb) && brut.crmb > 0 ? brut.crmb : 0;
+  // jamais un NaN qui contaminerait la banque. Et les montants sont posés sur
+  // leurs règles respectives — cookies sur la règle des valeurs, CRMB au
+  // centime — parce que ce que le rapport ANNONCE est ce que la banque REÇOIT.
+  const cookies = Number.isFinite(brut.cookies) && brut.cookies > 0 ? snapDown(brut.cookies) : 0;
+  const crmb = Number.isFinite(brut.crmb) && brut.crmb > 0 ? Math.floor(brut.crmb * 100 + 1e-9) / 100 : 0;
 
   return {
     durationMs: duree,

@@ -1,4 +1,4 @@
-# Cookie Craze 🍪
+# Crumbora 🍪
 
 Jeu de clic incrémental : bâtis ton empire du biscuit, accomplis des quêtes et
 fais fructifier ton CrumbCoin.
@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (160 tests)                    |
+| `npm test`          | Suite de tests (463 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -30,19 +30,28 @@ Le jeu tourne sur deux axes qui fonctionnent **en même temps** :
   **Cliqueurs** ;
 - **Minage** — les cookies générés chaque seconde, porté par les **Mineurs**.
 
-### La grille : des nombres choisis, jamais calculés
+### La règle des nombres : quarts sous cent, entiers dès cent
 
 **Aucun multiplicateur visible n'est le résultat d'un calcul.** Ils sont tous
-pris sur une grille :
+pris sur une grille, en pas de 0,25 à toute magnitude :
 
 ```
 ×1 · ×1,25 · ×1,50 · ×1,75 · ×2 · ×2,25 · ×2,50 · ×2,75 · ×3 …
 ```
 
+Les **valeurs** — cookies, production, prix, gains, bonus — suivent une règle
+à deux étages :
+
+- **sous cent**, seuls les quarts existent : `0 · 0,25 · 0,50 · … · 99,75` ;
+- **à partir de cent**, seuls les entiers : `100 · 125 · 402 · 1 910 · 20 100`.
+
+Un « 401,75 par clic » ou un « 125,50 » n'existe plus, ni à l'écran ni dans la
+banque : c'est la valeur **créditée** qui respecte la règle, pas seulement son
+affichage. Le **CRMB est l'exception assumée**, au centième — voir sa section.
 Ce n'est pas un arrondi d'affichage : la valeur montrée **est** la valeur
 utilisée dans la formule. Un ×1,02 ou un ×2,08 n'est donc pas corrigé, il est
-impossible à produire. Les valeurs, prix et récompenses suivent la même
-logique, sur l'échelle `1 · 2,5 · 5 · 10 · 25 · 50 · 100 · 250 …`.
+impossible à produire. Les seuils et récompenses suivent l'échelle
+`1 · 2,5 · 5 · 10 · 25 · 50 · 100 · 250 …`.
 
 Rien ne donne « +2 % ». Une source de bonus fait **franchir un palier**, et
 franchir un palier ajoute exactement +0,25. Entre deux paliers le nombre ne
@@ -59,10 +68,11 @@ crans      = paliers(chips) + paliers(staking) + niveaux(arbre céleste)
            + contrats(Registre) + niveaux(Éclat)
 global     = 1 + 0,25 × crans                        ← un multiple de 0,25, toujours
 valeur(b)  = grille↓(valeur_base(b) × palier(b) × global)   ≥ valeur_base(b)
-minage     = Σ(mineurs   × valeur(b))
-puiss. clic= 1 + Σ(cliqueurs × valeur(b))
-par clic   = (puissance clic + minage × 6 %) × combo
+minage     = grille↓(Σ(mineurs × valeur(b)) × buff)
+puiss. clic= grille↓(1 + Σ(cliqueurs × valeur(b)) + grille↓(minage × 6 %))
+par clic   = grille↓(puissance clic × combo)  ≥ puissance clic
 combo      = 1 + 0,25 × niveau,  niveau de 0 à 3
+prix       = quart de 10^⌊log₁₀⌋ au-delà de 100 000, remises comprises
 ```
 
 La **quantification par exemplaire** (`grille↓`) est ce qui garantit que le
@@ -70,7 +80,10 @@ nombre affiché est le nombre calculé. Sans elle, le Curseur — seul bâtiment
 la valeur de base n'est pas entière — sortait de la grille pour 73 % des
 multiplicateurs: `0,25 × 2,5 = 0,625`, que l'écran arrondissait en « +0,63 ».
 Les quinze autres ont une valeur entière et ne sont pas concernés, entier × (k/4)
-tombant toujours sur la grille.
+tombant toujours sur la grille. `grille↓` porte les deux étages de la règle :
+quart en dessous de cent, entier au-delà — avec une conséquence assumée et
+testée : au-delà de cent de puissance, le +0,25 d'un Curseur seul se
+matérialise en **+1 tous les quatre exemplaires**, jamais en perte.
 
 Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
 multiplicateurs. C'est le point clé : ×2,25 × ×1,25 vaut ×2,8125, et un Curseur
@@ -88,20 +101,21 @@ le faisait envoyait le rapport actif/passif au-delà de 8×.
 
 ### Valeurs propres et additives
 
-Un Mineur vaut dix fois son Cliqueur de même rang, et coûte exactement le même
-prix. Le premier achat de la partie est donc un vrai choix, à prix égal :
-produire pendant que tu ne joues pas, ou frapper plus fort quand tu joues.
+Un Mineur vaut **huit fois** son Cliqueur de même rang, et le Cliqueur coûte
+**trois quarts** du prix du Mineur (`click_price_factor`). Le premier achat de
+la partie est donc un vrai choix : produire pendant que tu ne joues pas, ou
+frapper plus fort — un peu moins cher — quand tu joues.
 
-| Rang | Cliqueur | | Mineur | | Prix de base |
+| Rang | Cliqueur | | Mineur | | Prix de base (Mineur) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Curseur | +0,25 /clic | Four | +2 /s | 100 |
-| 2 | Mamie | +1 | Boulangerie | +10 | 1 000 |
-| 3 | Gant de frappe | +5 | Ferme | +50 | 10 000 |
-| 4 | Bras robotisé | +25 | Usine | +250 | 100 000 |
-| 5 | Exosquelette | +100 | Banque | +1 000 | 1 000 000 |
-| 6 | IA de frappe | +500 | Temple | +5 000 | 10 000 000 |
-| 7 | Machine à Temps | +2 500 | Laboratoire | +25 000 | 100 000 000 |
-| 8 | Singularité tactile | +10 000 | Portail | +100 000 | 1 000 000 000 |
+| 2 | Mamie | +1 | Boulangerie | +8 | 1 000 |
+| 3 | Gant de frappe | +5 | Ferme | +40 | 10 000 |
+| 4 | Bras robotisé | +25 | Usine | +200 | 100 000 |
+| 5 | Exosquelette | +100 | Banque | +800 | 1 000 000 |
+| 6 | IA de frappe | +500 | Temple | +4 000 | 10 000 000 |
+| 7 | Machine à Temps | +2 500 | Laboratoire | +20 000 | 100 000 000 |
+| 8 | Singularité tactile | +10 000 | Portail | +80 000 | 1 000 000 000 |
 
 Un rang coûte dix fois le précédent et rapporte cinq fois plus : il devient
 rentable après quelques exemplaires de celui d'en dessous, ce qui fait
@@ -136,15 +150,20 @@ le compteur :
 
 ```
    PAR CLIC        CADENCE         CLICS
-     401,75        ≈4,25 /s        1 720 /s
+       402         ≈4,25 /s        ≈1 708 /s
    ─────────────────────────────────────────
-     ⛏️ 1 330/s  +  👆 1 720/s  =  3 050/s
+     ⛏️ 1 330/s  +  👆 ≈1 708/s  =  ≈3 038/s
 ```
 
 La **cadence est mesurée**, pas supposée : moyenne glissante sur trois secondes,
 publiée à 5 Hz, éteinte après une seconde et demie sans clic. Elle s'affiche
-arrondie au quart et préfixée de « ≈ » — c'est une moyenne, la donner au
-millième serait faussement précis.
+**arrondie au quart** — ≈4 · ≈4,25 · ≈4,50, jamais ≈4,12 — et préfixée de
+« ≈ » : le quart est la précision de toute la grille du jeu, et c'est la seule
+précision honnête pour une moyenne glissante. La **production des clics en
+découle** — « par clic × cadence affichée », repliée sur la règle des valeurs —
+si bien que le joueur peut refaire le calcul de tête ; comme elle est estimée,
+elle porte le même « ≈ », et le total avec elle tant qu'on clique. Au repos, le
+total vaut le minage **exactement**, sans ≈.
 
 Elle ne compte que les **clics crédités**. Sinon l'écran afficherait « ≈50 /s »
 à côté de « 12 par clic » et le joueur multiplierait deux nombres qui ne se
@@ -167,40 +186,48 @@ règle prime sur les autres : **le texte à l'écran se relit à l'identique**.
 
 | Ce qui s'écrivait | Ce qui s'écrit | Pourquoi |
 | --- | --- | --- |
-| `401,8` | `401,75` | La valeur vaut 401,75. Une décimale supprimée, et 401,75 et 401,80 devenaient le même texte |
-| `1,3` | `1,25` | Idem sur la grille : `fmt` gardait une seule décimale au-dessus de 1 |
+| `401,75` | `401` (la valeur VAUT 401) | Dès cent, la règle interdit les décimales — le pli va vers le bas, à la banque comme à l'écran |
+| `1,3` | `1,25` | Sous cent, les quarts s'affichent entiers de quarts, sans décimale supprimée |
 | `1,72K` | `1 720` | Une abréviation qui fabrique une décimale là où le nombre n'en avait pas |
+| `1,91M` | `1 910K` | Un suffixe ne porte jamais de virgule : la mantisse descend d'un cran et redevient entière |
+| `11,8M` | `11 750K` | Un prix exactement représentable s'affiche EXACTEMENT |
 | `100,00K` | `99 999` | Le solde s'abrégeait dès le millier |
 | `1 000M` | `1B` | L'arrondi à trois chiffres franchissait le millier sans remonter d'un cran |
 
 On n'abrège qu'à partir de **cent mille** (`COMPACT_FROM`) : en dessous, le
-nombre entier tient à l'écran et se lit d'un coup. Au-dessus, personne ne lit
-les chiffres du milieu et la forme compacte devient la plus honnête des deux —
-trois chiffres significatifs, `1,23M` · `12,3M` · `123M`. Au-delà du dernier
-suffixe, on passe en notation scientifique plutôt que d'inventer un nom d'unité.
+nombre entier tient à l'écran et se lit d'un coup. Au-dessus, la forme compacte
+ne porte **jamais de décimale** : trois chiffres significatifs à mantisse
+entière — `123K` · `1 910K` · `20 100K` · `123M` — la mantisse entière la plus
+haute gagnant (`25M`, pas `25 000K`), et un nombre exactement représentable
+s'affiche exactement (`11 750K`). Au-delà du dernier suffixe, on passe en
+notation scientifique plutôt que d'inventer un nom d'unité.
 
 Cinq formateurs, chacun pour un usage :
 
 | | Pour quoi | Exemple |
 | --- | --- | --- |
-| `fmt` | tout nombre de gameplay | `401,75` · `1 720` · `1,23M` |
+| `fmt` | tout nombre de gameplay | `99,75` · `1 720` · `1 910K` |
 | `fmtExact` | valeur de fiche, jamais abrégée | `80 000` |
-| `fmtInt` | le solde, en entier | `1 234` · `1,23M` |
+| `fmtInt` | le solde, en entier | `1 234` · `1 230K` |
 | `fmtMult` | multiplicateur de grille | `×1,50` · `×2` |
-| `fmtApprox` | valeur **mesurée** | `≈4,25` |
+| `fmtApprox` | valeur **mesurée ou estimée** | `≈4,25` |
+| `fmtCrmb` | montant CRMB, centimes | `1` · `1,5` · `1,05` · `<0,01` |
 
 Le préfixe `≈` n'est pas décoratif : il distingue une valeur calculée d'une
-valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,25 /s » tout
+valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,3 /s » tout
 court serait faussement précis.
 
-### L'achat groupé paie la somme des achats un par un
+### L'achat groupé ne paie jamais plus que les achats un par un
 
-`×10` n'est ni une remise cachée ni une pénalité cachée. Chaque exemplaire est
-remisé et arrondi **séparément**, puis les prix sont additionnés. Appliquer la
-remise à la somme puis arrondir une seule fois rendait le lot moins cher :
-mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la réduction du
-prestige (×0,95) et une remise générale (×0,75) se cumulaient. Trois cookies,
-mais c'est un écart que rien n'annonce et qui grandit avec le lot.
+`×10` n'est jamais une pénalité cachée. Chaque exemplaire est remisé, arrondi
+et **posé sur la grille des prix séparément**, puis les prix sont additionnés.
+Appliquer la remise à la somme puis arrondir une seule fois rendait le lot
+moins cher : mesuré, 99 822 au lieu de 99 825 sur dix Boulangeries quand la
+réduction du prestige (×0,95) et une remise générale (×0,75) se cumulaient.
+Trois cookies, mais c'est un écart que rien n'annonce et qui grandit avec le
+lot. Un seul cas fait dévier la somme : quand le lot traverse un ordre de
+grandeur, elle est repliée vers le **bas** sur la grille d'affichage — au pire
+un quart de cran de moins, jamais un de plus.
 
 ### Automatisation : ce qui est protégé, et ce qui ne peut pas l'être
 
@@ -265,7 +292,7 @@ innocents.
 Une vérification **n'apparaît jamais parce que le joueur est inactif**. Ne pas
 cliquer est une façon légitime de jouer — le minage tourne tout seul.
 
-### CRMB : rare, et jamais détruit par erreur
+### CRMB : rare, en centimes, et jamais détruit par erreur
 
 Le CRMB est une monnaie de **récompense**. On en gagne en terminant des quêtes
 (dix des vingt-six en donnent, 1 à 5 pièces), en décrochant les succès qui
@@ -273,6 +300,18 @@ comptent (0 · 0 · 1 · 2 · 5 selon le palier, 53 pièces pour les cinquante-c
 succès réunis), en renaissant (+5), et par le matériel d'extraction — jamais en
 cuisant des cookies. Le faucet historique versait 0,001 CRMB tous les 20 000
 cookies, soit des centaines de millions en fin de partie.
+
+**Le CRMB vit en centimes** — c'est son exception à la règle des quarts. Tout
+arrondi monétaire est au centième, l'affichage ne dépasse jamais deux
+décimales et retire les zéros inutiles (« 1 », « 1,5 », « 1,05 »). Ce qui est
+plus fin qu'un centime ne se perd pas : le rendement d'un tic — sept
+millionièmes de CRMB pour un vieux CPU — s'accumule dans une réserve interne
+et ne se verse au solde que par centimes pleins. Le taux d'extraction est posé
+au centième par heure **dans le moteur** : « 0,06 CRMB/h » à l'écran, c'est
+0,06 crédité, pas 0,0625. Le cours du marché est un **entier de cookies**, et
+chaque échange règle ses deux jambes dans leur règle : centimes de CRMB contre
+entiers de cookies, arrondis contre le joueur d'au plus un cookie — plafond à
+l'achat, plancher à la vente.
 
 **Un solde valide n'est jamais détruit par un calcul invalide.** `addCrmb`
 rejette le seul delta fautif et conserve le solde. Écrire
@@ -384,18 +423,20 @@ l'estimer.
 
 | Règle | Valeur | Pourquoi |
 | --- | --- | --- |
-| Silence entre deux ordinaires | 11 s | Une notification qu'on n'a pas le temps de lire n'informe personne |
+| Silence entre deux ordinaires | 16 s | Une notification qu'on n'a pas le temps de lire n'informe personne |
 | File bornée | 6 entrées | Une file sans limite ne supprime pas l'avalanche, elle la reporte |
 | Péremption | 90 s | Passé ce délai, le message parle d'une partie qu'on ne joue plus |
-| Déduplication | 30 s | Le même texte ne revient pas coup sur coup |
+| Déduplication | 45 s | Le même texte ne revient pas coup sur coup |
 | Regroupement | 1 s | Dix succès simultanés font **une** ligne, avec « ×10 » |
-| Écart entre majeurs | 2,5 s | Une renaissance passe devant, mais pas en rafale |
-| **Plafond des majeurs** | **6 / minute glissante** | Même un bug qui en déclencherait soixante ne peut pas saturer l'écran |
+| Écart entre majeurs | 6 s | Une renaissance passe devant, mais pas en rafale |
+| **Plafond des majeurs** | **3 / minute glissante** | Même un bug qui en déclencherait soixante ne peut pas saturer l'écran |
 
-Mesuré sur une session type (quêtes toutes les 45 s, succès toutes les 90 s,
-dorés toutes les 70 s, une renaissance toutes les 30 min) : **moins de 6
-notifications par minute** sur le premier quart d'heure comme sur une heure
-entière, et aucun identifiant réaffiché deux fois.
+Les cookies dorés, qui s'annoncent déjà par eux-mêmes à l'écran, sont passés au
+rang ordinaire : ils n'ont plus le droit de doubler la file. Mesuré sur une
+session type (quêtes toutes les 45 s, succès toutes les 90 s, dorés toutes les
+70 s, une renaissance toutes les 30 min) : **moins de 4 notifications par
+minute** sur le premier quart d'heure comme sur une heure entière, et aucun
+identifiant réaffiché deux fois.
 
 Un achat ordinaire ne notifie rien : le chiffre monte sur sa propre carte. Un
 achat refusé ne notifie rien non plus — le bouton tremble, c'est tout.
@@ -469,18 +510,31 @@ Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
 
 ### Le rythme
 
-Le chiffre exact de cookies compte moins que la cadence. Sept objectifs, mesurés
-sur une partie complète à cinq clics par seconde :
+Le chiffre exact de cookies compte moins que la cadence. La mesure a changé de
+nature avec cette passe : le simulateur voit désormais les **quêtes, les dorés
+et les succès**, et le joueur simulé met **dix secondes à décider** un achat —
+sans ce délai, on mesure une machine, pas un joueur. Objectifs, à cinq clics
+par seconde, stratégie équilibre :
 
 | Objectif | Cible | Mesuré | |
 | --- | --- | --- | --- |
-| Premier achat payé | 5–15 s | **6,5 s** | ✓ |
-| Achats marquants, 1re minute | 2–6 | **2** | ✓ |
-| Écart entre marquants, 0–5 min | 20–40 s | 73 s | ✗ |
-| Premier vrai palier de bâtiment | 10–20 min | **19,5 min** | ✓ |
-| Premier prestige | 60–120 min | **85 min** | ✓ |
-| Première ascension | 5–20 j | **10,1 j** | ✓ |
-| Dernière nouveauté du jeu | 7–60 j | **28 j** | ✓ |
+| Premier achat payé | 5–15 s | **8,9 s** | ✓ |
+| Achats marquants, 1re minute | 2–4 | **2** | ✓ |
+| Écart médian entre achats marquants, 0–5 min | 20–45 s | **30 s** | ✓ |
+| Écart médian entre MOMENTS intéressants, 0–5 min | 20–45 s | **10 s** | plus dense que la cible |
+| Premier vrai palier de bâtiment | 10–20 min | **13,4 min** | ✓ |
+| Premier prestige | 60–120 min | **64 min** | ✓ |
+| Première ascension | 5–20 j | **5,2 j** | ✓ |
+| Dernière nouveauté du jeu | 7–60 j | **13,8 j** | ✓ |
+
+Le « 73 s entre deux achats marquants » du constat précédent mesurait un jeu
+**sans ses temps forts** — ni quêtes, ni dorés, ni succès — joué par un
+optimiseur sans temps de décision. Compté honnêtement, l'écart entre achats
+marquants tient la cible, et le rythme VÉCU — une quête rendue, un doré
+attrapé, un succès décroché comptent aussi — descend à dix secondes en début
+de partie, porté par la rafale d'apprentissage de la première minute. Le jeu
+n'a pas été accéléré pour obtenir ces chiffres : c'est la mesure qui a été
+réparée.
 
 Le seuil de prestige a été choisi **par mesure** : une recherche par dichotomie
 sur la production totale donne 29 min à 5 millions de cookies cuits, 61 min à
@@ -635,7 +689,7 @@ lancent à la main. Playwright et son navigateur s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 402 tests
+npm test                      # 463 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -646,6 +700,11 @@ npm run simulations mecanique # une seule famille (plus rapide)
 npm i playwright && npx playwright install chromium
 npm run mobile                # six gabarits: cibles, textes, débordements
 npx vite-node scripts/console.mjs   # erreurs console et mémoire
+
+# Campagnes de vingt profils automatisés (contre `npm run preview`):
+node qa/harness/campagne.mjs http://127.0.0.1:4173/ qa-artifacts/campagne-X
+node qa/harness/planches.mjs http://127.0.0.1:4173/ qa-artifacts/planches-X
+node qa/harness/analyse.mjs qa-artifacts/campagne-1 qa-artifacts/campagne-2
 ```
 
 `CHROMIUM_PATH` force un navigateur précis quand l'environnement en fournit un
@@ -653,34 +712,43 @@ npx vite-node scripts/console.mjs   # erreurs console et mémoire
 
 ### Les simulations
 
-Le rapport complet — **dix-sept profils × onze horizons × dix-sept métriques** —
+Le rapport complet — **quatre familles × onze horizons × dix-sept métriques** —
 est dans [`docs/simulations.txt`](docs/simulations.txt), reproductible par
-`npm run simulations`.
+`npm run simulations` (ou par famille : `mecanique`, `sessions`, `complet`,
+`fermetures`, `rythme`).
 
-Deux familles, qui ne mesurent pas la même chose :
+Quatre familles, qui ne mesurent pas la même chose :
 
 - **Mécanique continue** : une cadence tenue en permanence. Sert à isoler
   l'effet d'un paramètre. Le rapport actif/passif y est directement comparable
   aux cibles (2,5–2,8× à cinq clics/s).
 - **Vraies sessions** : `activeFraction` est la part du temps réellement passée
-  à cliquer. Un joueur qui joue trente minutes par jour a une cadence **moyennée
-  sur vingt-quatre heures** de 0,10 clic/s : son rapport affiché tourne autour
-  de 1,03×, et c'est normal — il mesure la journée entière, pas la session.
+  à cliquer, l'onglet restant ouvert. Un joueur qui joue trente minutes par
+  jour a une cadence **moyennée sur vingt-quatre heures** de 0,10 clic/s : son
+  rapport affiché tourne autour de 1,03×, et c'est normal — il mesure la
+  journée entière, pas la session.
+- **Partie complète** : les quêtes et les succès tournent sur leur **vrai
+  moteur**, tranche par tranche ; les dorés et la pluie passent en espérance
+  mathématique avec un taux d'attrapage par profil ; le joueur met dix
+  secondes à décider chaque achat. C'est la famille qui manquait au simulateur
+  précédent.
+- **Onglet fermé** : des sessions réelles, et entre elles la **vraie fonction
+  de retour hors-ligne** du jeu. Mesuré : le hors-ligne pèse 2 à 11 % de la
+  production totale selon le rythme des sessions — plafond de deux heures et
+  rendement dégressif obligent.
 
-Deux artefacts à connaître avant de lire les tableaux :
+Ce que la simulation ne modélise toujours pas, et pourquoi : les **quêtes
+chronométrées** (les tranches de temps dépassent leur chrono — un joueur
+simulé qui les ignore), le **trading CRMB** (marche centrée et 2 % de frais
+par sens : l'espérance de tout aller-retour est négative), la **vérification
+humaine** (elle ne retire rien à un joueur honnête). Un relevé instantané peut
+toujours tomber juste après une renaissance et décrire un parc vide — les
+colonnes *ratio*, *bâtiments*, *prestiges*, *ascensions*, *étoiles* et
+*décision* n'en souffrent pas.
 
-1. **Un relevé instantané peut tomber juste après une renaissance**, et décrire
-   un parc vide. C'est le cas de plusieurs cases (« surtout inactif » à 1 j,
-   « occasionnel » à 365 j). Les colonnes *ratio*, *bâtiments*, *prestiges*,
-   *ascensions*, *étoiles* et *décision* n'en souffrent pas.
-2. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
-   dorés, ni les gains hors-ligne.** La colonne CRMB ne compte donc que le
-   prestige : la vraie économie CRMB est plus généreuse que ce que le tableau
-   montre.
-
-Résultat le plus net : les profils **« autoclicker 50/s » et « 15 clics/s »
-produisent des tableaux rigoureusement identiques**, chiffre pour chiffre, sur
-les onze horizons.
+Résultat le plus net, inchangé : les profils **« autoclicker 50/s » et
+« 15 clics/s » produisent des tableaux rigoureusement identiques**, chiffre
+pour chiffre, sur les onze horizons.
 
 ## Ce qui reste imparfait
 
@@ -701,24 +769,30 @@ défaut n'a simplement pas été mesuré.
    trois-cent-soixante-cinquième jour** : ×2,6 seulement, une fois la voie
    Horizon complète. C'est bien mieux que le plateau d'avant, ce n'est pas une
    courbe qui tient un an entier.
-3. **Le rythme des cinq premières minutes reste à 73 s entre deux achats
-   marquants**, contre 20 à 40 s visées. Le prix des paliers n'y change rien
-   (testé de 20 à 5 exemplaires : résultat identique), parce qu'un bâtiment bat
-   toujours un palier au rendement par cookie tant que le parc est petit. La
-   mesure ne voit d'ailleurs ni les quêtes, ni les succès, ni les cookies
-   dorés : le rythme réellement perçu est plus dense que ce chiffre.
+3. **Le « 73 s entre deux achats marquants » est réglé par la mesure, pas par
+   le jeu** : compté avec les quêtes, les dorés et les succès, et avec un
+   joueur qui met dix secondes à décider, l'écart entre achats marquants tient
+   la cible (30 s) et le rythme vécu descend à dix secondes en début de
+   partie. Le jeu n'a pas été accéléré ; c'est l'ancien chiffre qui décrivait
+   un jeu amputé de ses temps forts.
 4. **Les simulations ne sont pas des tests humains.** Elles ne disent rien du
    plaisir, de la lisibilité, du confort du pouce ni de l'envie de revenir. Un
-   nombre dans une fourchette n'est pas un jeu réussi.
-5. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
-   dorés, ni les gains hors-ligne.** Les colonnes CRMB des tableaux ne comptent
-   donc que le prestige : la vraie économie CRMB est plus généreuse.
-6. **La mémoire n'a été mesurée que sur des sessions de quelques minutes.**
-   Mille six cents clics, achats et changements d'onglet compris : zéro erreur
-   console, zéro avertissement, 377 nœuds de document, et un tas qui passe de
-   5,4 à 7,7 Mo **une fois le ramasse-miettes forcé**. Sans le forcer, le même
-   test affichait 5 → 22 Mo : c'étaient les déchets pas encore collectés, pas
-   une fuite. Une session de plusieurs heures n'a pas été observée.
+   nombre dans une fourchette n'est pas un jeu réussi. Les vingt profils de
+   campagne sont des scripts : ils utilisent le jeu dans un vrai navigateur,
+   mais personne n'a « aimé » quoi que ce soit.
+5. **L'extraction CRMB déborde ses puits au très long terme.** Trois machines
+   de chaque modèle produisent des dizaines de milliers de CRMB en un mois
+   simulé, quand les huit contrats du Registre en absorbent 4 435 en tout.
+   « Rare et utile » tient sur les trente premiers jours ; au-delà, la monnaie
+   redevient abondante. Rééquilibrage à décider par le propriétaire du projet.
+6. **Sous stratégie optimale parfaite, les récompenses de quêtes font boule de
+   neige** (proportionnelles à la production, reconverties instantanément).
+   Aucun profil navigateur à cadence humaine n'exhibe cet emballement — le
+   temps de décision est la vraie borne — mais un joueur-machine le pourrait.
+7. **La mémoire est mesurée sur des sessions de dix à treize minutes** (les
+   quarante sessions de campagne relèvent le tas toutes les vingt secondes:
+   4 → 33 Mo au pire, sans ramasse-miettes forcé) et sur la session de mesure
+   dédiée au GC forcé. Une session de plusieurs heures n'a pas été observée.
 
 ## Le jeu
 
@@ -744,7 +818,10 @@ défaut n'a simplement pas été mesuré.
   axes chacun, qui survivent aux ascensions.
 - **55 succès** en 9 catégories, avec récompense en cookies — et en CRMB à
   partir du palier Or.
-- **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes flash.
+- **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes
+  flash. Chaque gain d'événement est **posé sur la règle des valeurs avant
+  d'être crédité** (`src/utils/gains.js`) : une miette à ×2,5 sur un clic de
+  1,25 crédite 3, pas 3,125.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
 
@@ -765,7 +842,7 @@ une monnaie qu'on gagne sans effort ne récompense plus rien.
 | Succès Platine | +2 | 9 succès |
 | Succès Légendaire | +5 | 4 succès |
 | Prestige | +5 | à chaque renaissance |
-| Matériel de minage | 0,05 à 25 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
+| Matériel de minage | 0,01 à 5 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
 
 Les 55 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
 un revenu. Toutes les récompenses sont des entiers — le bonus de quête de
@@ -796,10 +873,12 @@ pleine en permanence — et, sur téléphone, posée pile sur la boutique.
 
 Un seul emplacement, **en haut** : la boutique et la navigation vivent sous le
 pouce et rien ne les recouvre. Au plus **une notification ordinaire toutes les
-onze secondes**, et ce qui arrive trop tôt **attend son tour** dans une file
-bornée à six entrées — écarté, il n'existait plus. Même les événements majeurs
-sont plafonnés à six par minute glissante. Mesuré sur une session type : moins
-de six notifications par minute, sur un quart d'heure comme sur une heure.
+seize secondes**, et ce qui arrive trop tôt **attend son tour** dans une file
+bornée à six entrées — écarté, il n'existait plus. Les événements majeurs
+gardent six secondes d'écart et sont plafonnés à trois par minute glissante ;
+les cookies dorés, visibles par eux-mêmes, sont redescendus au rang ordinaire.
+Mesuré sur une session type : moins de quatre notifications par minute, sur un
+quart d'heure comme sur une heure.
 
 ### Cliquer vite paie, automatiser non
 
@@ -847,10 +926,13 @@ Le gain marginal du N+1-ième exemplaire, tous bâtiments déjà possédés à N
 | 10⁶ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
 | 10⁹ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
 
-Le gain ne décroît jamais. Au-delà de 10¹² exemplaires **de chaque bâtiment**,
-un +0,25 passe sous la précision d'un flottant 64 bits ; cet état est de toute
-façon inatteignable, le prix du 10¹²-ième Curseur dépassant l'infini
-représentable.
+Le gain ne décroît jamais. Une nuance depuis la règle des entiers : au-delà de
+cent de puissance, le +0,25 d'un **Curseur seul** ne bouge l'entier affiché — et
+crédité — qu'une fois sur quatre ; quatre Curseurs rendent exactement +1, et
+aucun achat ne rend jamais moins que zéro. Au-delà de 10¹² exemplaires **de
+chaque bâtiment**, un +0,25 passe sous la précision d'un flottant 64 bits ; cet
+état est de toute façon inatteignable, le prix du 10¹²-ième Curseur dépassant
+l'infini représentable.
 
 Raccourcis clavier : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet.
 
@@ -919,17 +1001,23 @@ Ce qui est en place pour ça :
 
 ## Sauvegardes
 
-La partie est stockée sous la clé `cookieCrazeSaveV6`. Les sauvegardes des
-versions 1 à 5 sont migrées automatiquement au chargement : fusion profonde
-avec l'état par défaut, valeurs aberrantes assainies, ancien staking converti
-en position flexible, champs morts supprimés, record de combo ramené sur la
-nouvelle échelle, Ascension et Registre ajoutés à zéro.
+La partie est stockée sous la clé `cookieCrazeSaveV6`. Le préfixe est
+historique — le jeu s'appelait Cookie Craze avant de devenir Crumbora — et il
+est **volontairement conservé** : renommer les clés déconnecterait chaque
+joueur de sa partie, et la continuité des sauvegardes prime sur la cohérence
+du nom. Les sauvegardes des versions 1 à 5 sont migrées automatiquement au
+chargement : fusion profonde avec l'état par défaut, valeurs aberrantes
+assainies, ancien staking converti en position flexible, champs morts
+supprimés, record de combo ramené sur la nouvelle échelle, Ascension et
+Registre ajoutés à zéro.
 
 Les anciennes clés **ne sont jamais effacées** : un joueur qui reviendrait sur
 une version antérieure du jeu doit retrouver sa partie. Une sauvegarde illisible
 est archivée sous `cookieCrazeSaveV6_corrupted_<horodatage>`, pas supprimée.
 
 Export et import se font depuis ⚙️ → *Exporter / Importer la sauvegarde*.
+Les nouveaux exports portent l'étiquette `game: "crumbora"` ; les fichiers
+exportés sous l'ancienne étiquette s'importent pour toujours.
 
 ## Déploiement
 

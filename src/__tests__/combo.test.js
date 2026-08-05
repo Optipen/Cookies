@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { COMBO, comboMultiplier, comboStep, comboProgress, deriveStats } from "../utils/selectors.js";
-import { onGrid } from "../utils/grid.js";
+import { onGrid, snapDown } from "../utils/grid.js";
 import { createFreshState, migrate } from "../utils/state.js";
 
 // Le combo montait à ×3, ce qui écrasait tout le reste de l'économie: un joueur
@@ -85,7 +85,11 @@ describe("combo — effet réel sur le gain", () => {
     const sans = deriveStats(s, 6e5, 0);
     for (const streak of [0, COMBO.clicksPerStep, COMBO.clicksPerStep * 2, COMBO.clicksToMax]) {
       const avec = deriveStats(s, 6e5, streak);
-      expect(avec.perClick).toBeCloseTo(sans.perClickNoCombo * comboMultiplier(streak), 9);
+      // grille × combo quitte la grille (2,5 × 1,75 = 4,375): le gain est le
+      // produit REPLIÉ sur la grille, jamais en dessous du « sans combo ».
+      expect(avec.perClick).toBe(snapDown(sans.perClickNoCombo * comboMultiplier(streak), sans.perClickNoCombo));
+      expect(onGrid(avec.perClick), `parClic ${avec.perClick}`).toBe(true);
+      expect(avec.perClick).toBeGreaterThanOrEqual(sans.perClickNoCombo);
       expect(avec.perClickNoCombo).toBe(sans.perClickNoCombo); // le combo ne touche pas la puissance
     }
   });

@@ -35,33 +35,46 @@ const loc = (v, max, min = 0) =>
   v.toLocaleString(LOCALE, { minimumFractionDigits: min, maximumFractionDigits: max });
 
 /**
- * Forme compacte à trois chiffres significatifs: 1,23M · 12,3M · 123M.
+ * Forme compacte SANS décimale: « 1 910K » plutôt que « 1,91M ».
  *
- * L'arrondi peut faire franchir le millier — 999 999 999 arrondi à trois
- * chiffres vaut 1 000 M. On remonte alors d'un cran plutôt que d'écrire
- * « 1 000M », qui est à la fois plus long et moins lisible que « 1B ».
+ * Un suffixe ne porte jamais de virgule. Quand la mantisse à trois chiffres
+ * significatifs en aurait une, on descend d'un suffixe pour retrouver un
+ * entier: 5 750 000 s'écrit « 5 750K », 20 941 234 s'écrit « 20 900K ».
+ * Et un nombre exactement représentable s'affiche EXACTEMENT — les prix sont
+ * posés sur 0,25 × 10^k, « 11,8M » pour 11 750 000 serait un mensonge; on
+ * écrit « 11 750K ». La mantisse entière la plus haute gagne: « 25M », pas
+ * « 25 000K ».
  */
 function compact(n) {
   const signe = n < 0 ? -1 : 1;
-  let abs = Math.abs(n);
-  let cran = Math.min(SUFFIXES.length - 1, Math.floor(Math.log10(abs) / 3));
-  let valeur = abs / Math.pow(1000, cran);
-
-  const decimales = (v) => (v >= 100 ? 0 : v >= 10 ? 1 : 2);
-  let arrondi = Number(valeur.toFixed(decimales(valeur)));
-  if (arrondi >= 1000 && cran < SUFFIXES.length - 1) {
-    cran += 1;
-    valeur = abs / Math.pow(1000, cran);
-    arrondi = Number(valeur.toFixed(decimales(valeur)));
-  }
+  const abs = Math.abs(n);
 
   // Au-delà du dernier suffixe, un nom inventé serait un mensonge: on passe à
   // la notation scientifique, que tout le monde sait lire pour ce qu'elle est.
-  if (cran >= SUFFIXES.length - 1 && abs >= Math.pow(1000, SUFFIXES.length)) {
+  if (abs >= Math.pow(1000, SUFFIXES.length)) {
     return (signe * abs).toExponential(2).replace(".", ",");
   }
 
-  return loc(signe * arrondi, decimales(arrondi)) + SUFFIXES[cran];
+  // 1. La représentation exacte, si elle existe: la plus grande unité dont la
+  //    mantisse est un entier d'au plus cinq chiffres.
+  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
+    const mant = abs / Math.pow(1000, k);
+    if (mant >= 1 && mant <= 99_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
+      return loc(signe * Math.round(mant), 0) + SUFFIXES[k];
+    }
+  }
+
+  // 2. Sinon, trois chiffres significatifs — et si la mantisse arrondie garde
+  //    une décimale, elle descend d'un suffixe pour redevenir entière.
+  const ordre = Math.floor(Math.log10(abs));
+  const arrondi = Math.round(abs / Math.pow(10, ordre - 2)) * Math.pow(10, ordre - 2);
+  let cran = Math.min(SUFFIXES.length - 1, Math.floor((Math.log10(arrondi) + 1e-9) / 3));
+  let mant = arrondi / Math.pow(1000, cran);
+  if (Math.abs(mant - Math.round(mant)) > 1e-9 && cran >= 1) {
+    cran -= 1;
+    mant = arrondi / Math.pow(1000, cran);
+  }
+  return loc(signe * Math.round(mant), 0) + SUFFIXES[cran];
 }
 
 /**
@@ -84,6 +97,30 @@ export function fmt(n) {
   const entier = Math.round(v);
   if (Math.abs(entier) < COMPACT_FROM) return loc(entier, 0);
   return compact(v);
+}
+
+/**
+ * PRIX affiché = prix payé, sans exception.
+ *
+ * Un prix de lot est une somme exacte d'unités: il peut valoir 124 800, que le
+ * compact à trois chiffres écrirait « 125K » — un mensonge de 200 cookies.
+ * Règle: en dessous du million, le nombre plein; au-delà, la forme compacte
+ * SEULEMENT si elle est exacte (mantisse entière, jusqu'à six chiffres —
+ * « 1 248K », « 124 800K »), sinon le nombre plein, aussi long soit-il.
+ */
+export function fmtPrix(n) {
+  const v = nombre(n);
+  if (v === null) return "0";
+  if (!Number.isFinite(v)) return v > 0 ? "∞" : "-∞";
+  const abs = Math.abs(v);
+  if (abs < 1_000_000) return loc(Math.round(v), 0);
+  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
+    const mant = abs / Math.pow(1000, k);
+    if (mant >= 1 && mant <= 999_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
+      return loc(Math.sign(v) * Math.round(mant), 0) + SUFFIXES[k];
+    }
+  }
+  return loc(Math.round(v), 0);
 }
 
 /**
@@ -170,16 +207,16 @@ export function fmtClock(ms) {
 }
 
 /**
- * Montant CRMB. Deux décimales au plus, aucune quand le montant est entier.
- *
- * Les trois décimales fixes dataient du faucet, qui versait 0,001 à la fois.
- * Le CRMB se gagne désormais par unités entières: « 17,000 » se lisait comme
- * dix-sept mille alors qu'il s'agit de dix-sept pièces.
+ * Montant CRMB. DEUX décimales au plus — le CRMB vit en centimes — et aucune
+ * quand elles ne servent pas: « 1 », pas « 1,00 »; « 1,5 », pas « 1,50 »;
+ * « 1,05 » quand le centime compte. Un taux non nul sous le demi-centime
+ * s'annonce « <0,01 » plutôt que de s'afficher « 0 ».
  */
 export function fmtCrmb(n, digits = 2) {
   const v = nombre(n);
   if (v === null || !Number.isFinite(v)) return "∞";
-  return loc(v, digits);
+  if (v > 0 && v < 0.005) return "<0,01";
+  return loc(v, Math.min(2, digits));
 }
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

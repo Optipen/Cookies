@@ -5,9 +5,8 @@
 
 import { QUESTS, QUEST_BY_ID, questTitle, questDesc } from "./catalog.js";
 import { ITEMS } from "../data/items.js";
-import { cpsFrom } from "../utils/calc.js";
 import { deriveStats } from "../utils/selectors.js";
-import { stakedTotal, stakingBoost, addCrmb } from "../utils/crypto.js";
+import { stakedTotal, addCrmb } from "../utils/crypto.js";
 import { prestigeEffects } from "../data/prestige.js";
 
 export const ACTIVE_SLOTS = 3;
@@ -19,11 +18,14 @@ export const DAILY_PERIOD_MS = 24 * 3600 * 1000;
 export function buildContext(state) {
   const bank = state.cookies || 0;
   const lifetime = state.lifetime || 0;
-  const chips = state.prestige?.chips || 0;
   const positions = state.crypto?.positions || [];
-  const stakeMulti = stakingBoost(positions);
-  const cps = cpsFrom(state.items || {}, state.upgrades || {}, chips, stakeMulti);
-  const cpc = deriveStats(state).cpcBase;
+  // Le minage et le clic viennent du MÊME calcul que l'écran: `deriveStats`.
+  // L'ancien appel passait `stakingBoost` — un multiplicateur, ×1 minimum —
+  // là où `cpsFrom` attend des crans: un cran fantôme gonflait ctx.cps en
+  // permanence, même sans staking, et les cibles de quête avec lui.
+  const derived = deriveStats(state);
+  const cps = derived.baseCps;
+  const cpc = derived.cpcBase;
 
   let level = "early";
   if (lifetime >= 1_000_000 && cps >= 500) level = "late";

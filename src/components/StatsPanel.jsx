@@ -2,8 +2,9 @@ import React, { memo, useMemo, useState } from "react";
 import { ACHIEVEMENTS, ACHIEVEMENT_CATEGORIES, TIER_STYLE } from "../data/achievements.js";
 import { ITEMS } from "../data/items.js";
 import { MINERS } from "../utils/crypto.js";
-import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct } from "../utils/format.js";
+import { fmt, fmtInt, fmtDuration, fmtCrmb, fmtPct, fmtMult } from "../utils/format.js";
 import { activeRatio, REF_CLICKS_PER_SECOND, REF_COMBO } from "../utils/selectors.js";
+import { snap } from "../utils/grid.js";
 
 const Stat = memo(function Stat({ label, value, hint }) {
   return (
@@ -75,8 +76,10 @@ function StatsPanel({ state, stats }) {
           <Stat label="Temps de jeu" value={fmtDuration(state.stats?.playtimeMs || 0)} />
           <Stat
             label="Actif / passif"
-            value={`${activeRatio(state).toFixed(2)}×`}
-            hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${REF_COMBO}`}
+            // Sans le moindre Mineur le rapport est infini: « — » dit mieux
+            // « pas encore de passif à comparer » que « ≈∞× ».
+            value={Number.isFinite(activeRatio(state)) ? `≈${fmtMult(snap(activeRatio(state)))}×` : "—"}
+            hint={`Réf. ${REF_CLICKS_PER_SECOND} clics/s · combo ×${fmtMult(REF_COMBO)}`}
           />
         </div>
       </section>
@@ -104,7 +107,7 @@ function StatsPanel({ state, stats }) {
               role="tab"
               aria-selected={filter === cat}
               onClick={() => setFilter(cat)}
-              className={`shrink-0 text-[11px] px-2.5 py-1 rounded-lg font-semibold capitalize transition-colors ${
+              className={`shrink-0 text-xs min-h-11 px-2.5 rounded-lg font-semibold capitalize transition-colors ${
                 filter === cat ? "bg-amber-500 text-white" : "bg-amber-100/70 text-amber-800 hover:bg-amber-200"
               }`}
             >

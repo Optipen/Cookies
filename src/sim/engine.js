@@ -14,8 +14,14 @@ import { COMBO, comboMultiplier } from "../utils/combo.js";
 import { creditedRate } from "../utils/rate.js";
 import { ITEMS } from "../data/items.js";
 import { availableUpgrades } from "../data/upgrades.js";
-import { chipsFor, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
+import { chipsFor, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE, prestigeEffects } from "../data/prestige.js";
 import { ascensionEffects, canAscend, starsFor, trackCost, trackLevel } from "../data/ascension.js";
+import { buildContext, tickQuests } from "../quests/engine.js";
+import { ACHIEVEMENTS, achievementReward, achievementCrmb } from "../data/achievements.js";
+import { gainChance, gainJackpot, gainMiette } from "../utils/gains.js";
+import { offlineGains } from "../utils/offline.js";
+import { MINERS, minerCost, addCrmb, accrueCrmb } from "../utils/crypto.js";
+import tuning from "../data/tuning.json";
 
 const SECOND = 1000;
 export const HORIZONS = [
@@ -122,11 +128,15 @@ export const STRATEGIES = {
 
   /**
    * Alterne consciencieusement un achat de clic, un achat de minage. C'est le
-   * schéma humain le plus répandu: on veut « progresser des deux côtés ».
+   * schéma humain le plus répandu: on veut « progresser des deux côtés » — et
+   * une amélioration ×2 payable fait toujours partie des candidats: un humain
+   * achète le bouton qui brille. L'ancienne version les écartait tant qu'un
+   * bâtiment restait abordable, et le « premier palier » glissait au
+   * troisième jour: un artefact de modèle, pas un fait de jeu.
    */
   equilibre: (list, seed) => {
     const mode = seed % 2 === 0 ? "click" : "mine";
-    const prefere = list.filter((c) => c.kind === "item" && c.item.mode === mode);
+    const prefere = list.filter((c) => c.kind !== "item" || c.item.mode === mode);
     return pick(prefere.length ? prefere : list, (c) => c.gain / Math.max(1, c.price));
   },
 
@@ -170,6 +180,143 @@ const pseudo = (n) => {
   return x - Math.floor(x);
 };
 
+// --- Couche d'événements -----------------------------------------------------
+//
+// Ce que le simulateur précédent ne voyait pas: les quêtes, les cookies dorés,
+// la pluie, les succès, le CRMB gagné en jouant. La couche est OPT-IN — les
+// familles historiques restent comparables — et chaque morceau dit ce qu'il
+// est: moteur RÉEL pour les quêtes et les succès, ESPÉRANCE mathématique pour
+// les événements aléatoires, vraie fonction du jeu pour le hors-ligne.
+//
+// Ce qui n'est PAS modélisé, et pourquoi:
+//   · les quêtes chronométrées échouent souvent ici (les tranches de temps
+//     dépassent leur chrono): un joueur simulé qui les ignore, c'est honnête;
+//   · le TRADING du marché CRMB: la marche est centrée et les frais font 2 %
+//     par sens — l'espérance de toute stratégie d'échange est négative, on ne
+//     crédite donc aucun gain de trading;
+//   · la vérification humaine: elle ne retire rien à un joueur honnête;
+//   · les apparences: aucun effet sur l'économie.
+
+const CFG_EVENEMENTS = tuning?.[tuning?.mode || "standard"]?.events || {};
+
+/** Espérance de cookies d'UN doré attrapé, buffs convertis en production. */
+function esperanceDore(state, d, revenuParSeconde) {
+  const g = CFG_EVENEMENTS.golden || {};
+  const moyenne = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  // 35 %: buff de minage (25 s) · 30 %: buff de clic (15 s) · 23 %: chance ·
+  // 12 %: jackpot. Les multiplicateurs décroissants des dorés enchaînés se
+  // moyennent — un profil qui les attrape tous vit surtout les premiers crans.
+  const dr = moyenne((g.lucky_mults || [1, 0.5, 0.25, 0.1]).slice(0, 2));
+  const evBuffMine = (moyenne(g.cps_mults || [5, 3, 2]) - 1) * d.mining * 25;
+  const evBuffClic = (moyenne(g.cpc_mults || [10, 5, 3]) - 1) * Math.max(0, revenuParSeconde - d.mining) * 15;
+  return 0.35 * evBuffMine + 0.3 * evBuffClic + 0.23 * gainChance(state, d, dr) + 0.12 * gainJackpot(d, dr);
+}
+
+/**
+ * Avance la couche d'événements sur une tranche de temps déjà « minée ».
+ * Rend les cookies et le CRMB supplémentaires crédités.
+ */
+function avancerEvenements(state, now, trancheMs, ev, cpsCredite, revenuParSeconde, compteurs) {
+  if (!ev) return 0;
+  const d = deriveStats(state, now, 0);
+  let bonus = 0;
+
+  // --- Clics accumulés: les quêtes et succès de clics en dépendent ---------
+  state.stats.clicks = (state.stats.clicks || 0) + Math.round((cpsCredite * trancheMs) / 1000);
+
+  // --- Cookies dorés, pluie, volant: en espérance ---------------------------
+  if (trancheMs > 0 && ev.dores > 0) {
+    const g = CFG_EVENEMENTS.golden || {};
+    const cadenceSpawnS = ((g.cooldown_s || [45, 90])[0] + (g.cooldown_s || [45, 90])[1]) / 2;
+    const attrapes = (trancheMs / 1000 / cadenceSpawnS) * ev.dores * (prestigeEffects(state).goldenRate || 1);
+    bonus += attrapes * esperanceDore(state, d, revenuParSeconde);
+    state.stats.goldenClicks = (state.stats.goldenClicks || 0) + Math.round(attrapes);
+    const avantDores = Math.floor(compteurs.dores);
+    compteurs.dores += attrapes;
+    for (let k = avantDores; k < Math.floor(compteurs.dores); k++) compteurs.moments.push(now);
+  }
+  if (trancheMs > 0 && ev.pluie > 0) {
+    const p = CFG_EVENEMENTS.rain || {};
+    const cadenceS = ((p.cooldown_s || [90, 160])[0] + (p.cooldown_s || [90, 160])[1]) / 2;
+    const vagues = trancheMs / 1000 / cadenceS;
+    const parVague = (p.count || 26) * ev.pluie;
+    const multMoyen = ((p.cpc_mults || [2, 2.5, 3]).reduce((a, b) => a + b, 0)) / (p.cpc_mults || [2, 2.5, 3]).length;
+    bonus += vagues * parVague * gainMiette(d, multMoyen);
+    compteurs.miettes += vagues * parVague;
+  }
+
+  // --- Quêtes: le VRAI moteur, tranche par tranche --------------------------
+  if (ev.quetes) {
+    const ctx = buildContext(state);
+    const resultat = tickQuests(state, ctx, now, ev.rng);
+    if (resultat.changed) {
+      Object.assign(state, resultat.state);
+      for (const e of resultat.events) {
+        if (e.type !== "completed") continue;
+        compteurs.quetes += 1;
+        compteurs.moments.push(now);
+        compteurs.crmbQuetes += e.reward?.crmb || 0;
+        // Le buff de la récompense expirerait pendant le prochain saut de
+        // temps: on le convertit en son espérance de cookies, tout de suite.
+        const b = e.reward?.buff;
+        if (b) {
+          const revenu = b.kind === "cps" ? d.mining : Math.max(0, revenuParSeconde - d.mining);
+          bonus += (b.value - 1) * revenu * (b.seconds || 20);
+        }
+      }
+    }
+  }
+
+  // --- Succès: les VRAIES conditions ---------------------------------------
+  if (ev.succes) {
+    for (const a of ACHIEVEMENTS) {
+      if (state.unlocked[a.id]) continue;
+      let atteint = false;
+      try {
+        atteint = a.cond(state, d);
+      } catch {
+        /* une condition qui lève ne bloque pas les autres */
+      }
+      if (atteint) {
+        state.unlocked[a.id] = now || 1;
+        bonus += achievementReward(a.tier, d.cps);
+        const crmb = achievementCrmb(a.tier);
+        if (crmb > 0) {
+          state.crypto.balance = addCrmb(state.crypto.balance, crmb);
+          compteurs.crmbSucces += crmb;
+        }
+        compteurs.succes += 1;
+        compteurs.moments.push(now);
+      }
+    }
+  }
+
+  // --- CRMB: extraction réelle du matériel, achat simple de machines --------
+  if (ev.crypto) {
+    if (d.crmbRate > 0) {
+      const brut = d.crmbRate * (trancheMs / 1000);
+      const avant = state.crypto.balance;
+      state.crypto = accrueCrmb(state.crypto, brut);
+      compteurs.crmbExtraction += state.crypto.balance - avant;
+    }
+    // Il achète une machine quand elle coûte moins d'un dixième de la banque:
+    // le comportement du profil « spécialiste » observé en campagne.
+    for (const m of MINERS) {
+      const possede = state.crypto.miners[m.id] || 0;
+      if (possede >= 3) continue;
+      const prix = minerCost(m.id, possede);
+      if (prix <= state.cookies * 0.1) {
+        state.cookies -= prix;
+        state.crypto.miners[m.id] = possede + 1;
+        compteurs.machines += 1;
+      }
+      break; // une seule par tranche, la moins chère d'abord
+    }
+  }
+
+  return bonus;
+}
+
 // --- Boucle -----------------------------------------------------------------
 
 /**
@@ -197,20 +344,52 @@ export function play({
   ordreVoies = ["horizon", "echo", "eclat"],
   patienceS = 600,
   maxSteps = 200_000,
+  // Temps de DÉCISION entre deux achats, en secondes. Un humain repère la
+  // carte, lit le prix, tape — huit à quinze secondes au téléphone. Sans ce
+  // délai, le simulateur convertit chaque récompense en production à vitesse
+  // infinie et décrit une borne supérieure théorique, pas un joueur.
+  decisionS = 0,
+  // Couche d'événements (quêtes, dorés, pluie, succès, CRMB). Opt-in pour que
+  // la famille « mécanique » historique reste comparable d'un audit à l'autre.
+  evenements = null,
+  // Reprise d'une partie existante: sert au mode « onglet fermé » qui alterne
+  // sessions réelles et gains hors-ligne.
+  etatInitial = null,
 } = {}) {
-  const state = createFreshState(0);
+  const state = etatInitial || createFreshState(0);
   state.ui.introSeen = true;
-  state.createdAt = 0;
+  if (!etatInitial) state.createdAt = 0;
 
   const combo = comboMoyen(clicksPerSecond, burstS);
   const cpsEffectif = clicksPerSecond * Math.max(0, Math.min(1, activeFraction));
   const choisir = STRATEGIES[strategy] || STRATEGIES.optimiser;
+
+  // Les compteurs de la couche d'événements, et son générateur semé: une
+  // simulation se rejoue à l'identique, événements compris.
+  // `moments` horodate chaque battement intéressant hors achat — une quête
+  // rendue, un doré attrapé, un succès — pour mesurer le rythme VÉCU, pas
+  // seulement le rythme des achats.
+  const compteurs = { quetes: 0, succes: 0, dores: 0, miettes: 0, machines: 0, crmbQuetes: 0, crmbSucces: 0, crmbExtraction: 0, moments: [] };
+  let ev = null;
+  if (evenements) {
+    let graine = (evenements.graine ?? 1) >>> 0;
+    const rng = () => {
+      graine = (graine * 1664525 + 1013904223) >>> 0;
+      return graine / 4294967296;
+    };
+    ev = { quetes: true, dores: 0.6, pluie: 0.5, succes: true, crypto: true, ...evenements, rng };
+  }
+  const cpsCredite = creditedRate(cpsEffectif);
 
   let now = 0;
   let achats = 0;
   let prestiges = 0;
   let ascensions = 0;
   let crmb = 0;
+  // Production cumulée à TRAVERS les renaissances: `lifetime` est remis à zéro
+  // par chaque prestige, ce cumul ne l'est jamais. C'est lui qui permet de
+  // comparer des sources de cookies (hors-ligne, événements) à la partie entière.
+  let produitTotal = 0;
   const decisions = []; // horodatage de chaque achat, pour mesurer le rythme
   const jalons = {}; // première fois qu'un contenu apparaît
   // Le rapport actif/passif relevé APRÈS chaque achat. Un relevé unique à
@@ -260,13 +439,36 @@ export function play({
         break;
       }
       const attente = (manque / parSeconde) * 1000;
-      const saut = Math.min(attente, durationMs - now);
-      state.cookies += (parSeconde * saut) / 1000;
-      state.lifetime += (parSeconde * saut) / 1000;
-      now += saut;
+      let saut = Math.min(attente, durationMs - now);
+      if (!ev) {
+        state.cookies += (parSeconde * saut) / 1000;
+        state.lifetime += (parSeconde * saut) / 1000;
+        now += saut;
+      } else {
+        // La couche d'événements avance par tranches: assez fines pour que les
+        // quêtes courtes se résolvent en début de partie, assez larges pour
+        // qu'un an de jeu reste calculable. Un événement peut rendre l'achat
+        // payable AVANT la fin de l'attente — c'est tout l'objet de la mesure
+        // de rythme: les quêtes et les dorés densifient les premières minutes.
+        while (saut > 0 && state.cookies < cible.price) {
+          const tranche = Math.min(saut, Math.max(30 * SECOND, saut / 8));
+          state.cookies += (parSeconde * tranche) / 1000;
+          state.lifetime += (parSeconde * tranche) / 1000;
+          now += tranche;
+          saut -= tranche;
+          const bonus = avancerEvenements(state, now, tranche, ev, cpsCredite, parSeconde, compteurs);
+          if (bonus > 0) {
+            state.cookies += bonus;
+            state.lifetime += bonus;
+          }
+        }
+      }
       if (now >= durationMs) break;
       // Arrondi: on complète le centime manquant plutôt que de boucler.
       state.cookies = Math.max(state.cookies, cible.price);
+    } else if (ev) {
+      // Même sans attente, le monde continue entre deux achats immédiats.
+      avancerEvenements(state, now, 0, ev, 0, parSeconde, compteurs);
     }
 
     state.cookies -= cible.price;
@@ -292,19 +494,44 @@ export function play({
       sommet = Math.max(sommet, d.mining + pc);
     }
 
+    // Le temps de décision: la production tourne pendant que le joueur
+    // repère son prochain achat — huit à quinze secondes chez un humain.
+    if (decisionS > 0 && now < durationMs) {
+      const pause = Math.min(decisionS * SECOND, durationMs - now);
+      const revenu = income(state, cpsEffectif, combo, now);
+      state.cookies += (revenu * pause) / 1000;
+      state.lifetime += (revenu * pause) / 1000;
+      now += pause;
+      if (ev) {
+        const bonus = avancerEvenements(state, now, pause, ev, cpsCredite, revenu, compteurs);
+        if (bonus > 0) {
+          state.cookies += bonus;
+          state.lifetime += bonus;
+        }
+      }
+    }
+
     // Prestige: quand la renaissance rapporterait au moins la moitié des chips
     // déjà possédées, c'est le moment où elle cesse d'être anecdotique.
     if (prestige && state.lifetime >= PRESTIGE_MIN_LIFETIME) {
       const gagne = chipsFor(state.lifetime, ascensionEffects(state).chipMult);
       const actuels = state.prestige.chips;
       if (gagne >= Math.max(1, actuels * 1.5)) {
+        produitTotal += state.lifetime;
         const garde = state.prestige;
         const asc = state.ascension;
+        // Comme dans le jeu: le portefeuille CRMB, le matériel, le Registre et
+        // les succès SURVIVENT à la renaissance — et elle rapporte ses 5 CRMB.
+        const cryptoGarde = state.crypto;
+        const succesGardes = state.unlocked;
         Object.assign(state, createFreshState(now), {
           createdAt: 0,
           prestige: { chips: gagne, spent: garde.spent, upgrades: { ...garde.upgrades } },
           ascension: asc,
+          crypto: cryptoGarde,
+          unlocked: succesGardes,
         });
+        state.crypto.balance = addCrmb(state.crypto.balance, CRMB_PAR_PRESTIGE);
         state.ui.introSeen = true;
         prestiges++;
         crmb += CRMB_PAR_PRESTIGE;
@@ -317,6 +544,7 @@ export function play({
     // ce qu'on possède déjà. Ascendre pour une étoile quand on en a cinquante,
     // c'est perdre son parc pour rien.
     if (ascension && canAscend(state) && starsFor(state.prestige.chips) >= Math.max(1, (state.ascension?.stars || 0) * 0.5)) {
+      produitTotal += state.lifetime;
       const etoiles = starsFor(state.prestige.chips);
       const asc = {
         stars: (state.ascension?.stars || 0) + etoiles,
@@ -324,7 +552,15 @@ export function play({
         tracks: { ...(state.ascension?.tracks || {}) },
         count: (state.ascension?.count || 0) + 1,
       };
-      Object.assign(state, createFreshState(now), { createdAt: 0, ascension: asc });
+      // L'ascension emporte chips et arbre, mais garde CRMB, Registre, succès.
+      const cryptoGarde = state.crypto;
+      const succesGardes = state.unlocked;
+      Object.assign(state, createFreshState(now), {
+        createdAt: 0,
+        ascension: asc,
+        crypto: cryptoGarde,
+        unlocked: succesGardes,
+      });
       state.ui.introSeen = true;
       ascensions++;
       jalon("ascension");
@@ -360,6 +596,15 @@ export function play({
     ascensions,
     sommet,
     crmb,
+    produitTotal: produitTotal + state.lifetime,
+    compteurs,
+    crmbDetail: {
+      prestige: prestiges * CRMB_PAR_PRESTIGE,
+      quetes: compteurs.crmbQuetes,
+      succes: compteurs.crmbSucces,
+      extraction: Math.round(compteurs.crmbExtraction * 100) / 100,
+      solde: state.crypto?.balance || 0,
+    },
     decisions,
     releves,
     jalons,
@@ -423,3 +668,95 @@ export const premierAchatPaye = (decisions) => decisions.find((d) => d.prix > 0)
 /** Nombre d'achats marquants sur une période. */
 export const marquantsEntre = (decisions, depuis, jusqu) =>
   decisions.filter((d) => d.marquant && d.t >= depuis && d.t <= jusqu).length;
+
+/**
+ * Écart médian entre deux MOMENTS INTÉRESSANTS: un achat marquant, une quête
+ * rendue, un doré attrapé, un succès décroché. C'est la définition élargie du
+ * rythme vécu — un joueur ne vit pas que d'achats.
+ */
+export function ecartMomentsInteressants(r, depuis = 0, jusqu = Infinity) {
+  // Trois récompenses dans la même seconde se VIVENT comme un seul moment
+  // (le jeu les regroupe d'ailleurs en une notification): on déduplique à la
+  // seconde avant de mesurer les écarts.
+  const temps = [
+    ...new Set(
+      [...r.decisions.filter((d) => d.marquant).map((d) => d.t), ...(r.compteurs?.moments || [])]
+        .filter((t) => t >= depuis && t <= jusqu)
+        .map((t) => Math.round(t / 1000))
+    ),
+  ].sort((a, b) => a - b);
+  if (temps.length < 2) return Infinity;
+  const ecarts = [];
+  for (let i = 1; i < temps.length; i++) ecarts.push(temps[i] - temps[i - 1]);
+  return mediane(ecarts);
+}
+
+/**
+ * Le joueur qui FERME l'onglet: sessions réelles, et entre elles la vraie
+ * fonction de retour hors-ligne du jeu — pas un minage continu idéalisé.
+ *
+ * La famille « vraies sessions » modélise un onglet ouvert en permanence où
+ * seul le clic s'interrompt; celle-ci modélise l'autre joueur, celui pour qui
+ * `offlineGains` a été écrit: plafond de deux heures, rendement dégressif.
+ */
+export function playFermetures({
+  clicksPerSecond = 5,
+  strategy = "equilibre",
+  durationMs = 24 * 3600 * SECOND,
+  sessionsParJour = 3,
+  sessionMin = 10,
+  burstS = 30,
+  decisionS = 10,
+  evenements = { graine: 1 },
+} = {}) {
+  const sessionMs = sessionMin * 60 * SECOND;
+  const gapMs = Math.max(0, (24 * 3600 * SECOND - sessionsParJour * sessionMs) / sessionsParJour);
+  let etat = null;
+  let horloge = 0;
+  let horsLigneCookies = 0;
+  let horsLigneCrmb = 0;
+  let sessions = 0;
+  let dernier = null;
+  // Production des SESSIONS, cumulée à travers prestiges et fermetures — le
+  // seul dénominateur honnête pour « quelle part vient du hors-ligne ».
+  let produitSessions = 0;
+
+  while (horloge < durationMs) {
+    const duree = Math.min(sessionMs, durationMs - horloge);
+    const entrant = etat ? etat.lifetime : 0;
+    dernier = play({
+      clicksPerSecond,
+      strategy,
+      durationMs: duree,
+      burstS,
+      decisionS,
+      evenements: evenements ? { ...evenements, graine: (evenements.graine ?? 1) + sessions } : null,
+      etatInitial: etat,
+    });
+    etat = dernier.state;
+    produitSessions += dernier.produitTotal - entrant;
+    horloge += duree;
+    sessions += 1;
+    if (horloge >= durationMs) break;
+
+    // L'onglet se ferme: pas de minage, puis le rapport du retour.
+    const gains = offlineGains(etat, gapMs, horloge);
+    etat.cookies += gains.cookies;
+    etat.lifetime += gains.cookies;
+    if (gains.crmb > 0) etat.crypto.balance = addCrmb(etat.crypto.balance, gains.crmb);
+    horsLigneCookies += gains.cookies;
+    horsLigneCrmb += gains.crmb;
+    etat.stats.playtimeMs = (etat.stats.playtimeMs || 0) + gapMs;
+    horloge += gapMs;
+  }
+
+  return {
+    ...dernier,
+    sessions,
+    horsLigneCookies,
+    horsLigneCrmb,
+    produitSessions,
+    produitTotal: produitSessions + horsLigneCookies,
+    now: horloge,
+  };
+}

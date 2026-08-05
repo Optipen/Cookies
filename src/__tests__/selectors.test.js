@@ -93,12 +93,34 @@ describe("puissance de clic", () => {
     }
   });
 
-  it("garde un gain strictement positif à toutes les échelles jouables", () => {
-    for (const n of [0, 10, 1e3, 1e6, 1e9]) {
+  it("garde un gain exact de +0,25 par Curseur tant que la puissance reste sous cent", () => {
+    for (const n of [0, 10, 100, 390]) {
       const base = settled((x) => (x.items = { cursor: n }));
       const avant = deriveStats(base, LATER).perClickNoCombo;
+      if (avant + 0.25 >= 100) continue;
       const apres = deriveStats({ ...base, items: { cursor: n + 1 } }, LATER).perClickNoCombo;
       expect(apres - avant).toBeCloseTo(0.25, 6);
+    }
+  });
+
+  it("au-delà de cent, quatre Curseurs rendent exactement +1 et aucun achat ne rend négatif", () => {
+    // La règle des entiers dès cent rend le +0,25 unitaire invisible trois fois
+    // sur quatre à grande échelle: il se matérialise en +1 tous les quatre
+    // exemplaires, jamais en perte. C'est le prix — assumé — d'un « par clic »
+    // sans décimale au-delà de cent.
+    for (const n of [1e3, 1e6, 1e9]) {
+      const base = settled((x) => (x.items = { cursor: n }));
+      const avant = deriveStats(base, LATER).perClickNoCombo;
+      expect(Number.isInteger(avant)).toBe(true);
+      const unParUn = [1, 2, 3, 4].map(
+        (k) => deriveStats({ ...base, items: { cursor: n + k } }, LATER).perClickNoCombo
+      );
+      let precedent = avant;
+      for (const p of unParUn) {
+        expect(p).toBeGreaterThanOrEqual(precedent);
+        precedent = p;
+      }
+      expect(unParUn[3] - avant).toBeCloseTo(1, 6);
     }
   });
 });

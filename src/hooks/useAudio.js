@@ -28,15 +28,33 @@ export function useAudio(enabled, volume = 0.6) {
   const pendingRef = useRef(new Map());
   const enabledRef = useRef(enabled);
   const volumeRef = useRef(volume);
+  const gesteRef = useRef(false);
 
   useEffect(() => {
     enabledRef.current = enabled;
     volumeRef.current = volume;
   }, [enabled, volume]);
 
+  // Un son peut être demandé SANS geste (l'apparition d'un cookie doré): créer
+  // le contexte à ce moment-là déclenche l'avertissement d'autoplay et le
+  // laisse suspendu. On attend le premier vrai geste; d'ici là, silence.
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const marquer = () => {
+      gesteRef.current = true;
+    };
+    window.addEventListener("pointerdown", marquer, { once: true, passive: true });
+    window.addEventListener("keydown", marquer, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", marquer);
+      window.removeEventListener("keydown", marquer);
+    };
+  }, []);
+
   const ensureCtx = useCallback(async () => {
     if (!enabledRef.current) return null;
     if (typeof window === "undefined") return null;
+    if (!gesteRef.current) return null;
     const Ctor = window.AudioContext || window.webkitAudioContext;
     if (!Ctor) return null;
     if (!ctxRef.current) {

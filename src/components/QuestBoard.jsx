@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { QUEST_BY_ID, questTitle, questDesc, CATEGORY_STYLE } from "../quests/catalog.js";
-import { fmt, fmtCrmb, fmtClock, fmtDuration } from "../utils/format.js";
+import { fmt, fmtInt, fmtCrmb, fmtClock, fmtDuration } from "../utils/format.js";
 import { useTimeLeft, useClock } from "../hooks/useClock.js";
 
 // Chronomètre isolé: se rafraîchit 5×/s sans re-rendre le reste du plateau
@@ -48,8 +48,11 @@ const RewardChips = memo(function RewardChips({ quest, state, ctx }) {
   if (!reward) return null;
 
   const chips = [];
-  if (reward.cookies) chips.push({ key: "c", label: `+${fmt(reward.cookies * (ctx.questMult || 1))}`, cls: "bg-amber-100 text-amber-800 border-amber-300" });
-  if (reward.crmb) chips.push({ key: "m", label: `+${fmtCrmb(reward.crmb * (ctx.questMult || 1), 2)} CRMB`, cls: "bg-cyan-100 text-cyan-800 border-cyan-300" });
+  // Même arithmétique que `resolveReward`: cookies × bonus de quête, PLANCHER
+  // entier — et le CRMB tel quel, parce que le moteur ne le multiplie pas.
+  // La carte annonçait « +1,25 CRMB » quand le joueur allait recevoir 1.
+  if (reward.cookies) chips.push({ key: "c", label: `+${fmt(Math.floor(reward.cookies * (ctx.questMult || 1)))}`, cls: "bg-amber-100 text-amber-800 border-amber-300" });
+  if (reward.crmb) chips.push({ key: "m", label: `+${fmtCrmb(reward.crmb)} CRMB`, cls: "bg-cyan-100 text-cyan-800 border-cyan-300" });
   if (reward.buff) chips.push({ key: "b", label: reward.buff.label, cls: "bg-emerald-100 text-emerald-800 border-emerald-300" });
   if (reward.discount) chips.push({ key: "d", label: reward.discount.label, cls: "bg-violet-100 text-violet-800 border-violet-300" });
 
@@ -93,7 +96,7 @@ const QuestCard = memo(function QuestCard({ entry, state, ctx, onReroll, daily }
                 onClick={() => onReroll(entry.questId)}
                 title="Remplacer cette quête"
                 aria-label={`Remplacer la quête ${questTitle(quest, entry.meta)}`}
-                className="shrink-0 text-xs text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-md px-1.5 py-0.5 transition-colors"
+                className="shrink-0 min-h-11 min-w-11 grid place-items-center text-base text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-md transition-colors"
               >
                 ↻
               </button>
@@ -107,7 +110,9 @@ const QuestCard = memo(function QuestCard({ entry, state, ctx, onReroll, daily }
         <div className="flex items-center justify-between text-[11px] text-amber-700 mb-1">
           <span className="capitalize">{quest.category}</span>
           <span className="tabular-nums font-semibold">
-            {fmt(entry.progress)} / {fmt(entry.target)}
+            {/* La progression est un compteur qui accumule des tics: « 817,42 »
+                n'apprend rien de plus que « 817 », et sort de la règle. */}
+            {fmtInt(entry.progress)} / {fmt(entry.target)}
           </span>
         </div>
         <div

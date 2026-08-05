@@ -13,7 +13,7 @@ import { stakingTier, miningRate, stakingYieldPerSecond, ledgerSteps } from "./c
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
 import { creditedRate } from "./rate.js";
-import { lisible } from "./grid.js";
+import { lisible, prixLisible, snapDown, STEP } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -110,18 +110,25 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
   const clickSteps = prestige.clickSteps + permanents;
 
   const baseMining = miningFrom(items, upgrades, chips, stakeTier.steps, mineSteps);
-  const mining = baseMining * buffMine;
+  // Les buffs de quêtes sont des multiplicateurs en quarts (×1,5 · ×2,5):
+  // grille × 1,5 quitte la grille. Même pli que pour le clic.
+  const mining = snapDown(baseMining * buffMine);
 
   const buildingsPower = clickPowerFrom(items, upgrades, chips, stakeTier.steps, clickSteps);
   const ownPower = (state.cpcBase || 1) + buildingsPower;
   const flatClick = ownPower * clickUpgradeMult(upgrades);
 
   const share = shareOf();
-  const sharedClick = baseMining * share;
+  // La part reversée est 6 % du minage: un nombre quelconque. Posée sur la
+  // grille AVANT d'entrer dans la puissance de clic, sinon elle contamine
+  // tout ce qui s'affiche en « /clic » (« +2,23 », « +0,31 »…).
+  const sharedClick = snapDown(baseMining * share);
 
   const combo = comboMultiplier(comboStreak);
-  const perClickNoCombo = (flatClick + sharedClick) * buffClick;
-  const perClick = perClickNoCombo * combo;
+  const perClickNoCombo = snapDown((flatClick + sharedClick) * buffClick, 1);
+  // grille × combo quitte la grille (2,5 × 1,75 = 4,375): on re-quantifie le
+  // résultat, plancher au « sans combo » — le combo n'enlève jamais rien.
+  const perClick = snapDown(perClickNoCombo * combo, perClickNoCombo);
 
   return {
     // Noms « métier »
@@ -157,8 +164,11 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     buffCps: buffMine,
     buffCpc: buffClick,
     perItemMult: computePerItemMult(items, upgrades),
-    // Matériel d'extraction CRMB — sans rapport avec le minage de cookies
-    crmbRate: miningRate(state.crypto?.miners) * prestige.cryptoMult,
+    // Matériel d'extraction CRMB — sans rapport avec le minage de cookies.
+    // Le taux effectif est posé au CENTIÈME par heure: 0,05 × ×1,25 = 0,0625
+    // deviendrait « 0,06 » à l'écran tout en créditant 0,0625. On pose le taux
+    // lui-même: l'écran et le crédit disent le même nombre.
+    crmbRate: Math.floor(miningRate(state.crypto?.miners) * prestige.cryptoMult * 3600 * 100 + 1e-9) / 100 / 3600,
     stakingYield: stakingYieldPerSecond(positions) * prestige.cryptoMult,
   };
 }
@@ -230,14 +240,27 @@ export function productionStats(stats, cadence = 0) {
   const brute = Number(cadence);
   const mesuree = Number.isFinite(brute) && brute > 0 ? brute : 0;
   const creditee = creditedRate(mesuree);
-  const prodClics = creditee > 0 ? stats.perClickNoCombo * stats.combo * creditee : 0;
+  // La cadence annoncée est arrondie au QUART le plus proche: ≈4 · ≈4,25 ·
+  // ≈4,50 — jamais ≈4,12. C'est une moyenne glissante, le « ≈ » le dit; le
+  // quart est la précision de toute la grille du jeu. Elle ne descend jamais
+  // sous un quart tant qu'on clique: afficher « ≈0 » pendant un clic mentirait.
+  const cadenceAffichee = creditee > 0 ? Math.max(STEP, Math.round(creditee / STEP) * STEP) : 0;
+  // La production des clics DÉCOULE de la cadence affichée — le joueur peut
+  // refaire « par clic × cadence » de tête — puis se pose sur la règle des
+  // valeurs, comme tout ce qui s'annonce en cookies. Elle est estimée, et
+  // l'interface la préfixe donc de « ≈ » elle aussi.
+  const prodClics = cadenceAffichee > 0 ? snapDown(stats.perClick * cadenceAffichee) : 0;
   return {
     parClic: stats.perClick,
     cadence: mesuree,
     creditee,
+    cadenceAffichee,
     prodClics,
     minage: stats.mining,
-    total: stats.mining + prodClics,
+    // Au repos, le total EST le minage — exactement. En jeu actif, la somme de
+    // deux valeurs propres peut franchir cent avec un quart résiduel: on la
+    // replie sur la règle, et le « ≈ » de la ligne couvre ce pli.
+    total: creditee > 0 ? snapDown(stats.mining + prodClics) : stats.mining,
     actif: creditee > 0,
     // La cadence est bornée: le joueur doit pouvoir comprendre pourquoi
     // accélérer encore ne change plus rien.
@@ -345,9 +368,16 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
     if (k === 0 && offert) continue;
     const brut = unitPrice(item, owned + k);
     if (!isFinite(brut)) return Infinity;
-    total += Math.max(1, Math.ceil(brut * mult));
+    // Chaque UNITÉ est posée sur la grille des prix (remise comprise): le lot
+    // est ainsi la somme EXACTE des achats un par un — ni plus, ni moins.
+    total += Math.max(1, prixLisible(Math.ceil(brut * mult)));
     if (!isFinite(total)) return Infinity;
   }
+  // AUCUN repli final. L'ancien « repli vers le bas sur la grille d'affichage »
+  // quand le lot traversait une décade fabriquait une remise cachée récurrente
+  // — mesurée jusqu'à −19,9 % (dix Fours à 19 possédés: 124 800 un par un,
+  // 100 000 en lot) — et « Max » redevenait secrètement meilleur que ×1.
+  // L'affichage exact d'une somme quelconque est le travail de `fmtPrix`.
   return total;
 }
 

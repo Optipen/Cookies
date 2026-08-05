@@ -7,6 +7,7 @@ import { createFreshState, SAVE_KEY } from "../utils/state.js";
 import { RATE_WINDOW_MS, RATE_IDLE_MS } from "../hooks/useClickRate.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { SHARE_BASE } from "../data/upgrades.js";
+import { onGrid, snapDown } from "../utils/grid.js";
 
 const LATER = 6e5;
 const partie = (mutate = () => {}) => {
@@ -48,14 +49,34 @@ describe("les cinq chiffres", () => {
     // Ce n'est pas le même minage recompté: c'est un gain supplémentaire, versé
     // à chaque clic, dans une autre unité. La preuve: à cadence nulle il
     // disparaît complètement, et le total retombe au minage seul.
-    expect(d.sharedClick).toBeCloseTo(d.baseMining * SHARE_BASE, 9);
+    // La part reversée est posée sur la grille AVANT d'entrer dans le clic:
+    // 6 % du minage est un nombre quelconque, l'écran n'en montre jamais.
+    expect(d.sharedClick).toBe(snapDown(d.baseMining * SHARE_BASE));
+    expect(onGrid(d.sharedClick)).toBe(true);
     expect(productionStats(d, 0).total).toBe(d.mining);
 
-    // Et à cadence non nulle, l'écart au minage vaut exactement ce que les
-    // clics rapportent — rien de plus, rien de moins.
+    // Et à cadence non nulle, l'écart au minage vaut ce que les clics
+    // rapportent, POSÉ SUR LA RÈGLE des valeurs: la production des clics est
+    // « par clic × cadence affichée » replié (quarts sous cent, entiers dès
+    // cent), et le total replie la somme — c'est pour cela que la ligne
+    // active porte un « ≈ ».
     const c = productionStats(d, 4);
-    expect(c.total - c.minage).toBeCloseTo(d.perClick * 4, 9);
-    expect(c.prodClics).toBeCloseTo(d.perClickNoCombo * d.combo * 4, 9);
+    expect(c.prodClics).toBe(snapDown(d.perClick * 4));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
+  });
+
+  it("restent sur la grille même sous un buff en quarts", () => {
+    // Les récompenses de quêtes multiplient par ×1,5 ou ×2,25: grille × 1,5
+    // quitte la grille. Minage et clic replient le produit avant l'écran.
+    const s2 = partie((x) => {
+      x.items = { oven: 13, grandma: 7, cursor: 9 };
+      x.buffs = { cpsMulti: 1.5, cpcMulti: 2.25, until: LATER + 10_000, label: "×1,5 minage" };
+    });
+    const d2 = deriveStats(s2, LATER, 24);
+    expect(onGrid(d2.mining), `minage ${d2.mining}`).toBe(true);
+    expect(onGrid(d2.perClickNoCombo), `puissance ${d2.perClickNoCombo}`).toBe(true);
+    expect(onGrid(d2.perClick), `parClic ${d2.perClick}`).toBe(true);
+    expect(d2.mining).toBe(snapDown(d2.baseMining * 1.5));
   });
 
   it("font du « par clic » le gain réel d'un appui, combo compris", () => {
@@ -63,14 +84,18 @@ describe("les cinq chiffres", () => {
       const stats = deriveStats(s, LATER, streak);
       const c = productionStats(stats, 5);
       expect(c.parClic).toBe(stats.perClick);
-      expect(c.parClic).toBeCloseTo(stats.perClickNoCombo * stats.combo, 9);
+      // Le produit par le combo est replié sur la grille, plancher au « sans
+      // combo »: ce qui s'affiche est ce qui est crédité, au quart près.
+      expect(c.parClic).toBe(snapDown(stats.perClickNoCombo * stats.combo, stats.perClickNoCombo));
+      expect(onGrid(c.parClic)).toBe(true);
     }
   });
 
-  it("se lisent comme une phrase: puissance × cadence = production des clics", () => {
+  it("se lisent comme une phrase: puissance × cadence affichée = production des clics", () => {
     const c = productionStats(d, 3);
-    expect(c.prodClics).toBeCloseTo(c.parClic * c.cadence, 9);
-    expect(c.total).toBeCloseTo(c.minage + c.prodClics, 9);
+    expect(c.cadenceAffichee).toBe(3);
+    expect(c.prodClics).toBe(snapDown(c.parClic * c.cadenceAffichee));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
   });
 
   it("ne comptent que les clics crédités", () => {
@@ -91,8 +116,9 @@ describe("les cinq chiffres", () => {
 
   it("gardent la phrase vraie même quand la cadence est bornée", () => {
     const c = productionStats(d, 50);
-    expect(c.prodClics).toBeCloseTo(c.parClic * c.creditee, 9);
-    expect(c.total).toBeCloseTo(c.minage + c.prodClics, 9);
+    expect(c.cadenceAffichee).toBe(c.creditee);
+    expect(c.prodClics).toBe(snapDown(c.parClic * c.cadenceAffichee));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
   });
 
   it("restent finis sur un empire démesuré", () => {

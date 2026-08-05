@@ -1,5 +1,11 @@
 // Inspection des gabarits: ce qui tient au-dessus de la ligne de flottaison,
 // les cibles trop petites, les textes trop petits, les débordements.
+//
+// La mesure des cibles parcourt TOUS les onglets et le dialogue de réglages:
+// la première version ne regardait que l'écran d'accueil, et a laissé passer
+// une relance de quête de 20 px et des montants CRMB de 27 px en annonçant
+// « zéro cible sous 44 px » — le rapport était vrai pour ce qu'elle voyait,
+// faux comme affirmation globale.
 // Usage: npx vite-node scripts/mobile.mjs [url]
 // Playwright n'est pas une dépendance du projet — c'est un outil de mesure
 // lancé à la main. `npm i playwright && npx playwright install chromium`.
@@ -22,10 +28,15 @@ const SAUVEGARDE = {
   cpcBase: 1,
   items: { oven: 14, bakery: 6, cursor: 16, grandma: 9 },
   upgrades: {},
+  // Un portefeuille CRMB et un prestige entamé: les onglets CRMB et Prestige
+  // doivent montrer leur vrai contenu (montants rapides, staking, arbre),
+  // sinon leurs cibles ne sont pas mesurées.
+  crypto: { balance: 64, miners: {}, ledger: 0, totalEarned: 70, price: 22_500, priceHistory: [22_000, 22_500] },
+  prestige: { chips: 12, spent: 0, upgrades: {} },
   ui: { introSeen: true, sounds: false, reducedMotion: false, highContrast: false, volume: 0.6 },
   createdAt: 0,
   lastTs: 0,
-  stats: { clicks: 400, bestCombo: 1.5 },
+  stats: { clicks: 400, bestCombo: 1.5, prestigeCount: 1 },
 };
 
 const audit = async (page, largeur, hauteur) =>
@@ -100,16 +111,63 @@ for (const [nom, w, h] of GABARITS) {
 
   const r = await audit(page, w, h);
   const manquants = Object.entries(r.vue).filter(([, v]) => v === false).map(([k]) => k);
-  const ok = !r.debordement && !r.petitesCibles.length && !r.petitsTextes.length && !manquants.length;
+
+  // Chaque onglet, puis le dialogue de réglages: les cibles se mesurent dans
+  // le contexte où le joueur les touche, pas seulement sur l'accueil.
+  const parContexte = [];
+  const mesureCibles = () =>
+    page.evaluate(() => {
+      const visible = (el) => {
+        const s = getComputedStyle(el);
+        return s.display !== "none" && s.visibility !== "hidden" && el.offsetParent !== null;
+      };
+      const petites = [];
+      for (const el of document.querySelectorAll("button, a, [role='tab'], input, select")) {
+        if (!visible(el)) continue;
+        const b = el.getBoundingClientRect();
+        if (b.width < 44 || b.height < 44) {
+          petites.push({
+            t: (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 34),
+            w: Math.round(b.width),
+            h: Math.round(b.height),
+          });
+        }
+      }
+      return petites;
+    });
+  const onglets = await page.locator("[role='tab']").allInnerTexts();
+  for (let i = 0; i < onglets.length; i++) {
+    await page.locator("[role='tab']").nth(i).click();
+    await page.waitForTimeout(350);
+    parContexte.push({ contexte: `onglet ${onglets[i].trim().split("\n")[0] || i}`, petites: await mesureCibles() });
+  }
+  const reglages = page.locator("[aria-label='Réglages']").first();
+  if (await reglages.count()) {
+    await reglages.click();
+    await page.waitForTimeout(350);
+    parContexte.push({ contexte: "réglages", petites: await mesureCibles() });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+  }
+  const ciblesContextes = parContexte.reduce((a, c) => a + c.petites.length, 0);
+
+  const ok =
+    !r.debordement && !r.petitesCibles.length && !r.petitsTextes.length && !manquants.length && !ciblesContextes;
   if (!ok) echecs++;
 
   console.log(`\n=== ${nom} · ${w}×${h} === ${ok ? "OK" : "À CORRIGER"}`);
   console.log(`  débordement horizontal : ${r.debordement ? `OUI (${r.largeurDoc} px)` : "non"}`);
   console.log(`  haut de la boutique    : ${r.hautBoutique} px (écran ${h} px)`);
+  console.log(`  contextes visités      : accueil + ${parContexte.map((c) => c.contexte).join(" + ") || "aucun"}`);
   if (manquants.length) console.log(`  hors de la vue         : ${manquants.join(", ")}`);
   if (r.petitesCibles.length) {
-    console.log(`  cibles < 44 px         : ${r.petitesCibles.length}`);
+    console.log(`  cibles < 44 px (accueil): ${r.petitesCibles.length}`);
     for (const c of r.petitesCibles.slice(0, 8)) console.log(`     ${c.w}×${c.h}  « ${c.t} »`);
+  }
+  for (const c of parContexte) {
+    if (!c.petites.length) continue;
+    console.log(`  cibles < 44 px (${c.contexte}): ${c.petites.length}`);
+    for (const p of c.petites.slice(0, 8)) console.log(`     ${p.w}×${p.h}  « ${p.t} »`);
   }
   if (r.petitsTextes.length) {
     console.log(`  textes < 11 px         : ${r.petitsTextes.length}`);

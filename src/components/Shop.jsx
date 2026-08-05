@@ -1,7 +1,8 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
-import { fmt, fmtExact, fmtDuration } from "../utils/format.js";
+import { fmt, fmtExact, fmtPrix, fmtDuration } from "../utils/format.js";
+import { snapDown } from "../utils/grid.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
 const FlashTimer = memo(function FlashTimer({ until }) {
@@ -87,7 +88,8 @@ const ItemCard = memo(function ItemCard({
           type="button"
           onClick={onBuy}
           disabled={!achetable}
-          aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmt(price)} cookies`}
+          aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmtPrix(price)} cookies`}
+          title={isFree ? undefined : `${fmtExact(price)} cookies`}
           className={`relative w-24 sm:w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
             achetable
               ? "border-amber-200 bg-gradient-to-b from-amber-400 to-orange-500 text-white active:from-amber-500 active:to-orange-600"
@@ -102,7 +104,9 @@ const ItemCard = memo(function ItemCard({
           <span className="text-[11px] font-semibold uppercase tracking-wide opacity-90">
             {isFree ? "Offert" : qty > 1 ? `Acheter ×${qty}` : "Acheter"}
           </span>
-          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmt(price)}</span>
+          {/* Le prix affiché EST le prix payé: plein sous le million, compact
+              seulement quand il est exact — jamais « 125K » pour 124 800. */}
+          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmtPrix(price)}</span>
           {!achetable && eta != null && eta <= 86_400_000 && (
             <span className="text-[11px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
           )}
@@ -204,7 +208,10 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
         const after = isClick ? next.perClickNoCombo : next.mining;
         // Un Mineur augmente aussi le clic, via la part reversée. C'est un
         // second gain, dans une autre unité: il ne s'additionne pas au premier.
-        const gainClick = isClick ? 0 : next.perClickNoCombo - base.perClickNoCombo;
+        // Les ÉCARTS affichés sont pliés sur la règle: quand un achat fait
+        // franchir cent, « entier − quart » rend un 499,25 qui n'existe pas.
+        // Le détail avant → après reste exact pour qui veut vérifier.
+        const gainClick = isClick ? 0 : snapDown(next.perClickNoCombo - base.perClickNoCombo);
 
         const flash =
           state.flags?.flash && state.flags.flash.itemId === item.id && now < state.flags.flash.until
@@ -218,7 +225,7 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
           flash,
           before,
           after,
-          gainMain: after - before,
+          gainMain: snapDown(after - before),
           gainClick,
           unit: LABELS[item.mode].unit,
           isFree: price === 0,

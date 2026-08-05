@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLatestRef } from "./useLatestRef.js";
 import { deriveStats } from "../utils/selectors.js";
-import { stepMarket, addCrmb, CRMB } from "../utils/crypto.js";
+import { stepMarket, accrueCrmb, CRMB } from "../utils/crypto.js";
 import tuning from "../data/tuning.json";
 
 /**
@@ -75,7 +75,7 @@ export function useGameLoop(state, setState, options = {}) {
           next.buffs = { cpsMulti: 1, cpcMulti: 1, until: 0, label: "" };
         }
 
-        const crypto = { ...prev.crypto };
+        let crypto = { ...prev.crypto };
         let cryptoTouched = false;
         const lifetime = next.lifetime ?? prev.lifetime;
 
@@ -85,12 +85,12 @@ export function useGameLoop(state, setState, options = {}) {
         // robinet (0,001 tous les 20 000 cookies) en versait des centaines de
         // millions en fin de partie, et plus rien n'avait de valeur.
 
-        // Minage matériel + rendement de staking. `addCrmb` rejette le seul
-        // delta fautif: un rendement mal calculé ne doit pas emporter le
-        // portefeuille avec lui.
+        // Minage matériel + rendement de staking, versés en CENTIMES entiers:
+        // la fraction d'un tic s'accumule dans `pending` jusqu'au centime
+        // plein, et un rendement mal calculé est rejeté seul — il n'emporte
+        // jamais le portefeuille avec lui.
         if (mined > 0) {
-          crypto.balance = addCrmb(crypto.balance, mined);
-          crypto.totalMined = addCrmb(crypto.totalMined, mined);
+          crypto = accrueCrmb(crypto, mined);
           cryptoTouched = true;
         }
 
