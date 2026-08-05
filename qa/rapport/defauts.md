@@ -25,16 +25,29 @@ sa correction (commit) ou sa raison de rester, et sa priorité.
 | 11 | P3 | « 15 bâtiments » à l'intro (il y en a 16 de base, 24 avec Ascension) | lecture | « 16 bâtiments » |
 | 12 | P3 | Libellés de buff « ×1,5 » / « ×2,5 » (les multiplicateurs s'écrivent à deux décimales: ×1,50) | lecture catalogue | normalisés ×1,50 / ×2,50 |
 | 13 | P3 | Auditeur du harnais: état de sauvegarde construit mais jamais retourné (chronologie sans état) | lint no-unused-vars | retourné; campagne 1 garde des chronologies au solde textuel, campagne 2 aura l'état complet |
+| 14 | P1 | Gain affiché d'un achat franchissant cent: « +499,25 /clic » (entier − quart) en boutique et améliorations | campagne 2 (17 textes chez p05, 7 zones « Détail de… ») ; test rouge `gain-affiche` | écarts affichés pliés par `snapDown`; le détail avant → après reste exact; 16 scénarios rejoués → 0 |
 
 ## Constats documentés (pas de correction aveugle)
 
 | # | P | Constat | Preuve | Décision |
 | --- | --- | --- | --- | --- |
 | C1 | P2 | Sous stratégie optimale parfaite, récompenses de quêtes ∝ production font boule de neige (×20+ sur 10 min simulées, invisible aux cadences humaines: p05 navigateur = 80 K en 10 min, sain) | simulateur avec/sans `decisionS` vs campagne | documenté; pas de nerf sans mesure joueur — le temps de décision humain (8–15 s/achat) est la vraie borne |
-| C2 | P2 | Extraction CRMB à l'année ≈ 10⁵–10⁶ CRMB (3 machines de chaque): les puits (Registre 4 435 au total) sont dépassés de ×100+ au très long terme | simulation 365 j | documenté au rapport §CRMB: « rare et utile » tient jusqu'à ~30 j, plus au-delà — rééquilibrage à décider par le propriétaire |
+| C2 | P2 | Extraction CRMB abondante à long terme: 57 664 CRMB au 30ᵉ jour simulé, dont 51 636 d'extraction | simulations 30 j / 365 j | **corrigé le 5 août** (défaut 17 ci-dessous). Errata: la première version de ce constat affirmait que « les puits totalisent 4 435 CRMB » — c'est FAUX. 4 435 est le prix des huit premiers contrats du Registre seulement; l'échelle continue sans fin (5 000, 10 000, 25 000…). Le puits n'a jamais été borné, c'est le robinet qui était trop ouvert |
 | C3 | P2 | Au-delà de 100 de puissance, un Curseur seul (+0,25) ne bouge l'entier qu'une fois sur quatre — conséquence arithmétique assumée de la règle des entiers | test `grille-magnitudes` | documenté; +1 exact par groupe de quatre, jamais de perte |
 
-| 14 | P1 | Gain affiché d'un achat franchissant cent: « +499,25 /clic » (entier − quart) en boutique et améliorations | campagne 2 (17 textes chez p05, 7 zones « Détail de… ») ; test rouge `gain-affiche` | écarts affichés pliés par `snapDown`; le détail avant → après reste exact; 16 scénarios rejoués → 0 |
+## Corrigés dans la passe corrective du 5 août (après analyse externe des rapports)
+
+Quatre défauts relevés par l'analyse externe des rapports et des campagnes,
+tous reproduits ici avant correction — dont deux que la passe principale avait
+mal jugés (le lot « toléré », la synthèse mobile contredite par ses propres
+mesures).
+
+| # | P | Défaut | Preuve | Correction |
+| --- | --- | --- | --- | --- |
+| 15 | P1 | Remise cachée sur l'achat groupé: Four ×10 à 19 possédés = 100 000 quand les dix unités coûtent 124 800 une à une (−19,9 %) — l'écran ne l'annonçait nulle part, et `prix.test` tolérait l'écart | reproduction exacte Σ `costOf(×1)` vs `costOf(×10)` ; test durci en égalité stricte, rouge avant correctif | `costOf` ne replie plus la somme: le lot vaut EXACTEMENT la somme des unités lisibles; le bouton l'affiche via `fmtPrix` (mantisse entière exacte), valeur pleine en infobulle |
+| 16 | P2 | Cibles tactiles sous 44 px malgré une synthèse qui en annonçait zéro: relance de quête 20 px de haut, montants rapides CRMB 27 px, volume 34 px, miettes de pluie 36 px | mesures par profil des campagnes (contredisant la synthèse mobile) | `min-h-11`/`min-w-11` posés sur toutes les cibles visibles: relance, filtres de stats, montants rapides, volume, import/réinitialisation, nœuds de prestige, apparences, miettes 44 px |
+| 17 | P2 | CRMB abondant: 12 CRMB à 10 min, 445 au 1ᵉʳ jour, 57 664 au 30ᵉ jour simulé (dont 51 636 d'extraction) — « rare » ne tenait pas au-delà du premier mois | tableau économie CRMB des simulations, avant correctif | matériel d'extraction ÷5 (0,01 à 5 CRMB/h), progression des prix ×1,3 ; `crmb.test` durci (`perHour ≤ 5`) ; nouvelles courbes au rapport §13 |
+| 18 | P2 | 88 à 118 notifications en 10 minutes mesurées en campagne — une toutes les 5 à 7 s, épuisant | compteur MutationObserver des campagnes 1 et 2 | silence entre ordinaires 11 → 16 s, écart majeurs 2,5 → 6 s, plafond majeurs 6 → 3/min, déduplication 30 → 45 s, dorés redescendus au rang ordinaire (ils se signalent déjà à l'écran) ; test de session durci à ≤ 4/min |
 
 ## Défauts du HARNAIS lui-même (corrigés, comptés à part)
 

@@ -423,18 +423,20 @@ l'estimer.
 
 | Règle | Valeur | Pourquoi |
 | --- | --- | --- |
-| Silence entre deux ordinaires | 11 s | Une notification qu'on n'a pas le temps de lire n'informe personne |
+| Silence entre deux ordinaires | 16 s | Une notification qu'on n'a pas le temps de lire n'informe personne |
 | File bornée | 6 entrées | Une file sans limite ne supprime pas l'avalanche, elle la reporte |
 | Péremption | 90 s | Passé ce délai, le message parle d'une partie qu'on ne joue plus |
-| Déduplication | 30 s | Le même texte ne revient pas coup sur coup |
+| Déduplication | 45 s | Le même texte ne revient pas coup sur coup |
 | Regroupement | 1 s | Dix succès simultanés font **une** ligne, avec « ×10 » |
-| Écart entre majeurs | 2,5 s | Une renaissance passe devant, mais pas en rafale |
-| **Plafond des majeurs** | **6 / minute glissante** | Même un bug qui en déclencherait soixante ne peut pas saturer l'écran |
+| Écart entre majeurs | 6 s | Une renaissance passe devant, mais pas en rafale |
+| **Plafond des majeurs** | **3 / minute glissante** | Même un bug qui en déclencherait soixante ne peut pas saturer l'écran |
 
-Mesuré sur une session type (quêtes toutes les 45 s, succès toutes les 90 s,
-dorés toutes les 70 s, une renaissance toutes les 30 min) : **moins de 6
-notifications par minute** sur le premier quart d'heure comme sur une heure
-entière, et aucun identifiant réaffiché deux fois.
+Les cookies dorés, qui s'annoncent déjà par eux-mêmes à l'écran, sont passés au
+rang ordinaire : ils n'ont plus le droit de doubler la file. Mesuré sur une
+session type (quêtes toutes les 45 s, succès toutes les 90 s, dorés toutes les
+70 s, une renaissance toutes les 30 min) : **moins de 4 notifications par
+minute** sur le premier quart d'heure comme sur une heure entière, et aucun
+identifiant réaffiché deux fois.
 
 Un achat ordinaire ne notifie rien : le chiffre monte sur sa propre carte. Un
 achat refusé ne notifie rien non plus — le bouton tremble, c'est tout.
@@ -840,7 +842,7 @@ une monnaie qu'on gagne sans effort ne récompense plus rien.
 | Succès Platine | +2 | 9 succès |
 | Succès Légendaire | +5 | 4 succès |
 | Prestige | +5 | à chaque renaissance |
-| Matériel de minage | 0,05 à 25 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
+| Matériel de minage | 0,01 à 5 CRMB **par heure** | à partir de 10 M de cookies pour le premier |
 
 Les 55 succès rapportent **53 CRMB en tout** : c'est un plafond de partie, pas
 un revenu. Toutes les récompenses sont des entiers — le bonus de quête de
@@ -871,10 +873,12 @@ pleine en permanence — et, sur téléphone, posée pile sur la boutique.
 
 Un seul emplacement, **en haut** : la boutique et la navigation vivent sous le
 pouce et rien ne les recouvre. Au plus **une notification ordinaire toutes les
-onze secondes**, et ce qui arrive trop tôt **attend son tour** dans une file
-bornée à six entrées — écarté, il n'existait plus. Même les événements majeurs
-sont plafonnés à six par minute glissante. Mesuré sur une session type : moins
-de six notifications par minute, sur un quart d'heure comme sur une heure.
+seize secondes**, et ce qui arrive trop tôt **attend son tour** dans une file
+bornée à six entrées — écarté, il n'existait plus. Les événements majeurs
+gardent six secondes d'écart et sont plafonnés à trois par minute glissante ;
+les cookies dorés, visibles par eux-mêmes, sont redescendus au rang ordinaire.
+Mesuré sur une session type : moins de quatre notifications par minute, sur un
+quart d'heure comme sur une heure.
 
 ### Cliquer vite paie, automatiser non
 

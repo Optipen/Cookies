@@ -381,24 +381,32 @@ Si l'intégration Git du projet Vercel `cookies` (`prj_u8bZmUZiACxcchVQ8KdMaIutq
 
 **Ce que je n'ai pas pu vérifier d'ici, et pourquoi** : l'environnement bloque tout accès réseau à `*.vercel.app` (connexion refusée y compris vers `cookies-gules.vercel.app`, le domaine public connu) et la session n'a pas de connecteur Vercel. Conformément à la consigne, je n'ai PAS contourné (aucun autre projet, aucun déploiement direct). **À réautoriser pour une vérification par mes soins** : un connecteur Vercel, ou l'ouverture réseau vers `vercel.app`. En attendant, contrôle au tableau de bord : projet `cookies` → déploiement du commit de tête de la branche → statut READY, cible *Preview*, projet exact (pas Nyzora, pas cookie-craze), console propre sur l'URL de Preview.
 
+**Confirmé depuis GitHub le 5 août** : le commit `7ef4335` (tête de la branche au moment du rapport) porte un contrôle Vercel **réussi** — la Preview s'est construite et déployée, vérifié par le propriétaire sur la page du commit. Les commits de la passe corrective déclenchent une nouvelle construction au push : le même contrôle est à refaire sur le commit de tête.
+
 ## 20. Limites restantes
 
-1. **La vérification de la Preview Vercel n'a pas pu être faite d'ici.**
+1. **La vérification directe de la Preview Vercel reste impossible d'ici.**
    `vercel.app` est inaccessible depuis cet environnement (politique réseau du
    proxy: connexion refusée même vers le domaine de production connu), et
-   aucun connecteur Vercel n'est disponible dans la session. La branche seule
-   a été poussée; si l'intégration Git du projet `cookies`
-   (`prj_u8bZmUZiACxcchVQ8KdMaIutqmrr`) est active, la Preview se construit
-   automatiquement. **À réautoriser pour que je vérifie moi-même**: un
-   connecteur Vercel (ou l'accès réseau à `*.vercel.app`). En attendant, le
-   contrôle se fait au tableau de bord: projet `cookies` → déploiement du
-   commit de tête de `claude/cookie-craze-audit-tests-jo1ddp` → statut READY,
-   cible Preview, aucun rattachement à Nyzora ni à cookie-craze.
+   aucun connecteur Vercel n'est disponible dans la session. **Mais le
+   propriétaire a confirmé depuis GitHub** le contrôle Vercel réussi du commit
+   `7ef4335` (§19): l'intégration Git du projet `cookies`
+   (`prj_u8bZmUZiACxcchVQ8KdMaIutqmrr`) est active et construit bien la
+   branche. **À réautoriser pour que je vérifie moi-même**: un connecteur
+   Vercel (ou l'accès réseau à `*.vercel.app`). Le contrôle du commit de tête
+   après la passe corrective se fait au même endroit: statut READY, cible
+   Preview, aucun rattachement à Nyzora ni à cookie-craze.
 2. **La protection anti-autoclicker reste entièrement côté client** — bornée,
    mesurée, honnête sur ce qu'elle ne peut pas faire (localStorage, console,
    recompilation). Rien ne change sans serveur.
-3. **L'extraction CRMB déborde ses puits au très long terme** (§13):
-   rééquilibrage à décider par le propriétaire, pas fait en silence ici.
+3. **L'extraction CRMB dominait le très long terme** — rééquilibrée le
+   5 août sur décision du propriétaire (matériel ÷5 : 0,01 à 5 CRMB/h,
+   progression des prix ×1,3 — §13 et défaut 17). L'extraction reste la
+   première source d'une partie de plusieurs mois, à une échelle divisée par
+   cinq. Errata au passage: le rapport initial qualifiait le Registre de
+   puits fini (« 4 435 CRMB ») — faux, c'est le prix des huit premiers
+   contrats et l'échelle continue sans fin; le robinet était le problème,
+   pas le puits.
 4. **La courbe s'aplatit après J90** une fois l'Horizon complet — mieux qu'un
    plateau (Éclat/Écho continuent), pas une courbe qui tient l'année.
 5. **Le plaisir n'est pas mesuré.** Vingt scripts ne remplacent pas vingt
