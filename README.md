@@ -101,20 +101,21 @@ le faisait envoyait le rapport actif/passif au-delà de 8×.
 
 ### Valeurs propres et additives
 
-Un Mineur vaut dix fois son Cliqueur de même rang, et coûte exactement le même
-prix. Le premier achat de la partie est donc un vrai choix, à prix égal :
-produire pendant que tu ne joues pas, ou frapper plus fort quand tu joues.
+Un Mineur vaut **huit fois** son Cliqueur de même rang, et le Cliqueur coûte
+**trois quarts** du prix du Mineur (`click_price_factor`). Le premier achat de
+la partie est donc un vrai choix : produire pendant que tu ne joues pas, ou
+frapper plus fort — un peu moins cher — quand tu joues.
 
-| Rang | Cliqueur | | Mineur | | Prix de base |
+| Rang | Cliqueur | | Mineur | | Prix de base (Mineur) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Curseur | +0,25 /clic | Four | +2 /s | 100 |
-| 2 | Mamie | +1 | Boulangerie | +10 | 1 000 |
-| 3 | Gant de frappe | +5 | Ferme | +50 | 10 000 |
-| 4 | Bras robotisé | +25 | Usine | +250 | 100 000 |
-| 5 | Exosquelette | +100 | Banque | +1 000 | 1 000 000 |
-| 6 | IA de frappe | +500 | Temple | +5 000 | 10 000 000 |
-| 7 | Machine à Temps | +2 500 | Laboratoire | +25 000 | 100 000 000 |
-| 8 | Singularité tactile | +10 000 | Portail | +100 000 | 1 000 000 000 |
+| 2 | Mamie | +1 | Boulangerie | +8 | 1 000 |
+| 3 | Gant de frappe | +5 | Ferme | +40 | 10 000 |
+| 4 | Bras robotisé | +25 | Usine | +200 | 100 000 |
+| 5 | Exosquelette | +100 | Banque | +800 | 1 000 000 |
+| 6 | IA de frappe | +500 | Temple | +4 000 | 10 000 000 |
+| 7 | Machine à Temps | +2 500 | Laboratoire | +20 000 | 100 000 000 |
+| 8 | Singularité tactile | +10 000 | Portail | +80 000 | 1 000 000 000 |
 
 Un rang coûte dix fois le précédent et rapporte cinq fois plus : il devient
 rentable après quelques exemplaires de celui d'en dessous, ce qui fait
@@ -697,6 +698,11 @@ npm run simulations mecanique # une seule famille (plus rapide)
 npm i playwright && npx playwright install chromium
 npm run mobile                # six gabarits: cibles, textes, débordements
 npx vite-node scripts/console.mjs   # erreurs console et mémoire
+
+# Campagnes de vingt profils automatisés (contre `npm run preview`):
+node qa/harness/campagne.mjs http://127.0.0.1:4173/ qa-artifacts/campagne-X
+node qa/harness/planches.mjs http://127.0.0.1:4173/ qa-artifacts/planches-X
+node qa/harness/analyse.mjs qa-artifacts/campagne-1 qa-artifacts/campagne-2
 ```
 
 `CHROMIUM_PATH` force un navigateur précis quand l'environnement en fournit un
