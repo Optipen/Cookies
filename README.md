@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (160 tests)                    |
+| `npm test`          | Suite de tests (463 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -507,18 +507,31 @@ Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
 
 ### Le rythme
 
-Le chiffre exact de cookies compte moins que la cadence. Sept objectifs, mesurés
-sur une partie complète à cinq clics par seconde :
+Le chiffre exact de cookies compte moins que la cadence. La mesure a changé de
+nature avec cette passe : le simulateur voit désormais les **quêtes, les dorés
+et les succès**, et le joueur simulé met **dix secondes à décider** un achat —
+sans ce délai, on mesure une machine, pas un joueur. Objectifs, à cinq clics
+par seconde, stratégie équilibre :
 
 | Objectif | Cible | Mesuré | |
 | --- | --- | --- | --- |
-| Premier achat payé | 5–15 s | **6,5 s** | ✓ |
-| Achats marquants, 1re minute | 2–6 | **2** | ✓ |
-| Écart entre marquants, 0–5 min | 20–40 s | 73 s | ✗ |
-| Premier vrai palier de bâtiment | 10–20 min | **19,5 min** | ✓ |
-| Premier prestige | 60–120 min | **85 min** | ✓ |
-| Première ascension | 5–20 j | **10,1 j** | ✓ |
-| Dernière nouveauté du jeu | 7–60 j | **28 j** | ✓ |
+| Premier achat payé | 5–15 s | **8,9 s** | ✓ |
+| Achats marquants, 1re minute | 2–4 | **2** | ✓ |
+| Écart médian entre achats marquants, 0–5 min | 20–45 s | **30 s** | ✓ |
+| Écart médian entre MOMENTS intéressants, 0–5 min | 20–45 s | **10 s** | plus dense que la cible |
+| Premier vrai palier de bâtiment | 10–20 min | **13,4 min** | ✓ |
+| Premier prestige | 60–120 min | **64 min** | ✓ |
+| Première ascension | 5–20 j | **5,4 j** | ✓ |
+| Dernière nouveauté du jeu | 7–60 j | **13,4 j** | ✓ |
+
+Le « 73 s entre deux achats marquants » du constat précédent mesurait un jeu
+**sans ses temps forts** — ni quêtes, ni dorés, ni succès — joué par un
+optimiseur sans temps de décision. Compté honnêtement, l'écart entre achats
+marquants tient la cible, et le rythme VÉCU — une quête rendue, un doré
+attrapé, un succès décroché comptent aussi — descend à dix secondes en début
+de partie, porté par la rafale d'apprentissage de la première minute. Le jeu
+n'a pas été accéléré pour obtenir ces chiffres : c'est la mesure qui a été
+réparée.
 
 Le seuil de prestige a été choisi **par mesure** : une recherche par dichotomie
 sur la production totale donne 29 min à 5 millions de cookies cuits, 61 min à
@@ -673,7 +686,7 @@ lancent à la main. Playwright et son navigateur s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 402 tests
+npm test                      # 463 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -691,34 +704,43 @@ npx vite-node scripts/console.mjs   # erreurs console et mémoire
 
 ### Les simulations
 
-Le rapport complet — **dix-sept profils × onze horizons × dix-sept métriques** —
+Le rapport complet — **quatre familles × onze horizons × dix-sept métriques** —
 est dans [`docs/simulations.txt`](docs/simulations.txt), reproductible par
-`npm run simulations`.
+`npm run simulations` (ou par famille : `mecanique`, `sessions`, `complet`,
+`fermetures`, `rythme`).
 
-Deux familles, qui ne mesurent pas la même chose :
+Quatre familles, qui ne mesurent pas la même chose :
 
 - **Mécanique continue** : une cadence tenue en permanence. Sert à isoler
   l'effet d'un paramètre. Le rapport actif/passif y est directement comparable
   aux cibles (2,5–2,8× à cinq clics/s).
 - **Vraies sessions** : `activeFraction` est la part du temps réellement passée
-  à cliquer. Un joueur qui joue trente minutes par jour a une cadence **moyennée
-  sur vingt-quatre heures** de 0,10 clic/s : son rapport affiché tourne autour
-  de 1,03×, et c'est normal — il mesure la journée entière, pas la session.
+  à cliquer, l'onglet restant ouvert. Un joueur qui joue trente minutes par
+  jour a une cadence **moyennée sur vingt-quatre heures** de 0,10 clic/s : son
+  rapport affiché tourne autour de 1,03×, et c'est normal — il mesure la
+  journée entière, pas la session.
+- **Partie complète** : les quêtes et les succès tournent sur leur **vrai
+  moteur**, tranche par tranche ; les dorés et la pluie passent en espérance
+  mathématique avec un taux d'attrapage par profil ; le joueur met dix
+  secondes à décider chaque achat. C'est la famille qui manquait au simulateur
+  précédent.
+- **Onglet fermé** : des sessions réelles, et entre elles la **vraie fonction
+  de retour hors-ligne** du jeu. Mesuré : le hors-ligne pèse 2 à 11 % de la
+  production totale selon le rythme des sessions — plafond de deux heures et
+  rendement dégressif obligent.
 
-Deux artefacts à connaître avant de lire les tableaux :
+Ce que la simulation ne modélise toujours pas, et pourquoi : les **quêtes
+chronométrées** (les tranches de temps dépassent leur chrono — un joueur
+simulé qui les ignore), le **trading CRMB** (marche centrée et 2 % de frais
+par sens : l'espérance de tout aller-retour est négative), la **vérification
+humaine** (elle ne retire rien à un joueur honnête). Un relevé instantané peut
+toujours tomber juste après une renaissance et décrire un parc vide — les
+colonnes *ratio*, *bâtiments*, *prestiges*, *ascensions*, *étoiles* et
+*décision* n'en souffrent pas.
 
-1. **Un relevé instantané peut tomber juste après une renaissance**, et décrire
-   un parc vide. C'est le cas de plusieurs cases (« surtout inactif » à 1 j,
-   « occasionnel » à 365 j). Les colonnes *ratio*, *bâtiments*, *prestiges*,
-   *ascensions*, *étoiles* et *décision* n'en souffrent pas.
-2. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
-   dorés, ni les gains hors-ligne.** La colonne CRMB ne compte donc que le
-   prestige : la vraie économie CRMB est plus généreuse que ce que le tableau
-   montre.
-
-Résultat le plus net : les profils **« autoclicker 50/s » et « 15 clics/s »
-produisent des tableaux rigoureusement identiques**, chiffre pour chiffre, sur
-les onze horizons.
+Résultat le plus net, inchangé : les profils **« autoclicker 50/s » et
+« 15 clics/s » produisent des tableaux rigoureusement identiques**, chiffre
+pour chiffre, sur les onze horizons.
 
 ## Ce qui reste imparfait
 
@@ -739,24 +761,30 @@ défaut n'a simplement pas été mesuré.
    trois-cent-soixante-cinquième jour** : ×2,6 seulement, une fois la voie
    Horizon complète. C'est bien mieux que le plateau d'avant, ce n'est pas une
    courbe qui tient un an entier.
-3. **Le rythme des cinq premières minutes reste à 73 s entre deux achats
-   marquants**, contre 20 à 40 s visées. Le prix des paliers n'y change rien
-   (testé de 20 à 5 exemplaires : résultat identique), parce qu'un bâtiment bat
-   toujours un palier au rendement par cookie tant que le parc est petit. La
-   mesure ne voit d'ailleurs ni les quêtes, ni les succès, ni les cookies
-   dorés : le rythme réellement perçu est plus dense que ce chiffre.
+3. **Le « 73 s entre deux achats marquants » est réglé par la mesure, pas par
+   le jeu** : compté avec les quêtes, les dorés et les succès, et avec un
+   joueur qui met dix secondes à décider, l'écart entre achats marquants tient
+   la cible (30 s) et le rythme vécu descend à dix secondes en début de
+   partie. Le jeu n'a pas été accéléré ; c'est l'ancien chiffre qui décrivait
+   un jeu amputé de ses temps forts.
 4. **Les simulations ne sont pas des tests humains.** Elles ne disent rien du
    plaisir, de la lisibilité, du confort du pouce ni de l'envie de revenir. Un
-   nombre dans une fourchette n'est pas un jeu réussi.
-5. **Le simulateur ne modélise ni les quêtes, ni les événements, ni les cookies
-   dorés, ni les gains hors-ligne.** Les colonnes CRMB des tableaux ne comptent
-   donc que le prestige : la vraie économie CRMB est plus généreuse.
-6. **La mémoire n'a été mesurée que sur des sessions de quelques minutes.**
-   Mille six cents clics, achats et changements d'onglet compris : zéro erreur
-   console, zéro avertissement, 377 nœuds de document, et un tas qui passe de
-   5,4 à 7,7 Mo **une fois le ramasse-miettes forcé**. Sans le forcer, le même
-   test affichait 5 → 22 Mo : c'étaient les déchets pas encore collectés, pas
-   une fuite. Une session de plusieurs heures n'a pas été observée.
+   nombre dans une fourchette n'est pas un jeu réussi. Les vingt profils de
+   campagne sont des scripts : ils utilisent le jeu dans un vrai navigateur,
+   mais personne n'a « aimé » quoi que ce soit.
+5. **L'extraction CRMB déborde ses puits au très long terme.** Trois machines
+   de chaque modèle produisent des dizaines de milliers de CRMB en un mois
+   simulé, quand les huit contrats du Registre en absorbent 4 435 en tout.
+   « Rare et utile » tient sur les trente premiers jours ; au-delà, la monnaie
+   redevient abondante. Rééquilibrage à décider par le propriétaire du projet.
+6. **Sous stratégie optimale parfaite, les récompenses de quêtes font boule de
+   neige** (proportionnelles à la production, reconverties instantanément).
+   Aucun profil navigateur à cadence humaine n'exhibe cet emballement — le
+   temps de décision est la vraie borne — mais un joueur-machine le pourrait.
+7. **La mémoire est mesurée sur des sessions de dix à treize minutes** (les
+   quarante sessions de campagne relèvent le tas toutes les vingt secondes:
+   4 → 33 Mo au pire, sans ramasse-miettes forcé) et sur la session de mesure
+   dédiée au GC forcé. Une session de plusieurs heures n'a pas été observée.
 
 ## Le jeu
 
