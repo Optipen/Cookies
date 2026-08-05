@@ -133,15 +133,80 @@ Voir §2 et `qa/rapport/defauts.md`.
 
 ## 11. Chiffres de rythme
 
-<!-- RYTHME -->
+Mesure sur simulateur complet (quêtes réelles, événements en espérance, joueur
+à 5 clics/s, stratégie équilibre, **dix secondes de décision par achat** —
+sans ce délai on mesure une machine) :
+
+| Objectif | Cible | Mesuré | |
+| --- | --- | --- | --- |
+| Premier achat payé | 5–15 s | **8,9 s** | ✓ |
+| Achats marquants, 1re minute | 2–4 | **2** | ✓ |
+| Écart médian entre achats marquants, 0–5 min | 20–45 s | **30 s** | ✓ |
+| Écart médian entre MOMENTS intéressants (achat marquant + quête + doré + succès), 0–5 min | 20–45 s | **10 s** | plus dense que la cible |
+| Premier vrai palier de bâtiment | 10–20 min | **13,4 min** | ✓ |
+| Premier prestige | 60–120 min | **64 min** | ✓ |
+| Première ascension | 5–20 j | **5,4 j** | ✓ |
+| Dernière nouveauté | 7–60 j | **13,4 j** | ✓ |
+
+**Le « 70,5 s » d'origine est réglé par la mesure, pas par un coup
+d'accélérateur** : l'ancien chiffre comptait les seuls achats d'un optimiseur
+sans temps de décision, dans un jeu amputé de ses quêtes, dorés et succès.
+Compté honnêtement, l'écart entre achats marquants tient la cible (30 s), et le
+rythme vécu descend à ~10 s sur les cinq premières minutes — dominé par la
+rafale d'apprentissage de la première minute. Aucune impasse durable après une
+mauvaise stratégie : le profil p13 (tout-Cliqueurs puis pivot Minage) finit sa
+session en croissance normale, et l'écart meilleure/pire stratégie reste borné
+(voir §12). Vérité navigateur concordante : les notifications de p05 montrent
+des temps forts toutes les ~15–25 s sur les deux premières minutes.
 
 ## 12. Équilibre Clic / Minage
 
-<!-- EQUILIBRE -->
+Rapport actif/passif médian (famille mécanique, stratégie optimiser, cible
+2,5–2,8× à cinq clics par seconde) après la pose de la règle des entiers :
+
+| Cadence | 1 h | 1 j | 30 j | 365 j |
+| --- | --- | --- | --- | --- |
+| 5 clics/s | **2,47×** | **2,52×** | **2,55×** | **2,60×** |
+
+La règle des entiers dès cent (qui rabote quelques quarts de crans sur les
+grosses valeurs) déplace le rapport d'environ un centième — l'équilibre
+documenté tient. Le doublement de cadence double toujours l'écart au passif,
+sans plafond; l'autoclicker borné reste à ~1,8× le joueur très rapide en
+régime établi (§14). Détail complet par famille et par horizon dans
+`docs/simulations.txt`.
 
 ## 13. Économie CRMB
 
-<!-- CRMB -->
+**Règle** : centimes partout, solde en centimes entiers, fractions accumulées
+dans une réserve interne jamais perdue (testé : trois heures d'un CPU à
+0,05 CRMB/h créditent 0,15 au centime près, alors qu'un arrondi par tic aurait
+tout perdu). Cours entier, jambes d'échange entières, frais de 2 % par sens
+maintenus, taux d'extraction posé au centième par heure dans le moteur.
+
+**Gains par source et par horizon** (simulateur complet, joueur normal) :
+
+| Horizon | Prestige | Quêtes | Succès | Extraction | Solde |
+| --- | --- | --- | --- | --- | --- |
+| 10 min | 0 | 11 | 1 | 0 | 12 |
+| 30 min | 0 | 11 | 2 | 0 | 13 |
+| 1 h | 0 | 11 | 3 | 0 | 14 |
+| 1 j | 45 | 239 | 19 | 142 | 445 |
+| 7 j | 135 | 1 346 | 28 | 2 864 | 4 373 |
+| 30 j | 410 | 5 584 | 34 | 51 636 | 57 664 |
+
+**En navigateur** (p14, 13 minutes réelles) : achats 1/5/10/25 au marché,
+vente, staking flexible ouvert puis retiré, positions 1 h et 6 h verrouillées
+(verrou constaté), deux contrats du Registre signés (10 puis 25), ventes au
+sommet sur tendance haussière. Départ 64 CRMB (71 après rendements), arrivée
+cohérente opération par opération, zéro nombre hors règle en campagne 2.
+
+**Constat de rareté, sans fard** : « rare et utile » tient sur le premier mois
+— les quêtes dominent d'abord, le Registre absorbe les premières dizaines de
+pièces. Au-delà, l'extraction domine tout (51 636 CRMB au trentième jour
+simulé) et les puits (4 435 CRMB pour les huit contrats) sont dépassés d'un
+facteur dix, cent à l'année. Rééquilibrage possible (prix d'extraction, paliers
+de contrats supplémentaires), **à décider par le propriétaire** — pas de nerf
+silencieux dans cette passe.
 
 ## 14. Résultats anti-autoclicker
 
@@ -222,7 +287,39 @@ millionième, gain unitaire `+0,25` à toute échelle).
 
 ## 18. Simulations longues
 
-<!-- SIMULATIONS -->
+Horizons couverts : 1 min · 5 min · 15 min · **1 h · 6 h · 1 j · 3 j · 7 j ·
+30 j · 90 j · 365 j** — quatre familles, dans `docs/simulations.txt`
+(régénéré sur le moteur corrigé, reproductible par `npm run simulations`).
+
+**Ce qui manquait au simulateur précédent est modélisé** :
+- **quêtes et succès** : leur VRAI moteur (`tickQuests`, conditions réelles),
+  tranche par tranche, récompenses réelles;
+- **dorés, pluie** : espérance mathématique paramétrée par un taux
+  d'attrapage par profil (les barèmes réels du jeu, DR compris);
+- **hors-ligne** : famille « onglet fermé » — sessions réelles, puis la vraie
+  fonction `offlineGains` entre elles. Mesuré : 2 à 11 % de la production
+  totale selon le rythme (plafond 2 h + dégressivité obligent);
+- **temps de décision humain** : dix secondes par achat.
+
+**Ce qui n'est pas modélisé, et pourquoi, précisément** :
+- les **quêtes chronométrées** — les tranches de temps du simulateur dépassent
+  leur chrono; elles échouent comme chez un joueur qui les ignore;
+- le **trading CRMB** — marche aléatoire centrée avec retour à la moyenne et
+  2 % de frais par sens: l'espérance de tout aller-retour est négative par
+  construction, il n'y a pas de gain à modéliser;
+- la **vérification humaine** — elle ne retire rien à un joueur honnête;
+- le **plaisir** — un nombre dans une fourchette n'est pas un jeu réussi.
+
+**Séparation des sources de vérité, comme exigé** : mesure réelle en
+navigateur = campagnes (10–13 min); simulation mathématique = familles
+1–4; état préparé par fixture = profils tardifs (16–19) et planches;
+jugement humain = explicitement hors de portée, dit partout où c'est le cas.
+
+Longue durée : premier prestige 64 min; ascension 5,4 j; 24 bâtiments
+découverts au 13,4ᵉ jour; du 30ᵉ au 365ᵉ jour la production est encore
+multipliée par ~50 (famille complète: 5,7e9/s → 6,3e11/s en total au
+365ᵉ), l'Éclat et l'Écho restant les seuls leviers après l'Horizon complet
+— la courbe s'aplatit après J90, limite connue et déjà documentée.
 
 ## 19. URL et statut de la Preview
 
