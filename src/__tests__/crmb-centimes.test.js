@@ -40,7 +40,7 @@ describe("le solde vit en centimes", () => {
   });
 
   it("l'accumulateur ne perd aucune fraction sous le centime", () => {
-    // Un vieux CPU: 0,05 CRMB/h, soit ~7 millionièmes par tic de 500 ms.
+    // Un vieux GPU: 0,05 CRMB/h, soit ~7 millionièmes par tic de 500 ms.
     // Arrondi au centime à chaque tic, il ne verserait JAMAIS rien.
     let crypto = { ...defaultCryptoState(0), balance: 0, pending: 0 };
     const parTic = 0.05 / 3600 / 2;

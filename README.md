@@ -524,8 +524,8 @@ par seconde, stratégie équilibre :
 | Écart médian entre MOMENTS intéressants, 0–5 min | 20–45 s | **10 s** | plus dense que la cible |
 | Premier vrai palier de bâtiment | 10–20 min | **13,4 min** | ✓ |
 | Premier prestige | 60–120 min | **64 min** | ✓ |
-| Première ascension | 5–20 j | **5,4 j** | ✓ |
-| Dernière nouveauté du jeu | 7–60 j | **13,4 j** | ✓ |
+| Première ascension | 5–20 j | **5,2 j** | ✓ |
+| Dernière nouveauté du jeu | 7–60 j | **13,8 j** | ✓ |
 
 Le « 73 s entre deux achats marquants » du constat précédent mesurait un jeu
 **sans ses temps forts** — ni quêtes, ni dorés, ni succès — joué par un

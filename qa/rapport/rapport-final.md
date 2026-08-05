@@ -175,8 +175,8 @@ sans ce délai on mesure une machine) :
 | Écart médian entre MOMENTS intéressants (achat marquant + quête + doré + succès), 0–5 min | 20–45 s | **10 s** | plus dense que la cible |
 | Premier vrai palier de bâtiment | 10–20 min | **13,4 min** | ✓ |
 | Premier prestige | 60–120 min | **64 min** | ✓ |
-| Première ascension | 5–20 j | **5,4 j** | ✓ |
-| Dernière nouveauté | 7–60 j | **13,4 j** | ✓ |
+| Première ascension | 5–20 j | **5,2 j** | ✓ |
+| Dernière nouveauté | 7–60 j | **13,8 j** | ✓ |
 
 **Le « 70,5 s » d'origine est réglé par la mesure, pas par un coup
 d'accélérateur** : l'ancien chiffre comptait les seuls achats d'un optimiseur
@@ -208,21 +208,31 @@ régime établi (§14). Détail complet par famille et par horizon dans
 ## 13. Économie CRMB
 
 **Règle** : centimes partout, solde en centimes entiers, fractions accumulées
-dans une réserve interne jamais perdue (testé : trois heures d'un CPU à
+dans une réserve interne jamais perdue (testé : trois heures d'un GPU à
 0,05 CRMB/h créditent 0,15 au centime près, alors qu'un arrondi par tic aurait
 tout perdu). Cours entier, jambes d'échange entières, frais de 2 % par sens
 maintenus, taux d'extraction posé au centième par heure dans le moteur.
 
-**Gains par source et par horizon** (simulateur complet, joueur normal) :
+**Gains par source et par horizon** (simulateur complet, joueur normal —
+APRÈS le correctif du 5 août: matériel d'extraction ÷5, progression des prix
+×1,3) :
 
 | Horizon | Prestige | Quêtes | Succès | Extraction | Solde |
 | --- | --- | --- | --- | --- | --- |
 | 10 min | 0 | 11 | 1 | 0 | 12 |
 | 30 min | 0 | 11 | 2 | 0 | 13 |
 | 1 h | 0 | 11 | 3 | 0 | 14 |
-| 1 j | 45 | 239 | 19 | 142 | 445 |
-| 7 j | 135 | 1 346 | 28 | 2 864 | 4 373 |
-| 30 j | 410 | 5 584 | 34 | 51 636 | 57 664 |
+| 1 j | 45 | 246 | 19 | 29,02 | 339,02 |
+| 7 j | 140 | 1 352 | 28 | 801,81 | 2 321,81 |
+| 30 j | 370 | 5 444 | 35 | 10 636,91 | 16 485,91 |
+
+**Avant le correctif**, l'extraction versait 142 CRMB au 1ᵉʳ jour, 2 864 au
+7ᵉ, 51 636 au 30ᵉ (solde 57 664). Elle est divisée par cinq à la source —
+0,01 à 5 CRMB/h par machine au lieu de 0,05 à 25 — et chaque machine
+supplémentaire coûte plus vite (croissance ×1,3). Les quêtes redeviennent la
+première source jusqu'au 7ᵉ jour; au 30ᵉ, le solde cumulé (16 486) se mesure
+enfin à l'échelle du Registre, dont les neuvième et dixième contrats coûtent
+à eux seuls 5 000 et 10 000 CRMB.
 
 **En navigateur** (p14, 13 minutes réelles) : achats 1/5/10/25 au marché,
 vente, staking flexible ouvert puis retiré, positions 1 h et 6 h verrouillées
@@ -230,13 +240,15 @@ vente, staking flexible ouvert puis retiré, positions 1 h et 6 h verrouillées
 sommet sur tendance haussière. Départ 64 CRMB (71 après rendements), arrivée
 cohérente opération par opération, zéro nombre hors règle en campagne 2.
 
-**Constat de rareté, sans fard** : « rare et utile » tient sur le premier mois
-— les quêtes dominent d'abord, le Registre absorbe les premières dizaines de
-pièces. Au-delà, l'extraction domine tout (51 636 CRMB au trentième jour
-simulé) et les puits (4 435 CRMB pour les huit contrats) sont dépassés d'un
-facteur dix, cent à l'année. Rééquilibrage possible (prix d'extraction, paliers
-de contrats supplémentaires), **à décider par le propriétaire** — pas de nerf
-silencieux dans cette passe.
+**Constat de rareté, corrigé — et un errata** : la première version de ce
+rapport écrivait que « les puits totalisent 4 435 CRMB » et s'en servait pour
+dire l'économie débordée « facteur cent ». C'était FAUX, et l'erreur était
+dans le rapport, pas dans le jeu : 4 435 CRMB n'est que la somme des HUIT
+premiers contrats du Registre, dont l'échelle de prix continue sans fin
+(5 000, 10 000, 25 000…). Le puits n'a jamais été borné — c'est le robinet
+qui était trop ouvert, et c'est lui qui a été refermé le 5 août (défaut 17,
+`qa/rapport/defauts.md`). L'abondance, elle, était réelle : 57 664 CRMB au
+30ᵉ jour rendaient les contrats triviaux ; 16 486 en font un arbitrage.
 
 ## 14. Résultats anti-autoclicker
 
@@ -367,11 +379,14 @@ navigateur = campagnes (10–13 min); simulation mathématique = familles
 1–4; état préparé par fixture = profils tardifs (16–19) et planches;
 jugement humain = explicitement hors de portée, dit partout où c'est le cas.
 
-Longue durée : premier prestige 64 min; ascension 5,4 j; 24 bâtiments
-découverts au 13,4ᵉ jour; du 30ᵉ au 365ᵉ jour la production est encore
-multipliée par ~50 (famille complète: 5,7e9/s → 6,3e11/s en total au
-365ᵉ), l'Éclat et l'Écho restant les seuls leviers après l'Horizon complet
-— la courbe s'aplatit après J90, limite connue et déjà documentée.
+Longue durée (chiffres régénérés après le correctif CRMB) : premier prestige
+64 min; ascension 5,2 j; 24 bâtiments découverts au 13,8ᵉ jour; au 90ᵉ jour
+la production totale du profil complet atteint 2,7e11/s, 6,7e11/s au 365ᵉ
+(×2,5 sur les neuf derniers mois), l'Éclat et l'Écho restant les seuls
+leviers après l'Horizon complet — la courbe s'aplatit après J90, limite
+connue et déjà documentée. (Les instantanés à 30 j de cette famille tombent
+en début de cycle de renaissance : ils se lisent avec cette réserve dans
+`docs/simulations.txt`.)
 
 ## 19. URL et statut de la Preview
 
