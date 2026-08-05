@@ -1,4 +1,4 @@
-# Cookie Craze 🍪
+# Crumbora 🍪
 
 Jeu de clic incrémental : bâtis ton empire du biscuit, accomplis des quêtes et
 fais fructifier ton CrumbCoin.
@@ -1001,17 +1001,23 @@ Ce qui est en place pour ça :
 
 ## Sauvegardes
 
-La partie est stockée sous la clé `cookieCrazeSaveV6`. Les sauvegardes des
-versions 1 à 5 sont migrées automatiquement au chargement : fusion profonde
-avec l'état par défaut, valeurs aberrantes assainies, ancien staking converti
-en position flexible, champs morts supprimés, record de combo ramené sur la
-nouvelle échelle, Ascension et Registre ajoutés à zéro.
+La partie est stockée sous la clé `cookieCrazeSaveV6`. Le préfixe est
+historique — le jeu s'appelait Cookie Craze avant de devenir Crumbora — et il
+est **volontairement conservé** : renommer les clés déconnecterait chaque
+joueur de sa partie, et la continuité des sauvegardes prime sur la cohérence
+du nom. Les sauvegardes des versions 1 à 5 sont migrées automatiquement au
+chargement : fusion profonde avec l'état par défaut, valeurs aberrantes
+assainies, ancien staking converti en position flexible, champs morts
+supprimés, record de combo ramené sur la nouvelle échelle, Ascension et
+Registre ajoutés à zéro.
 
 Les anciennes clés **ne sont jamais effacées** : un joueur qui reviendrait sur
 une version antérieure du jeu doit retrouver sa partie. Une sauvegarde illisible
 est archivée sous `cookieCrazeSaveV6_corrupted_<horodatage>`, pas supprimée.
 
 Export et import se font depuis ⚙️ → *Exporter / Importer la sauvegarde*.
+Les nouveaux exports portent l'étiquette `game: "crumbora"` ; les fichiers
+exportés sous l'ancienne étiquette s'importent pour toujours.
 
 ## Déploiement
 

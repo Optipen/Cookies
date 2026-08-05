@@ -390,14 +390,18 @@ export function validateState(state) {
 
 // === Import / export ===
 export function exportSave(state) {
-  return JSON.stringify({ game: "cookie-craze", version: STATE_VERSION, exportedAt: Date.now(), state });
+  return JSON.stringify({ game: "crumbora", version: STATE_VERSION, exportedAt: Date.now(), state });
 }
 
-/** Accepte le format v5, un état nu, ou l'ancien base64 de la v3. */
+/** Accepte le format v5, un état nu, ou l'ancien base64 de la v3.
+ *  Les fichiers exportés avant le renommage portent l'ancienne étiquette
+ *  (deuxième littéral ci-dessous): ils restent importables pour toujours —
+ *  on n'orpheline pas une sauvegarde pour une histoire de marque. */
 export function importSave(text) {
   const attempt = (raw) => {
     const parsed = JSON.parse(raw);
-    const candidate = parsed && parsed.game === "cookie-craze" ? parsed.state : parsed;
+    const exporte = parsed && (parsed.game === "crumbora" || parsed.game === "cookie-craze");
+    const candidate = exporte ? parsed.state : parsed;
     if (!validateState(candidate)) throw new Error("état invalide");
     return migrate(candidate);
   };

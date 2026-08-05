@@ -1,14 +1,19 @@
-// Service worker de Cookie Craze
+// Service worker de Crumbora
 //
 // Objectif: le jeu doit se lancer instantanément aux visites suivantes et
 // rester jouable hors connexion. Toute la logique tourne côté client et la
 // sauvegarde vit dans localStorage, donc rien d'autre n'est nécessaire — c'est
 // aussi ce qui permet au jeu d'encaisser n'importe quel nombre de joueurs:
 // chaque partie est locale, l'hébergement ne sert que des fichiers statiques.
+//
+// Les caches portent le nouveau nom: l'activation supprime tout cache absent
+// de la liste courante, ceux de l'ancien nom disparaissent donc seuls à la
+// première visite après le renommage. La sauvegarde, elle, vit dans
+// localStorage et ne bouge pas.
 
-const VERSION = "v1";
-const SHELL_CACHE = `cookiecraze-shell-${VERSION}`;
-const ASSET_CACHE = `cookiecraze-assets-${VERSION}`;
+const VERSION = "v2";
+const SHELL_CACHE = `crumbora-shell-${VERSION}`;
+const ASSET_CACHE = `crumbora-assets-${VERSION}`;
 
 // Ressources indispensables au premier écran
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/cookie.png", "/favicon.ico"];

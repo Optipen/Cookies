@@ -1,5 +1,12 @@
 # Rapport final — passe exhaustive Cookie Craze
 
+> **Note du 5 août** : le jeu a été renommé **Crumbora** après cette passe
+> (commit du lot de renommage, tests `rebranding.test.jsx`, vérification
+> `scripts/crumbora.mjs`). Ce rapport conserve le nom sous lequel le jeu a
+> été audité — les mesures, captures et vidéos qu'il cite sont des preuves
+> datées. Les clés de sauvegarde gardent leur préfixe historique, exprès :
+> une partie commencée sous l'ancien nom s'ouvre telle quelle dans Crumbora.
+
 > **Résumé pour lecture rapide, sans connaître le code.**
 >
 > Vingt profils automatisés — des scripts Playwright, jamais des personnes —

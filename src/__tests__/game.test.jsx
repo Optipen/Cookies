@@ -56,7 +56,7 @@ describe("démarrage", () => {
   it("affiche l'écran d'accueil sur une partie neuve", async () => {
     render(<CookieCraze />);
     await act(async () => {});
-    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+    expect(screen.getByText("CRUMBORA")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Commencer à cuire/i })).toBeTruthy();
   });
 
@@ -66,13 +66,13 @@ describe("démarrage", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Commencer à cuire/i }));
     });
-    expect(screen.getByRole("heading", { name: "Cookie Craze" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "CRUMBORA" })).toBeTruthy();
   });
 
   it("charge une partie existante sans repasser par l'accueil", async () => {
     await startGame((s) => (s.cookies = 4242));
-    expect(screen.queryByText("COOKIE CRAZE")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Cookie Craze" })).toBeTruthy();
+    expect(screen.queryByText(/Commencer à cuire/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: "CRUMBORA" })).toBeTruthy();
   });
 });
 
@@ -318,7 +318,7 @@ describe("robustesse", () => {
     localStorage.setItem(SAVE_KEY, "{ ceci n'est pas du json");
     render(<CookieCraze />);
     await act(async () => {});
-    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+    expect(screen.getByText("CRUMBORA")).toBeTruthy();
   });
 
   it("survit à un localStorage indisponible", async () => {
@@ -327,7 +327,7 @@ describe("robustesse", () => {
     });
     render(<CookieCraze />);
     await act(async () => {});
-    expect(screen.getByText("COOKIE CRAZE")).toBeTruthy();
+    expect(screen.getByText("CRUMBORA")).toBeTruthy();
     spy.mockRestore();
   });
 });

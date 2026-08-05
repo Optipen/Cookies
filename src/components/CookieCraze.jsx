@@ -1248,7 +1248,7 @@ export default function CookieCraze() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cookiecraze-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `crumbora-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       notify.banner("Sauvegarde exportée", "success");
@@ -1354,12 +1354,18 @@ export default function CookieCraze() {
             une ligne: le titre rétrécit, et les deux chiffres que la barre de
             production répète mot pour mot disparaissent sous `sm`. */}
         <header className="flex items-center justify-between gap-2 flex-nowrap">
-          <div className="flex items-center gap-2 min-w-0">
+          {/* Le mot-marque ne cède JAMAIS sa place: `shrink-0` le protège du
+              flex — les pastilles de droite, elles, savent passer à la ligne.
+              Sans ça, Chips + CRMB réunies compressaient le nom en
+              « CRUMBO… » sur téléphone. */}
+          <div className="flex items-center gap-2 shrink-0">
             <span className="text-2xl sm:text-3xl drop-shadow-sm shrink-0" aria-hidden="true">
               🍪
             </span>
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-700 to-orange-600 truncate">
-              Cookie Craze
+            {/* Un seul mot, du four au cosmos — l'ambre du cookie file vers
+                le violet céleste, comme la partie elle-même. */}
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-700 via-orange-600 to-purple-700">
+              CRUMBORA
             </h1>
           </div>
 
