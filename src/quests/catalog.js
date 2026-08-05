@@ -148,7 +148,7 @@ export const QUESTS = [
     mid: 600,
     late: 1200,
     cooldownS: 600,
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), buff: buff("cpc", 1.5, 60, "×1,5 au clic") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), buff: buff("cpc", 1.5, 60, "×1,50 au clic") }),
   }),
   {
     id: "click_precision",
@@ -202,7 +202,7 @@ export const QUESTS = [
     pool: MINE_ITEMS,
     qty: (ctx) => byLevel(ctx, 5, 10, 20),
     cooldownS: 420,
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), buff: buff("cps", 1.5, 45, "×1,5 minage") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 150), buff: buff("cps", 1.5, 45, "×1,50 minage") }),
   }),
   {
     id: "diversify",
@@ -218,7 +218,7 @@ export const QUESTS = [
       const kinds = ITEMS.filter((it) => (state.items[it.id] || 0) > 0).length;
       return { progress: Math.min(kinds, meta.kinds), target: meta.kinds, done: kinds >= meta.kinds };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), buff: buff("cps", 1.5, 60, "×1,5 minage") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 200), buff: buff("cps", 1.5, 60, "×1,50 minage") }),
     weight: () => 0.9,
   },
   {
@@ -317,7 +317,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.crypto?.positions || []).length - (meta.stakedAtStart || 0));
       return { progress: Math.min(diff, 1), target: 1, done: diff >= 1 };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 1, buff: buff("cps", 1.5, 60, "×1,5 minage") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 180), crmb: 1, buff: buff("cps", 1.5, 60, "×1,50 minage") }),
     weight: () => 1.2,
   },
   {
@@ -442,7 +442,7 @@ export const QUESTS = [
       const gained = Math.max(0, (state.lifetime || 0) - (meta.lifetimeAtStart || 0));
       return { progress: Math.min(gained, meta.amount), target: meta.amount, done: gained >= meta.amount };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 900), crmb: 2, buff: buff("cps", 2.5, 120, "×2,5 minage") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 900), crmb: 2, buff: buff("cps", 2.5, 120, "×2,50 minage") }),
     weight: () => 1,
   },
   {
@@ -459,7 +459,7 @@ export const QUESTS = [
       const diff = Math.max(0, (state.stats.clicks || 0) - (meta.clicksAtStart || 0));
       return { progress: Math.min(diff, meta.clicks), target: meta.clicks, done: diff >= meta.clicks };
     },
-    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 2, buff: buff("cpc", 2.5, 90, "×2,5 au clic") }),
+    reward: (state, ctx) => ({ cookies: cookieReward(ctx, 600), crmb: 2, buff: buff("cpc", 2.5, 90, "×2,50 au clic") }),
     weight: () => 1,
   },
   {

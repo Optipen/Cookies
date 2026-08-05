@@ -48,8 +48,11 @@ const RewardChips = memo(function RewardChips({ quest, state, ctx }) {
   if (!reward) return null;
 
   const chips = [];
-  if (reward.cookies) chips.push({ key: "c", label: `+${fmt(reward.cookies * (ctx.questMult || 1))}`, cls: "bg-amber-100 text-amber-800 border-amber-300" });
-  if (reward.crmb) chips.push({ key: "m", label: `+${fmtCrmb(reward.crmb * (ctx.questMult || 1), 2)} CRMB`, cls: "bg-cyan-100 text-cyan-800 border-cyan-300" });
+  // Même arithmétique que `resolveReward`: cookies × bonus de quête, PLANCHER
+  // entier — et le CRMB tel quel, parce que le moteur ne le multiplie pas.
+  // La carte annonçait « +1,25 CRMB » quand le joueur allait recevoir 1.
+  if (reward.cookies) chips.push({ key: "c", label: `+${fmt(Math.floor(reward.cookies * (ctx.questMult || 1)))}`, cls: "bg-amber-100 text-amber-800 border-amber-300" });
+  if (reward.crmb) chips.push({ key: "m", label: `+${fmtCrmb(reward.crmb)} CRMB`, cls: "bg-cyan-100 text-cyan-800 border-cyan-300" });
   if (reward.buff) chips.push({ key: "b", label: reward.buff.label, cls: "bg-emerald-100 text-emerald-800 border-emerald-300" });
   if (reward.discount) chips.push({ key: "d", label: reward.discount.label, cls: "bg-violet-100 text-violet-800 border-violet-300" });
 
