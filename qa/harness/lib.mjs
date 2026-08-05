@@ -364,6 +364,10 @@ export function outilsPour(nom, page, dossier, rnd) {
      */
     async clics(cps, secondes, opts = {}) {
       const biscuit = page.locator("[aria-label^='Cliquer le cookie']");
+      // Sur mobile, un achat précédent a pu faire défiler la boutique: le
+      // cookie existe hors de l'écran et des clics aux coordonnées mortes ne
+      // touchent rien — c'est ce qui a mangé les clics de p01/p02 en campagne 1.
+      await biscuit.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
       const boite = await biscuit.boundingBox().catch(() => null);
       if (!boite) {
         o.note("COOKIE-INTROUVABLE", "pas de bouton principal");
