@@ -30,19 +30,28 @@ Le jeu tourne sur deux axes qui fonctionnent **en même temps** :
   **Cliqueurs** ;
 - **Minage** — les cookies générés chaque seconde, porté par les **Mineurs**.
 
-### La grille : des nombres choisis, jamais calculés
+### La règle des nombres : quarts sous cent, entiers dès cent
 
 **Aucun multiplicateur visible n'est le résultat d'un calcul.** Ils sont tous
-pris sur une grille :
+pris sur une grille, en pas de 0,25 à toute magnitude :
 
 ```
 ×1 · ×1,25 · ×1,50 · ×1,75 · ×2 · ×2,25 · ×2,50 · ×2,75 · ×3 …
 ```
 
+Les **valeurs** — cookies, production, prix, gains, bonus — suivent une règle
+à deux étages :
+
+- **sous cent**, seuls les quarts existent : `0 · 0,25 · 0,50 · … · 99,75` ;
+- **à partir de cent**, seuls les entiers : `100 · 125 · 402 · 1 910 · 20 100`.
+
+Un « 401,75 par clic » ou un « 125,50 » n'existe plus, ni à l'écran ni dans la
+banque : c'est la valeur **créditée** qui respecte la règle, pas seulement son
+affichage. Le **CRMB est l'exception assumée**, au centième — voir sa section.
 Ce n'est pas un arrondi d'affichage : la valeur montrée **est** la valeur
 utilisée dans la formule. Un ×1,02 ou un ×2,08 n'est donc pas corrigé, il est
-impossible à produire. Les valeurs, prix et récompenses suivent la même
-logique, sur l'échelle `1 · 2,5 · 5 · 10 · 25 · 50 · 100 · 250 …`.
+impossible à produire. Les seuils et récompenses suivent l'échelle
+`1 · 2,5 · 5 · 10 · 25 · 50 · 100 · 250 …`.
 
 Rien ne donne « +2 % ». Une source de bonus fait **franchir un palier**, et
 franchir un palier ajoute exactement +0,25. Entre deux paliers le nombre ne
@@ -71,7 +80,10 @@ nombre affiché est le nombre calculé. Sans elle, le Curseur — seul bâtiment
 la valeur de base n'est pas entière — sortait de la grille pour 73 % des
 multiplicateurs: `0,25 × 2,5 = 0,625`, que l'écran arrondissait en « +0,63 ».
 Les quinze autres ont une valeur entière et ne sont pas concernés, entier × (k/4)
-tombant toujours sur la grille.
+tombant toujours sur la grille. `grille↓` porte les deux étages de la règle :
+quart en dessous de cent, entier au-delà — avec une conséquence assumée et
+testée : au-delà de cent de puissance, le +0,25 d'un Curseur seul se
+matérialise en **+1 tous les quatre exemplaires**, jamais en perte.
 
 Les sources de bonus **additionnent leurs crans** au lieu de multiplier leurs
 multiplicateurs. C'est le point clé : ×2,25 × ×1,25 vaut ×2,8125, et un Curseur
@@ -137,16 +149,20 @@ le compteur :
 
 ```
    PAR CLIC        CADENCE         CLICS
-     401,75        ≈4,25 /s        1 720 /s
+       402         ≈4,25 /s        ≈1 708 /s
    ─────────────────────────────────────────
-     ⛏️ 1 330/s  +  👆 1 720/s  =  3 050/s
+     ⛏️ 1 330/s  +  👆 ≈1 708/s  =  ≈3 038/s
 ```
 
 La **cadence est mesurée**, pas supposée : moyenne glissante sur trois secondes,
 publiée à 5 Hz, éteinte après une seconde et demie sans clic. Elle s'affiche
-**entière** et préfixée de « ≈ » — c'est la seule forme qui garde le produit
-« puissance × cadence » sur la grille, et la seule précision honnête pour une
-moyenne glissante.
+**arrondie au quart** — ≈4 · ≈4,25 · ≈4,50, jamais ≈4,12 — et préfixée de
+« ≈ » : le quart est la précision de toute la grille du jeu, et c'est la seule
+précision honnête pour une moyenne glissante. La **production des clics en
+découle** — « par clic × cadence affichée », repliée sur la règle des valeurs —
+si bien que le joueur peut refaire le calcul de tête ; comme elle est estimée,
+elle porte le même « ≈ », et le total avec elle tant qu'on clique. Au repos, le
+total vaut le minage **exactement**, sans ≈.
 
 Elle ne compte que les **clics crédités**. Sinon l'écran afficherait « ≈50 /s »
 à côté de « 12 par clic » et le joueur multiplierait deux nombres qui ne se
@@ -169,27 +185,32 @@ règle prime sur les autres : **le texte à l'écran se relit à l'identique**.
 
 | Ce qui s'écrivait | Ce qui s'écrit | Pourquoi |
 | --- | --- | --- |
-| `401,8` | `401,75` | La valeur vaut 401,75. Une décimale supprimée, et 401,75 et 401,80 devenaient le même texte |
-| `1,3` | `1,25` | Idem sur la grille : `fmt` gardait une seule décimale au-dessus de 1 |
+| `401,75` | `401` (la valeur VAUT 401) | Dès cent, la règle interdit les décimales — le pli va vers le bas, à la banque comme à l'écran |
+| `1,3` | `1,25` | Sous cent, les quarts s'affichent entiers de quarts, sans décimale supprimée |
 | `1,72K` | `1 720` | Une abréviation qui fabrique une décimale là où le nombre n'en avait pas |
+| `1,91M` | `1 910K` | Un suffixe ne porte jamais de virgule : la mantisse descend d'un cran et redevient entière |
+| `11,8M` | `11 750K` | Un prix exactement représentable s'affiche EXACTEMENT |
 | `100,00K` | `99 999` | Le solde s'abrégeait dès le millier |
 | `1 000M` | `1B` | L'arrondi à trois chiffres franchissait le millier sans remonter d'un cran |
 
 On n'abrège qu'à partir de **cent mille** (`COMPACT_FROM`) : en dessous, le
-nombre entier tient à l'écran et se lit d'un coup. Au-dessus, personne ne lit
-les chiffres du milieu et la forme compacte devient la plus honnête des deux —
-trois chiffres significatifs, `1,23M` · `12,3M` · `123M`. Au-delà du dernier
-suffixe, on passe en notation scientifique plutôt que d'inventer un nom d'unité.
+nombre entier tient à l'écran et se lit d'un coup. Au-dessus, la forme compacte
+ne porte **jamais de décimale** : trois chiffres significatifs à mantisse
+entière — `123K` · `1 910K` · `20 100K` · `123M` — la mantisse entière la plus
+haute gagnant (`25M`, pas `25 000K`), et un nombre exactement représentable
+s'affiche exactement (`11 750K`). Au-delà du dernier suffixe, on passe en
+notation scientifique plutôt que d'inventer un nom d'unité.
 
 Cinq formateurs, chacun pour un usage :
 
 | | Pour quoi | Exemple |
 | --- | --- | --- |
-| `fmt` | tout nombre de gameplay | `401,75` · `1 720` · `1,23M` |
+| `fmt` | tout nombre de gameplay | `99,75` · `1 720` · `1 910K` |
 | `fmtExact` | valeur de fiche, jamais abrégée | `80 000` |
-| `fmtInt` | le solde, en entier | `1 234` · `1,23M` |
+| `fmtInt` | le solde, en entier | `1 234` · `1 230K` |
 | `fmtMult` | multiplicateur de grille | `×1,50` · `×2` |
-| `fmtApprox` | valeur **mesurée** | `≈4` |
+| `fmtApprox` | valeur **mesurée ou estimée** | `≈4,25` |
+| `fmtCrmb` | montant CRMB, centimes | `1` · `1,5` · `1,05` · `<0,01` |
 
 Le préfixe `≈` n'est pas décoratif : il distingue une valeur calculée d'une
 valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,3 /s » tout
@@ -270,7 +291,7 @@ innocents.
 Une vérification **n'apparaît jamais parce que le joueur est inactif**. Ne pas
 cliquer est une façon légitime de jouer — le minage tourne tout seul.
 
-### CRMB : rare, et jamais détruit par erreur
+### CRMB : rare, en centimes, et jamais détruit par erreur
 
 Le CRMB est une monnaie de **récompense**. On en gagne en terminant des quêtes
 (dix des vingt-six en donnent, 1 à 5 pièces), en décrochant les succès qui
@@ -278,6 +299,18 @@ comptent (0 · 0 · 1 · 2 · 5 selon le palier, 53 pièces pour les cinquante-c
 succès réunis), en renaissant (+5), et par le matériel d'extraction — jamais en
 cuisant des cookies. Le faucet historique versait 0,001 CRMB tous les 20 000
 cookies, soit des centaines de millions en fin de partie.
+
+**Le CRMB vit en centimes** — c'est son exception à la règle des quarts. Tout
+arrondi monétaire est au centième, l'affichage ne dépasse jamais deux
+décimales et retire les zéros inutiles (« 1 », « 1,5 », « 1,05 »). Ce qui est
+plus fin qu'un centime ne se perd pas : le rendement d'un tic — sept
+millionièmes de CRMB pour un vieux CPU — s'accumule dans une réserve interne
+et ne se verse au solde que par centimes pleins. Le taux d'extraction est posé
+au centième par heure **dans le moteur** : « 0,06 CRMB/h » à l'écran, c'est
+0,06 crédité, pas 0,0625. Le cours du marché est un **entier de cookies**, et
+chaque échange règle ses deux jambes dans leur règle : centimes de CRMB contre
+entiers de cookies, arrondis contre le joueur d'au plus un cookie — plafond à
+l'achat, plancher à la vente.
 
 **Un solde valide n'est jamais détruit par un calcul invalide.** `addCrmb`
 rejette le seul delta fautif et conserve le solde. Écrire
@@ -749,7 +782,10 @@ défaut n'a simplement pas été mesuré.
   axes chacun, qui survivent aux ascensions.
 - **55 succès** en 9 catégories, avec récompense en cookies — et en CRMB à
   partir du palier Or.
-- **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes flash.
+- **Événements** : cookies dorés, pluie de miettes, cookie volant, ventes
+  flash. Chaque gain d'événement est **posé sur la règle des valeurs avant
+  d'être crédité** (`src/utils/gains.js`) : une miette à ×2,5 sur un clic de
+  1,25 crédite 3, pas 3,125.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
 
@@ -852,10 +888,13 @@ Le gain marginal du N+1-ième exemplaire, tous bâtiments déjà possédés à N
 | 10⁶ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
 | 10⁹ | +0,25 | +10 000 | +2 · +0,12 | +80 000 · +4 800 | +40 M · +2,4 M |
 
-Le gain ne décroît jamais. Au-delà de 10¹² exemplaires **de chaque bâtiment**,
-un +0,25 passe sous la précision d'un flottant 64 bits ; cet état est de toute
-façon inatteignable, le prix du 10¹²-ième Curseur dépassant l'infini
-représentable.
+Le gain ne décroît jamais. Une nuance depuis la règle des entiers : au-delà de
+cent de puissance, le +0,25 d'un **Curseur seul** ne bouge l'entier affiché — et
+crédité — qu'une fois sur quatre ; quatre Curseurs rendent exactement +1, et
+aucun achat ne rend jamais moins que zéro. Au-delà de 10¹² exemplaires **de
+chaque bâtiment**, un +0,25 passe sous la précision d'un flottant 64 bits ; cet
+état est de toute façon inatteignable, le prix du 10¹²-ième Curseur dépassant
+l'infini représentable.
 
 Raccourcis clavier : `Ctrl`/`Cmd` + `1‑6` pour changer d'onglet.
 
