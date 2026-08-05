@@ -2,6 +2,7 @@ import React, { memo, useMemo } from "react";
 import { availableUpgrades } from "../data/upgrades.js";
 import { ITEM_BY_ID, LABELS } from "../data/items.js";
 import { deriveStats } from "../utils/selectors.js";
+import { snapDown } from "../utils/grid.js";
 import { useClock } from "../hooks/useClock.js";
 import { fmt } from "../utils/format.js";
 
@@ -107,11 +108,13 @@ function Upgrades({ state, stats, onBuy }) {
       } catch {
         // Une condition invalide laisse simplement l'amélioration verrouillée
       }
-      // Le gain annoncé est calculé avec la formule du jeu, pas approché.
+      // Le gain annoncé est calculé avec la formule du jeu, pas approché — et
+      // l'écart AFFICHÉ est plié sur la règle: « entier − quart » au passage
+      // de cent rendrait un 499,25 qui n'existe pas dans ce jeu.
       const next = deriveStats({ ...state, upgrades: { ...state.upgrades, [upgrade.id]: true } }, now, 0);
       const gain = {
-        mining: next.mining - base.mining,
-        click: next.perClickNoCombo - base.perClickNoCombo,
+        mining: snapDown(next.mining - base.mining),
+        click: snapDown(next.perClickNoCombo - base.perClickNoCombo),
       };
       return { upgrade, unlocked, progress, gain, affordable: state.cookies >= upgrade.cost };
     });

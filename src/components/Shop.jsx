@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo, useState } from "react";
 import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
 import { fmt, fmtExact, fmtDuration } from "../utils/format.js";
+import { snapDown } from "../utils/grid.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
 const FlashTimer = memo(function FlashTimer({ until }) {
@@ -204,7 +205,10 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
         const after = isClick ? next.perClickNoCombo : next.mining;
         // Un Mineur augmente aussi le clic, via la part reversée. C'est un
         // second gain, dans une autre unité: il ne s'additionne pas au premier.
-        const gainClick = isClick ? 0 : next.perClickNoCombo - base.perClickNoCombo;
+        // Les ÉCARTS affichés sont pliés sur la règle: quand un achat fait
+        // franchir cent, « entier − quart » rend un 499,25 qui n'existe pas.
+        // Le détail avant → après reste exact pour qui veut vérifier.
+        const gainClick = isClick ? 0 : snapDown(next.perClickNoCombo - base.perClickNoCombo);
 
         const flash =
           state.flags?.flash && state.flags.flash.itemId === item.id && now < state.flags.flash.until
@@ -218,7 +222,7 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
           flash,
           before,
           after,
-          gainMain: after - before,
+          gainMain: snapDown(after - before),
           gainClick,
           unit: LABELS[item.mode].unit,
           isFree: price === 0,
