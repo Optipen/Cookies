@@ -186,7 +186,7 @@ if (!SEULEMENT || SEULEMENT === "complet") {
 // INTÉRESSANTS (achat marquant, quête rendue, doré attrapé, succès), qui est
 // ce que le joueur vit réellement. La stratégie est « equilibre »: un humain,
 // pas un optimiseur parfait.
-if (SEULEMENT === "mecanique") process.exit(0);
+if (SEULEMENT && SEULEMENT !== "rythme") process.exit(0);
 console.log(`\n\n${"=".repeat(110)}\nOBJECTIFS DE RYTHME (joueur normal, 5 clics/s, équilibre, événements réels)\n${"=".repeat(110)}`);
 const ref = play({ clicksPerSecond: 5, durationMs: 30 * J, strategy: "equilibre", decisionS: 10, evenements: { graine: 7 } });
 const refSans = play({ clicksPerSecond: 5, durationMs: 5 * MIN, strategy: "equilibre", decisionS: 10 });

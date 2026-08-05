@@ -128,11 +128,15 @@ export const STRATEGIES = {
 
   /**
    * Alterne consciencieusement un achat de clic, un achat de minage. C'est le
-   * schéma humain le plus répandu: on veut « progresser des deux côtés ».
+   * schéma humain le plus répandu: on veut « progresser des deux côtés » — et
+   * une amélioration ×2 payable fait toujours partie des candidats: un humain
+   * achète le bouton qui brille. L'ancienne version les écartait tant qu'un
+   * bâtiment restait abordable, et le « premier palier » glissait au
+   * troisième jour: un artefact de modèle, pas un fait de jeu.
    */
   equilibre: (list, seed) => {
     const mode = seed % 2 === 0 ? "click" : "mine";
-    const prefere = list.filter((c) => c.kind === "item" && c.item.mode === mode);
+    const prefere = list.filter((c) => c.kind !== "item" || c.item.mode === mode);
     return pick(prefere.length ? prefere : list, (c) => c.gain / Math.max(1, c.price));
   },
 
