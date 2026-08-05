@@ -87,7 +87,9 @@ function Intro({ onStart, soundsOn, onToggleSound }) {
           className="mt-6 grid grid-cols-2 gap-2 text-xs text-stone-300 max-w-sm w-full"
         >
           {[
-            ["🛍️", "15 bâtiments"],
+            // Seize dès la première partie: les huit rangs d'Ascension ne se
+            // promettent pas à quelqu'un qui n'a pas encore cliqué une fois.
+            ["🛍️", "16 bâtiments"],
             ["📜", "Quêtes & quotidiennes"],
             ["🪙", "Marché crypto"],
             ["✨", "Arbre céleste"],
