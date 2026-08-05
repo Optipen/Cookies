@@ -759,7 +759,6 @@ async function ascensionVoies(page, o, rnd) {
 // ---------------------------------------------------------------------------
 async function accessibilite(page, o, rnd) {
   const DUREE = 720;
-  const alea = aleaDe(rnd);
   await attendre(1800);
   // Retour après deux heures: le rapport hors-ligne doit être là.
   const modal = page.locator("[role='dialog']:has-text('Bon retour')");

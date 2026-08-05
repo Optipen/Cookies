@@ -35,11 +35,13 @@ export default [
     rules: { "no-console": "off" },
   },
   {
-    // Outils de mesure lancés à la main (`npx vite-node scripts/…`). Ils
-    // tournent sous Node et n'existent que pour écrire dans la console.
-    files: ["scripts/**/*.mjs"],
-    // `globals.browser` en plus de Node: `scripts/mobile.mjs` fait exécuter du
-    // code DANS la page via `page.evaluate`, donc `document` y est légitime.
+    // Outils de mesure lancés à la main (`npx vite-node scripts/…`) et
+    // harnais de campagne QA (`node qa/harness/campagne.mjs`). Ils tournent
+    // sous Node et n'existent que pour écrire dans la console.
+    files: ["scripts/**/*.mjs", "qa/**/*.mjs"],
+    // `globals.browser` en plus de Node: `scripts/mobile.mjs` et l'auditeur du
+    // harnais font exécuter du code DANS la page via `page.evaluate`, donc
+    // `document` y est légitime.
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: { "no-console": "off" },
   },

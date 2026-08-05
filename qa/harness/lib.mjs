@@ -100,13 +100,13 @@ export function auditerLaPage() {
       violations.push({ cat, texte: m, valeur: v, zone: zoneDe(parent), autour: t.trim().slice(0, 60) });
 
     // --- Nombres à virgule française -------------------------------------
-    const reVirgule = /(\d{1,3}(?:[\s  ]\d{3})+|\d+),(\d+)/g;
+    const reVirgule = /(\d{1,3}(?:[\s\u202F\u00A0]\d{3})+|\d+),(\d+)/g;
     let m;
     while ((m = reVirgule.exec(t)) !== null) {
       const suite = t.slice(m.index + m[0].length, m.index + m[0].length + 4);
       const estPct = /^\s*%/.test(suite);
       const suffixe = SUFFIXES.find((s) => suite.startsWith(s) && !/^[a-z]/.test(suite.slice(s.length)));
-      const v = parseFloat(m[1].replace(/[\s  ]/g, "") + "." + m[2]);
+      const v = parseFloat(m[1].replace(/[\s\u202F\u00A0]/g, "") + "." + m[2]);
       const decimales = m[2].length;
 
       if (suffixe) {
@@ -206,6 +206,7 @@ export function auditerLaPage() {
     solde: soldeEl ? soldeEl.textContent.trim().slice(0, 40) : "?",
     cadenceTexte: cadenceEl ? cadenceEl.textContent.trim().slice(0, 20) : null,
     notifs,
+    etat,
     memoire: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null,
   };
 }
