@@ -4,6 +4,7 @@ import { deriveStats } from "../utils/selectors.js";
 import { prestigeEffects } from "../data/prestige.js";
 import { isFeatureEnabled } from "../utils/state.js";
 import { fmt } from "../utils/format.js";
+import { gainChance, gainJackpot, gainMiette } from "../utils/gains.js";
 
 const cfgFor = (path, fallback) => {
   const mode = tuning?.mode || "standard";
@@ -118,12 +119,15 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
         next.buffs = { cpsMulti: 1, cpcMulti: m, until: now + 15_000, label: `Clic ×${m}` };
         major(`Puissance de clic ×${m} pendant 15 s`, "gold");
       } else if (roll < 0.88) {
-        const bonus = Math.max(prev.cookies * 0.1, stats.cps * 25) * dr;
+        // Le gain est posé sur la règle des valeurs AVANT d'être crédité:
+        // « banque × 10 % » est un nombre quelconque, l'annonce et le solde
+        // doivent dire le même nombre propre.
+        const bonus = gainChance(prev, stats, dr);
         next.cookies = prev.cookies + bonus;
         next.lifetime = prev.lifetime + bonus;
         major(`Chance — +${fmt(bonus)} cookies`, "gold");
       } else {
-        const bonus = stats.cpc * 60 * dr;
+        const bonus = gainJackpot(stats, dr);
         next.cookies = prev.cookies + bonus;
         next.lifetime = prev.lifetime + bonus;
         next.flags = { ...next.flags, discountAll: { value: 0.25, until: now + 45_000 } };
@@ -174,10 +178,12 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
       setState((prev) => {
         const stats = deriveStats(prev);
         // Un cran net tiré au sort plutôt qu'un réel continu: une miette
-        // rapportait « ×2,4713 fois le clic », un nombre que personne ne peut lire.
+        // rapportait « ×2,4713 fois le clic », un nombre que personne ne peut
+        // lire. Et le produit « clic × ×2,5 » est ENSUITE posé sur la règle:
+        // 1,25 × 2,5 = 3,125 n'existe pas, la miette crédite 3.
         const echelle = cfgFor(["events", "rain", "cpc_mults"], [2, 2.5, 3]);
         const mult = echelle[Math.floor(Math.random() * echelle.length)];
-        const gain = Math.max(stats.cpc * mult, stats.cps * 2);
+        const gain = gainMiette(stats, mult);
         return { ...prev, cookies: prev.cookies + gain, lifetime: prev.lifetime + gain };
       });
       audio.play("crunch", 0.25);

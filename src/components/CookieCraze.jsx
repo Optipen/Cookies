@@ -42,6 +42,7 @@ import {
 } from "../utils/selectors.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
+import { gainCroque } from "../utils/gains.js";
 import { offlineGains } from "../utils/offline.js";
 import { STEP } from "../utils/grid.js";
 import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
@@ -1214,7 +1215,9 @@ export default function CookieCraze() {
     const s = stateRef.current;
     const derived = deriveStats(s);
     const count = (s.cookieEatenCount || 0) + 1;
-    const bonus = Math.max(derived.perClick * (count % 5 === 0 ? 120 : 40), derived.mining * 45);
+    // Barème dans `utils/gains.js`, posé sur la règle des valeurs: le bandeau
+    // et le solde annoncent le même nombre propre.
+    const bonus = gainCroque(derived, count);
 
     audio.play("golden", 0.5);
     particlesRef.current?.burstGold(40);
