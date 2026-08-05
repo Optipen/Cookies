@@ -487,13 +487,18 @@ async function crmbSpecialiste(page, o, rnd) {
   }
   await o.shot("crmb-registre");
 
-  // Extraction: trois machines.
+  // Extraction: trois machines — et on VÉRIFIE l'état après chaque achat, la
+  // campagne 1 ayant montré une note d'achat sans machine persistée.
   for (let i = 0; i < 3; i++) {
     const m = page.locator("section:has-text('Extraction') button:enabled").first();
     if (await m.isVisible().catch(() => false)) {
       await m.click().catch(() => {});
-      await attendre(400);
-      o.note("extraction", `machine ${i + 1}`);
+      await attendre(900);
+      const machines = await page.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem("cookieCrazeSaveV6") || "{}");
+        return Object.values((s.crypto && s.crypto.miners) || {}).reduce((a, b) => a + b, 0);
+      });
+      o.note(machines > i ? "extraction" : "EXTRACTION-SANS-EFFET", `clic machine ${i + 1} → ${machines} machine(s) en sauvegarde`);
     }
   }
   await o.shot("crmb-extraction");
