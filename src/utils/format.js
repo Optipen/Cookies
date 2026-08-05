@@ -183,16 +183,16 @@ export function fmtClock(ms) {
 }
 
 /**
- * Montant CRMB. Deux décimales au plus, aucune quand le montant est entier.
- *
- * Les trois décimales fixes dataient du faucet, qui versait 0,001 à la fois.
- * Le CRMB se gagne désormais par unités entières: « 17,000 » se lisait comme
- * dix-sept mille alors qu'il s'agit de dix-sept pièces.
+ * Montant CRMB. DEUX décimales au plus — le CRMB vit en centimes — et aucune
+ * quand elles ne servent pas: « 1 », pas « 1,00 »; « 1,5 », pas « 1,50 »;
+ * « 1,05 » quand le centime compte. Un taux non nul sous le demi-centime
+ * s'annonce « <0,01 » plutôt que de s'afficher « 0 ».
  */
 export function fmtCrmb(n, digits = 2) {
   const v = nombre(n);
   if (v === null || !Number.isFinite(v)) return "∞";
-  return loc(v, digits);
+  if (v > 0 && v < 0.005) return "<0,01";
+  return loc(v, Math.min(2, digits));
 }
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

@@ -267,7 +267,11 @@ export function migrate(savedState, now = Date.now()) {
       perCookies: undefined,
       perAmount: undefined,
       totalEarned: addCrmb(num(oldCrypto.totalEarned), 0),
-      price: num(oldCrypto.price, CRMB.basePrice),
+      // Le cours est un entier de cookies, et les fractions en attente de
+      // versement repartent saines: une valeur négative ou infinie gonflerait
+      // le premier versement suivant.
+      price: Math.round(num(oldCrypto.price, CRMB.basePrice)),
+      pending: Math.max(0, num(oldCrypto.pending)),
       priceHistory: Array.isArray(oldCrypto.priceHistory) && oldCrypto.priceHistory.length
         ? oldCrypto.priceHistory.filter((p) => isFinite(p)).slice(-CRMB.historyLength)
         : [num(oldCrypto.price, CRMB.basePrice)],

@@ -56,7 +56,7 @@ import {
   LEGACY_KEYS,
   PENDING_RESET_KEY,
 } from "../utils/state.js";
-import { buyPrice, sellPrice, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
+import { coutAchatCrmb, gainVenteCrmb, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
 
 import { useAudio } from "../hooks/useAudio.js";
@@ -897,8 +897,10 @@ export default function CookieCraze() {
   const cryptoBuy = useCallback(
     (amount) => {
       const s = stateRef.current;
-      const cost = buyPrice(s.crypto.price) * amount;
-      if (amount <= 0 || s.cookies < cost) {
+      // Chaque jambe dans sa règle: le CRMB en centimes, les cookies en entier.
+      const montant = roundCrmb(amount);
+      const cost = coutAchatCrmb(s.crypto.price, montant);
+      if (montant <= 0 || s.cookies < cost) {
         refuse();
         return;
       }
@@ -908,8 +910,8 @@ export default function CookieCraze() {
         cookies: prev.cookies - cost,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, amount),
-          totalBought: addCrmb(prev.crypto.totalBought, amount),
+          balance: addCrmb(prev.crypto.balance, montant),
+          totalBought: addCrmb(prev.crypto.totalBought, montant),
           realizedPnl: (prev.crypto.realizedPnl || 0) - cost,
         },
       }));
@@ -920,11 +922,12 @@ export default function CookieCraze() {
   const cryptoSell = useCallback(
     (amount) => {
       const s = stateRef.current;
-      if (amount <= 0 || s.crypto.balance < amount) {
+      const montant = roundCrmb(amount);
+      if (montant <= 0 || s.crypto.balance < montant) {
         refuse();
         return;
       }
-      const gain = sellPrice(s.crypto.price) * amount;
+      const gain = gainVenteCrmb(s.crypto.price, montant);
       audio.play("buy", 0.35);
       setState((prev) => ({
         ...prev,
@@ -932,8 +935,8 @@ export default function CookieCraze() {
         lifetime: prev.lifetime + gain,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, -amount),
-          totalSold: addCrmb(prev.crypto.totalSold, amount),
+          balance: addCrmb(prev.crypto.balance, -montant),
+          totalSold: addCrmb(prev.crypto.totalSold, montant),
           realizedPnl: (prev.crypto.realizedPnl || 0) + gain,
         },
       }));
@@ -944,7 +947,10 @@ export default function CookieCraze() {
   const cryptoStake = useCallback(
     (amount, tierId) => {
       const s = stateRef.current;
-      if (amount <= 0 || s.crypto.balance < amount) {
+      // Posé en centimes AVANT toute comparaison: un « 7,499 » saisi au champ
+      // deviendrait sinon une position plus grosse que ce que le solde couvre.
+      const montant = roundCrmb(amount);
+      if (montant <= 0 || s.crypto.balance < montant) {
         refuse();
         return;
       }
@@ -955,12 +961,12 @@ export default function CookieCraze() {
         ...prev,
         crypto: {
           ...prev.crypto,
-          balance: addCrmb(prev.crypto.balance, -amount),
+          balance: addCrmb(prev.crypto.balance, -montant),
           positions: [
             ...prev.crypto.positions,
             {
               id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-              amount: roundCrmb(amount),
+              amount: montant,
               tierId: tier.id,
               startedAt: now,
               unlockAt: now + tier.lockMs,

@@ -40,7 +40,8 @@ describe("P0 — le CRMB était produit puis détruit", () => {
     expect(roundCrmb(NaN)).toBe(0);
     expect(roundCrmb(Infinity)).toBe(0);
     expect(roundCrmb(undefined)).toBe(0);
-    expect(roundCrmb(1.2345678)).toBeCloseTo(1.234568, 6);
+    // L'arrondi monétaire est au centième: le CRMB vit en centimes entiers.
+    expect(roundCrmb(1.2345678)).toBeCloseTo(1.23, 10);
   });
 
   it("garde un solde fini après une migration d'état corrompu", () => {

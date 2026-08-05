@@ -139,13 +139,15 @@ describe("les prix restent lisibles et strictement croissants", () => {
   });
 
   it("s'affiche exactement: le texte à l'écran EST le prix payé", () => {
-    // `compact` sait rendre toute mantisse posée sur les quarts sans la
-    // tronquer — c'est ce qui rend la pose honnête de bout en bout.
-    expect(fmt(5_750_000)).toBe("5,75M");
-    expect(fmt(57_500_000)).toBe("57,5M");
+    // `compact` rend toute mantisse posée sur les quarts EXACTEMENT — et sans
+    // décimale dans le suffixe: la mantisse descend d'un cran pour rester
+    // entière. « 5 750K », jamais « 5,75M » ni « 5,8M ».
+    const esp = (s) => s.replace(/[\s  ]/g, " ");
+    expect(esp(fmt(5_750_000))).toBe("5 750K");
+    expect(esp(fmt(57_500_000))).toBe("57 500K");
     expect(fmt(575_000_000)).toBe("575M");
-    expect(fmt(11_750_000)).toBe("11,75M");
-    expect(fmt(2_750_000_000_000)).toBe("2,75T");
+    expect(esp(fmt(11_750_000))).toBe("11 750K");
+    expect(esp(fmt(2_750_000_000_000))).toBe("2 750B");
     expect(fmt(125_000)).toBe("125K");
   });
 

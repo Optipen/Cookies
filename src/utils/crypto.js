@@ -70,6 +70,8 @@ export const defaultCryptoState = (now = Date.now()) => ({
   totalMined: 0,
   // Contrats du Registre déjà signés: achat définitif, +0,25 par contrat
   ledger: 0,
+  // Fractions de rendement sous le centime, en attente de versement
+  pending: 0,
   // Staking: liste de positions { id, amount, tierId, startedAt, unlockAt }
   positions: [],
   lastYieldTs: now,
@@ -105,6 +107,9 @@ export function stepMarket(crypto, lifetime = 0, rng = Math.random) {
 
   let next = price * (1 + meanReversion + noise * volatility);
   next = Math.max(anchor * CRMB.minPriceFactor, Math.min(anchor * CRMB.maxPriceFactor, next));
+  // Le cours est un ENTIER de cookies: il vaut toujours plusieurs milliers,
+  // et l'écran doit pouvoir afficher exactement ce que le marché applique.
+  next = Math.round(next);
 
   const history = [...(crypto.priceHistory || []), next].slice(-CRMB.historyLength);
   return { price: next, priceHistory: history };
@@ -177,10 +182,14 @@ export function stakingYieldPerSecond(positions = []) {
 
 export const isUnlocked = (position, now = Date.now()) => now >= (position.unlockAt || 0);
 
-// Arrondi monétaire — évite les dérives flottantes cumulées.
+// Arrondi monétaire AU CENTIÈME: le CRMB vit en centimes entiers. C'est la
+// précision de toute l'économie CRMB — solde, échanges, frais, récompenses —
+// et elle supprime les dérives flottantes du genre 0,1 + 0,2. Les fractions
+// plus fines (rendement d'un tic de 500 ms) passent par `accrueCrmb`, qui les
+// garde de côté jusqu'au centime plein.
 // Un montant non fini est ramené à 0 plutôt que propagé: un seul NaN dans une
 // balance la contamine définitivement, et le joueur perd tout sans rien voir.
-export const roundCrmb = (n) => (isFinite(n) ? Math.round((n + Number.EPSILON) * 1e6) / 1e6 : 0);
+export const roundCrmb = (n) => (isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0);
 
 /**
  * Ajoute un montant à un solde, sans jamais faire confiance ni à l'un ni à
@@ -203,6 +212,38 @@ export function addCrmb(solde, delta) {
   if (!isFinite(somme)) return roundCrmb(base);
   return Math.max(0, roundCrmb(somme));
 }
+
+/**
+ * Verse un rendement continu SANS perdre les fractions sous le centime.
+ *
+ * Un vieux CPU produit 0,05 CRMB/h — sept millionièmes par tic de 500 ms.
+ * Arrondi au centime à chaque tic, il ne verserait jamais rien; sans arrondi,
+ * le solde quitterait les centimes. La fraction s'accumule donc dans
+ * `pending`, invisible, et le solde ne reçoit que des centimes entiers.
+ * Un brut invalide est rejeté SEUL, comme dans `addCrmb`.
+ */
+export function accrueCrmb(crypto, brut) {
+  if (typeof brut !== "number" || !isFinite(brut) || brut <= 0) return crypto;
+  const pending = (isFinite(crypto.pending) && crypto.pending > 0 ? crypto.pending : 0) + brut;
+  const centimes = Math.floor(pending * 100 + 1e-9) / 100;
+  if (centimes < 0.01) return { ...crypto, pending };
+  return {
+    ...crypto,
+    balance: addCrmb(crypto.balance, centimes),
+    totalMined: addCrmb(crypto.totalMined, centimes),
+    pending: Math.max(0, pending - centimes),
+  };
+}
+
+/**
+ * Les deux jambes d'un échange au marché, chacune dans sa monnaie et sa règle:
+ * le CRMB en centimes, les cookies en ENTIERS (la règle des valeurs dès cent —
+ * et un cours ne descend jamais sous 7 000). L'arrondi va toujours contre le
+ * joueur d'un cookie au plus: au plafond à l'achat, au plancher à la vente —
+ * jamais de frais caché au-delà, jamais de cookie fantôme.
+ */
+export const coutAchatCrmb = (price, amount) => Math.ceil(buyPrice(price) * roundCrmb(amount));
+export const gainVenteCrmb = (price, amount) => Math.floor(sellPrice(price) * roundCrmb(amount));
 
 // === Le Registre ===
 //

@@ -164,8 +164,11 @@ export function deriveStats(state, now = Date.now(), comboStreak = 0) {
     buffCps: buffMine,
     buffCpc: buffClick,
     perItemMult: computePerItemMult(items, upgrades),
-    // Matériel d'extraction CRMB — sans rapport avec le minage de cookies
-    crmbRate: miningRate(state.crypto?.miners) * prestige.cryptoMult,
+    // Matériel d'extraction CRMB — sans rapport avec le minage de cookies.
+    // Le taux effectif est posé au CENTIÈME par heure: 0,05 × ×1,25 = 0,0625
+    // deviendrait « 0,06 » à l'écran tout en créditant 0,0625. On pose le taux
+    // lui-même: l'écran et le crédit disent le même nombre.
+    crmbRate: Math.floor(miningRate(state.crypto?.miners) * prestige.cryptoMult * 3600 * 100 + 1e-9) / 100 / 3600,
     stakingYield: stakingYieldPerSecond(positions) * prestige.cryptoMult,
   };
 }

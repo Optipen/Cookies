@@ -73,7 +73,8 @@ describe("un solde valide n'est jamais détruit par un calcul invalide", () => {
 
   it("arrondit sans jamais rendre une valeur non finie", () => {
     for (const n of [NaN, Infinity, -Infinity, undefined]) expect(roundCrmb(n)).toBe(0);
-    expect(roundCrmb(1.2345678)).toBeCloseTo(1.234568, 6);
+    // Le CRMB vit désormais en centimes: l'arrondi monétaire est au centième.
+    expect(roundCrmb(1.2345678)).toBeCloseTo(1.23, 10);
   });
 });
 
