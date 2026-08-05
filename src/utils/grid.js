@@ -81,23 +81,33 @@ export function tierState(value, first = 0, entier = true) {
 export const snap = (n) => Math.round(n / STEP) * STEP;
 
 /**
- * Ramène une valeur SUR la grille, par en dessous, sans jamais descendre sous
+ * Frontière de la règle des valeurs: en dessous, les quarts; à partir d'elle,
+ * les entiers.
+ */
+export const ENTIER_DES = 100;
+
+/**
+ * Ramène une VALEUR sur la règle, par en dessous, sans jamais descendre sous
  * un plancher.
  *
- * C'est ce qui règle le cas du Curseur. Sa valeur de base vaut 0,25, et
- * 0,25 × (1 + 0,25k) = k/16 ne retombe sur la grille que si le multiplicateur
- * est entier: 73 % des multiplicateurs donnaient donc +0,3125, +0,5625,
- * +0,8125… que l'écran arrondissait en « +0,31 », « +0,56 », « +0,81 ».
- * L'affiché ne correspondait plus au calculé.
+ *   · sous cent, le pas est le quart:   0 · 0,25 · 0,50 · … · 99,75 ;
+ *   · à partir de cent, le pas est UN:  100 · 125 · 402 · 1 910 · 20 100…
  *
- * En quantifiant la valeur unitaire, le nombre montré EST le nombre utilisé.
- * Les quinze autres bâtiments ont une valeur de base entière: entier × (k/4)
- * tombe toujours sur la grille, la fonction les laisse donc intacts.
+ * La règle porte sur ce que le jeu CRÉDITE, pas seulement sur l'affichage:
+ * un « 401,75 par clic » n'existe plus, il vaut 401 — et c'est 401 que le
+ * clic rapporte. Sous cent, rien ne change: c'est ce qui règle le cas du
+ * Curseur (valeur 0,25), dont 73 % des multiplicateurs sortaient de la
+ * grille avant quantification (+0,3125 affiché « +0,31 »).
+ *
+ * Les MULTIPLICATEURS ne passent pas par ici: un ×101,25 est légal, la règle
+ * des entiers ne concerne que les valeurs de gameplay (cookies, production,
+ * prix, gains). Eux gardent `snap`, en pas de 0,25 à toute magnitude.
  */
 export const snapDown = (n, plancher = 0) => {
   if (!isFinite(n)) return plancher;
-  const cran = Math.floor(n / STEP + 1e-9) * STEP;
-  return Math.max(plancher, Number(cran.toFixed(10)));
+  const pli =
+    n >= ENTIER_DES ? Math.floor(n + 1e-9) : Number((Math.floor(n / STEP + 1e-9) * STEP).toFixed(10));
+  return Math.max(plancher, pli);
 };
 
 /**
