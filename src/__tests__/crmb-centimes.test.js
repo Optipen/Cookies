@@ -96,7 +96,7 @@ describe("le marché et ses frais restent propres", () => {
 describe("l'extraction s'affiche comme elle crédite", () => {
   it("le taux effectif est posé au centième par heure", () => {
     const s = createFreshState(0);
-    s.crypto.miners = { cpu: 1 };
+    s.crypto.miners = { gpu: 1 };
     s.prestige = { chips: 0, spent: 0, upgrades: { crypto_edge: 1 } }; // ×1,25
     const stats = deriveStats(s, 0);
     const parHeure = stats.crmbRate * 3600;
@@ -109,7 +109,7 @@ describe("l'extraction s'affiche comme elle crédite", () => {
 describe("le retour hors-ligne verse des centimes entiers", () => {
   it("plafonne le CRMB hors-ligne au centième, sans fraction fantôme", () => {
     const s = createFreshState(0);
-    s.crypto.miners = { cpu: 2 }; // 0,10/h → 2 h plafonnées × 50 % = 0,10
+    s.crypto.miners = { gpu: 2 }; // 0,10/h → 2 h plafonnées × 50 % = 0,10
     const gains = offlineGains(s, 2 * 3600 * 1000, 0);
     expect(estCentimes(gains.crmb)).toBe(true);
     expect(gains.crmb).toBeCloseTo(0.1, 10);

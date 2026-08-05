@@ -83,7 +83,7 @@ describe("les trois sources de CRMB fonctionnent vraiment", () => {
     const s = partie((x) => (x.crypto.miners = { cpu: 3, gpu: 1 }));
     const d = deriveStats(s, LATER);
     expect(d.crmbRate).toBeGreaterThan(0);
-    expect(d.crmbRate * 3600).toBeCloseTo(3 * 0.05 + 0.25, 6);
+    expect(d.crmbRate * 3600).toBeCloseTo(3 * 0.01 + 0.05, 6);
     expect(d.miningRate).toBeUndefined(); // le nom fautif ne doit pas réapparaître
   });
 
@@ -131,9 +131,9 @@ describe("le CRMB reste rare", () => {
 
   it("n'a aucune source illimitée sans effort", () => {
     // Le matériel se paie en cookies et rapporte peu: le meilleur rig donne
-    // 25 CRMB par heure pour cinq cents milliards de cookies.
+    // 5 CRMB par heure pour cinq cents milliards de cookies.
     for (const m of MINERS) {
-      expect(m.perHour).toBeLessThanOrEqual(25);
+      expect(m.perHour).toBeLessThanOrEqual(5);
       expect(m.base).toBeGreaterThanOrEqual(1e7);
     }
     // Le staking rend au plus 0,1 % par jour: il ne double jamais une mise.

@@ -28,16 +28,21 @@ export const CRMB = {
 
 // === Matériel de minage ===
 //
-// Rendements exprimés en CRMB **par heure**, en nombres ronds. Le meilleur rig
-// rapporte 25 CRMB/h et coûte 500 milliards de cookies: c'est un investissement
-// de fin de partie, pas un robinet. L'ancienne échelle produisait 1,8 CRMB/s,
-// soit 6 480 par heure et par exemplaire.
+// Rendements exprimés en CRMB **par heure**, en centimes ronds. Le meilleur
+// rig rapporte 5 CRMB/h et coûte 500 milliards de cookies: un investissement
+// de fin de partie, pas un robinet.
+// L'échelle précédente (0,05 à 25 CRMB/h, prix ×1,2) rendait l'extraction
+// écrasante au long terme: cinquante mille CRMB au trentième jour simulé,
+// neuf fois les quêtes — une monnaie de récompense noyée par ses machines.
+// Divisée par cinq et renchérie (×1,3 par exemplaire), l'extraction reste un
+// investissement de fin de partie du même ordre que les quêtes, sans jamais
+// descendre sous le centime par heure que l'affichage sait dire.
 export const MINERS = [
-  { id: "cpu", name: "Vieux CPU", emoji: "💻", base: 10_000_000, growth: 1.2, perHour: 0.05, desc: "Un portable qui chauffe. Ça mine, lentement." },
-  { id: "gpu", name: "Carte graphique", emoji: "🎮", base: 100_000_000, growth: 1.2, perHour: 0.25, desc: "Le classique. Bruyant mais efficace." },
-  { id: "asic", name: "Rig ASIC", emoji: "🖥️", base: 1_000_000_000, growth: 1.2, perHour: 1, desc: "Matériel dédié, rendement sérieux." },
-  { id: "farm", name: "Ferme de minage", emoji: "🏗️", base: 25_000_000_000, growth: 1.2, perHour: 5, desc: "Un hangar entier de rigs." },
-  { id: "quantum", name: "Mineur quantique", emoji: "⚛️", base: 500_000_000_000, growth: 1.2, perHour: 25, desc: "Il mine dans plusieurs réalités à la fois." },
+  { id: "cpu", name: "Vieux CPU", emoji: "💻", base: 10_000_000, growth: 1.3, perHour: 0.01, desc: "Un portable qui chauffe. Ça mine, lentement." },
+  { id: "gpu", name: "Carte graphique", emoji: "🎮", base: 100_000_000, growth: 1.3, perHour: 0.05, desc: "Le classique. Bruyant mais efficace." },
+  { id: "asic", name: "Rig ASIC", emoji: "🖥️", base: 1_000_000_000, growth: 1.3, perHour: 0.2, desc: "Matériel dédié, rendement sérieux." },
+  { id: "farm", name: "Ferme de minage", emoji: "🏗️", base: 25_000_000_000, growth: 1.3, perHour: 1, desc: "Un hangar entier de rigs." },
+  { id: "quantum", name: "Mineur quantique", emoji: "⚛️", base: 500_000_000_000, growth: 1.3, perHour: 5, desc: "Il mine dans plusieurs réalités à la fois." },
 ];
 
 // === Paliers de staking ===
