@@ -64,7 +64,33 @@ test minimum (profil de campagne + test unitaire ou planche), et son verdict.
 
 ## 5. Tableau des 20 profils
 
-<!-- PROFILS -->
+Tous les profils sont des **scripts automatisés** (personas simulées) — jamais
+des personnes. Graine fixe par profil: la campagne 2 rejoue les mêmes
+décisions. Les états tardifs viennent de **fixtures datées** (personne n'a
+« attendu dix jours »).
+
+| # | Profil | Écran | Durée | Sauvegarde de départ |
+| --- | --- | --- | --- | --- |
+| 1 | Nouveau très lent | 320×568 | 620 s | aucune (intro) |
+| 2 | Nouveau normal mobile | 390×844 | 620 s | aucune (intro) |
+| 3 | Nouveau ordinateur | 1366×768 | 620 s | aucune (intro) |
+| 4 | Occasionnel ~3 clics/s | 1280×800 | 620 s | petit parc |
+| 5 | Normal ~5 clics/s | 1440×900 | 620 s | petit parc |
+| 6 | Rapide 8–11 clics/s | 1440×900 | 620 s | petit parc |
+| 7 | Très rapide 12–15, rafales | 1440×900 | 620 s | petit parc |
+| 8 | Autoclicker 50 clics/s | 1366×768 | 620 s | petit parc |
+| 9 | Minage seul (2 clics) | 1280×800 | 620 s | parc moyen |
+| 10 | Alternance clics/pauses | 1366×768 | 620 s | petit parc |
+| 11 | Achats au hasard | 1366×768 | 620 s | parc moyen |
+| 12 | Optimiseur | 1440×900 | 620 s | petit parc |
+| 13 | Mauvaise stratégie puis pivot | 1366×768 | 620 s | petit parc |
+| 14 | Spécialiste CRMB | 1440×900 | 780 s | fixture CRMB (64 CRMB, parc) |
+| 15 | Chasseur de quêtes/événements | 1366×768 | 780 s | fixture quêtes |
+| 16 | Sauvegarde v3 | 1280×800 | 620 s | **fixture v3 réelle** (champs morts, combo ×2,6) |
+| 17 | Sauvegardes v4 puis v5 | 1280×800 | 660 s | **fixtures v4 et v5** (staking à plat, chips) |
+| 18 | Prestige + arbre céleste | 1440×900 | 720 s | fixture au seuil (740 M cuits) |
+| 19 | Ascension: Horizon/Éclat/Écho | 1440×900 | 720 s | fixture ascendue (9 ⭐, 6 400 chips) |
+| 20 | Accessibilité | 390×844 | 720 s | fixture + absence 2 h |
 
 ## 6. Résultats avant / après par profil
 
@@ -119,11 +145,57 @@ Voir §2 et `qa/rapport/defauts.md`.
 
 ## 14. Résultats anti-autoclicker
 
-<!-- ANTICHEAT -->
+**En navigateur (campagnes, deux passes concordantes):**
+
+| Profil | Envoyés | Crédités | Vérifications | Verdict |
+| --- | --- | --- | --- | --- |
+| p04 ~3 clics/s | 1 193 | 100 % | 0 | ✓ |
+| p05 ~5 clics/s | 2 110 | 100 % | 0 | ✓ |
+| p06 8–11 clics/s | 3 885 | 100 % | 0 | ✓ |
+| p07 12–15 clics/s en rafales | 4 695 | **99,4 %** | **0** | ✓ aucun faux positif |
+| p08 autoclicker (7 601 synthétiques à 50/s + 4 444 réguliers à ~30/s) | 12 045+ | borné (3 913 au compteur) | **7** — la première en **17 s** | ✓ détecté et borné |
+| p09 inactif 620 s | 2 | — | **0** | ✓ jamais de vérification sur l'inactivité |
+
+Le minage continue onglet caché (p09: +32 776 cookies pendant 120 s masqué) et
+pendant les vérifications. La borne de 15 clics/s crédités est conservée, avec
+la réserve de rafale de 8.
+
+**En unitaire (`anticheat-cadences.test.js`)** — la matrice exigée: 3 · 5 · 8 ·
+11 crédités à 100 % sans vérification; 12–15 en rafales giguées >95 % sans
+vérification; 20/s borné sans accusation (le seau suffit); 50/s borné ET
+vérifié; métronome parfait vérifié même à 8/s; deux rafales à fréquence
+identique repérées sans condamner seules; multitouch >5 doigts signalé;
+10 minutes d'événements synthétiques à cadence humaine jamais condamnées;
+rechargement = garde neuf (non-persistance choisie).
+
+**Limites, sans détour**: protection entièrement côté client. Elle ne prétend
+pas empêcher la modification du `localStorage`, l'appel du moteur en console ni
+la recompilation sans le garde — rien ne le peut sans serveur. La vérification
+se contourne par rechargement, exprès, pour qu'un bug ne puisse enfermer
+personne. Et même bornée, l'automatisation garde un avantage cumulatif (~10×
+sur un an, composé par les renaissances): la borne rend l'écart fini, pas nul.
 
 ## 15. Migrations
 
-<!-- MIGRATIONS -->
+**En navigateur:**
+- **v3** (p16): clé `cookieCrazeSaveV3` **conservée**, partie jouable
+  immédiatement, champs morts écartés, `bestCombo 2,6` ramené à 1,75,
+  session de 620 s sans erreur. Solde CRMB v3 `0,412` migré au centime (0,41).
+- **v4** (p17 phase 1): staking « à plat » (4,5) devenu **position flexible
+  visible** avec bouton Retirer; identifiants d'améliorations legacy écartés.
+- **v5** (p17 phase 2, campagne 2): chips et arbre céleste conservés, Ascension
+  et Registre ajoutés à zéro. (En campagne 1, ce créneau a mesuré autre chose
+  d'aussi précieux: après un `clear()` sauvage suivi d'un rechargement,
+  l'autosauvegarde de `pagehide` restaure la partie en cours — le jeu ne perd
+  pas le joueur, même quand on lui vide le stockage sous les pieds.)
+- **v6 → v6**: rechargements multiples en cours de session (p17, p20) sans
+  dérive; réglages d'accessibilité persistés à travers le rechargement (p20).
+
+**En unitaire** (`migration.test.js`, inchangé et vert): NaN/Infinity assainis,
+quantités négatives écartées seules, types entièrement faux → partie neuve sans
+exception, horloge reculée/avancée de dix ans sans valeur négative, migration
+jouée deux fois → résultat identique, sauvegarde illisible archivée sous
+`cookieCrazeSaveV6_corrupted_<horodatage>`, jamais supprimée.
 
 ## 16. Performances
 
