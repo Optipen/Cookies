@@ -34,8 +34,23 @@ sa correction (commit) ou sa raison de rester, et sa priorité.
 | C2 | P2 | Extraction CRMB à l'année ≈ 10⁵–10⁶ CRMB (3 machines de chaque): les puits (Registre 4 435 au total) sont dépassés de ×100+ au très long terme | simulation 365 j | documenté au rapport §CRMB: « rare et utile » tient jusqu'à ~30 j, plus au-delà — rééquilibrage à décider par le propriétaire |
 | C3 | P2 | Au-delà de 100 de puissance, un Curseur seul (+0,25) ne bouge l'entier qu'une fois sur quatre — conséquence arithmétique assumée de la règle des entiers | test `grille-magnitudes` | documenté; +1 exact par groupe de quatre, jamais de perte |
 
-## En attente de la fin de campagne 1
+| 14 | P1 | Gain affiché d'un achat franchissant cent: « +499,25 /clic » (entier − quart) en boutique et améliorations | campagne 2 (17 textes chez p05, 7 zones « Détail de… ») ; test rouge `gain-affiche` | écarts affichés pliés par `snapDown`; le détail avant → après reste exact; 16 scénarios rejoués → 0 |
 
-- inventaire exhaustif des textes hors règle par zone (analyse.md agrégée) ;
-- verdicts p07 (aucune vérification à 12–15 clics/s) et p08 (borne + vérification) ;
-- p14/p15 (économie CRMB et notifications réelles) ; p18/p19 (prestige, Ascension) ; p20 (accessibilité).
+## Défauts du HARNAIS lui-même (corrigés, comptés à part)
+
+| # | Défaut | Preuve | Correction |
+| --- | --- | --- | --- |
+| H1 | Zone CRMB non reconnue quand « CRMB » et la valeur vivent dans deux nœuds (pastille d'en-tête) → centimes légaux comptés en violations | campagne 1, catégorie quart-requis (10 textes, tous CRMB) | ancêtre court (≤80 car.) mentionnant CRMB qualifie la zone |
+| H2 | Clics mobiles envoyés à des coordonnées mortes après défilement de la boutique (p01: 71 crédités sur 300) | campagne 1, p01/p02 | `scrollIntoViewIfNeeded` avant chaque rafale |
+| H3 | Bascule v5 de p17 annulée par l'autosauvegarde de `pagehide` après `clear()` — le jeu, correctement, reprenait la partie v4 | campagne 1, sondes de migration | bascule one-shot au chargement, avant le code du jeu |
+| H4 | Note d'achat de machine d'extraction sans vérification d'état (p14: note émise, 0 machine persistée) | campagne 1 | vérification de la sauvegarde après chaque clic d'achat |
+| H5 | Auditeur: photographie d'état construite mais jamais retournée | lint no-unused-vars | retournée; chronologies complètes en campagne 2 |
+
+## Verdicts finals (après relance des scénarios marqués)
+
+- **Nombres hors règle: 1 056 (campagne 1) → 0 (campagne 2 + relances), sur les vingt profils.**
+- **Erreurs console: 0 partout, sur les deux campagnes et les relances.**
+- **Régressions: 0** (analyse comparée `qa/rapport/analyse-comparee.md`).
+- p07 (12–15 clics/s humains): **0 vérification** sur les deux campagnes; p08: vérification en ~17 s, 7 puis 8 au total, cadence créditée bornée.
+- p09: minage continu onglet caché (+32 776 en 120 s), aucune vérification d'inactivité.
+- p14: cycle CRMB complet en centimes exacts; p17: v4 → position flexible, v5 → chips/arbre conservés; p19: seconde Ascension avec survie exacte (CRMB, Registre, skin, succès); p20: hors-ligne encaissé au clavier, réglages persistés au rechargement.

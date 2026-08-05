@@ -9,7 +9,7 @@
 > moteur : quarts sous cent, entiers dès cent, CRMB en centimes, cadence au
 > quart, affichage compact sans décimale (« 1 910K »). Chaque gain crédité
 > respecte désormais la règle — pas seulement son affichage. Les campagnes ont
-> produit 40 vidéos, ~600 captures, des chronologies à 20 secondes et zéro
+> produit 40 vidéos, 872 captures, des chronologies à 20 secondes et zéro
 > erreur console sur les deux passes. L'anti-autoclicker ne montre aucun faux
 > positif à 12–15 clics/s humains et détecte l'autoclicker à 50/s en 17
 > secondes. Le simulateur couvre enfin quêtes, événements et hors-ligne
@@ -41,7 +41,37 @@
 
 ## 2. Liste des commits
 
-<!-- COMMITS -->
+Base `402d713` → tête de branche. Un commit par correction ou par outil, chacun raconté au message (le commit du rapport final suit cette liste) :
+
+- `89c341a` Harnais de campagne: vingt profils automatisés, rejouables à la graine
+- `2593d5d` La règle des valeurs: quarts sous cent, entiers à partir de cent
+- `ee5338f` Affichage compact sans décimale: « 1 910K » plutôt que « 1,91M »
+- `3f2ac2a` Cadence affichée au quart, production des clics estimée depuis elle
+- `1d5599b` Lint du harnais QA: globals navigateur, blancs réguliers, état retourné
+- `7922119` Le CRMB vit en centimes, et aucune fraction ne se perd
+- `24c19f5` Les gains d'événements sortent posés sur la règle des valeurs
+- `02f62c2` Quêtes: le contexte mesure le vrai minage, la carte annonce le vrai CRMB
+- `50d0014` L'écran d'accueil compte les bâtiments qui existent: seize
+- `8146fc4` Anti-autoclicker: la matrice des cadences, verrouillée par tests
+- `ae52cda` Le simulateur voit enfin les quêtes, les dorés, les succès et le hors-ligne
+- `22ce69f` Simulateur: temps de décision humain, moments intéressants, cumul traversant
+- `c5fc6ad` Outils de campagne: planches déterministes et analyse comparée
+- `b7211f5` Trois affichages remis sur la règle, et l'inventaire des défauts
+- `e7f375a` README: la règle des nombres telle qu'elle est désormais
+- `ee4c545` Scénario p17: la bascule v5 se fait au chargement, pas après un clear
+- `14a9e3e` Auditeur: la pastille d'en-tête CRMB est bien une zone CRMB
+- `498dc9e` Rapport: squelette en vingt sections et matrice fonctionnelle
+- `b7eee62` Campagne 1 close: synthèse committée, scénario extraction vérifié
+- `decba47` Harnais: le cookie revient à l'écran avant chaque rafale de clics
+- `4c97730` Rapport: profils, anti-autoclicker et migrations — sections closes
+- `7ca24b3` Rapport: la validation sur copie propre est verte de bout en bout
+- `0212ebb` Les gains affichés se plient au passage de cent
+- `7b20329` Stratégie « equilibre »: un humain achète aussi le bouton qui brille
+- `c24ed91` Le rythme, mesuré honnêtement — et les simulations qui vont avec
+- `6898729` README: le facteur huit et les prix réels, plus les commandes de campagne
+- `7cc7b55` Rapport: rythme, équilibre, économie CRMB et simulations — sections chiffrées
+- `4d0b961` Rapport: performances mesurées et limites restantes, sans fard
+
 
 ## 3. Matrice complète des fonctionnalités
 
@@ -97,7 +127,7 @@ décisions. Les états tardifs viennent de **fixtures datées** (personne n'a
 Voir `qa-artifacts/campagne-2/analyse.md` (synthèses des deux campagnes +
 comparaison profil par profil, régressions incluses).
 
-<!-- AVANT-APRES -->
+**Le chiffre-clé : 1 056 nombres hors règle relevés sur les vingt profils avant correction → 0 après** (les seize scénarios encore marqués par l'écart de franchissement de cent ont été rejoués sur le build final, comme exigé). Zéro erreur console des deux côtés, zéro régression détectée. Les écarts de progression notables sont des changements de scénario documentés (§20.6) : p17 joue enfin la vraie bascule v5 (lifetime 5,6e7 → 3,2e11, la fixture v5), p19 reconstruit plus vite après sa seconde Ascension.
 
 ## 7. Index des vidéos
 
@@ -110,7 +140,7 @@ Les vidéos et captures restent des **artefacts de QA locaux** (répertoire
 l'historique). L'environnement d'exécution étant éphémère, l'index et les
 synthèses chiffrées sont, eux, committés sous `qa/rapport/`.
 
-<!-- VIDEOS -->
+**40 vidéos, ~1,6 Go au total** (810 Mo + 806 Mo), une par profil et par campagne ; les seize scénarios rejoués ont leur vidéo de relance (marquée « (relance) » dans l'index, la plus récente retenue).
 
 ## 8. Planches de captures
 
@@ -345,7 +375,11 @@ multipliée par ~50 (famille complète: 5,7e9/s → 6,3e11/s en total au
 
 ## 19. URL et statut de la Preview
 
-<!-- PREVIEW -->
+La branche `claude/cookie-craze-audit-tests-jo1ddp` **seule** a été poussée sur `Optipen/Cookies` — aucune fusion dans main, aucun déploiement manuel, aucun force-push, la branche de sauvegarde `jod0ip` intacte.
+
+Si l'intégration Git du projet Vercel `cookies` (`prj_u8bZmUZiACxcchVQ8KdMaIutqmrr`, équipe Optipen) est active, la Preview du dernier commit se construit automatiquement — c'est elle qu'il faut utiliser, comme demandé.
+
+**Ce que je n'ai pas pu vérifier d'ici, et pourquoi** : l'environnement bloque tout accès réseau à `*.vercel.app` (connexion refusée y compris vers `cookies-gules.vercel.app`, le domaine public connu) et la session n'a pas de connecteur Vercel. Conformément à la consigne, je n'ai PAS contourné (aucun autre projet, aucun déploiement direct). **À réautoriser pour une vérification par mes soins** : un connecteur Vercel, ou l'ouverture réseau vers `vercel.app`. En attendant, contrôle au tableau de bord : projet `cookies` → déploiement du commit de tête de la branche → statut READY, cible *Preview*, projet exact (pas Nyzora, pas cookie-craze), console propre sur l'URL de Preview.
 
 ## 20. Limites restantes
 
