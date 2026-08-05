@@ -13,7 +13,7 @@ import { stakingTier, miningRate, stakingYieldPerSecond, ledgerSteps } from "./c
 import { chipTier } from "./calc.js";
 import { comboMultiplier } from "./combo.js";
 import { creditedRate } from "./rate.js";
-import { lisible, prixLisible, snapDown } from "./grid.js";
+import { lisible, prixLisible, snapDown, STEP } from "./grid.js";
 import tuning from "../data/tuning.json";
 
 export const modeCfg = () => {
@@ -237,11 +237,16 @@ export function productionStats(stats, cadence = 0) {
   const brute = Number(cadence);
   const mesuree = Number.isFinite(brute) && brute > 0 ? brute : 0;
   const creditee = creditedRate(mesuree);
-  // La cadence annoncée est ENTIÈRE: c'est la seule forme qui garde le produit
-  // « puissance × cadence » sur la grille des quarts. « ≈3 /s » est aussi la
-  // seule précision honnête pour une moyenne glissante.
-  const cadenceAffichee = creditee > 0 ? Math.max(1, Math.round(creditee)) : 0;
-  const prodClics = cadenceAffichee > 0 ? stats.perClick * cadenceAffichee : 0;
+  // La cadence annoncée est arrondie au QUART le plus proche: ≈4 · ≈4,25 ·
+  // ≈4,50 — jamais ≈4,12. C'est une moyenne glissante, le « ≈ » le dit; le
+  // quart est la précision de toute la grille du jeu. Elle ne descend jamais
+  // sous un quart tant qu'on clique: afficher « ≈0 » pendant un clic mentirait.
+  const cadenceAffichee = creditee > 0 ? Math.max(STEP, Math.round(creditee / STEP) * STEP) : 0;
+  // La production des clics DÉCOULE de la cadence affichée — le joueur peut
+  // refaire « par clic × cadence » de tête — puis se pose sur la règle des
+  // valeurs, comme tout ce qui s'annonce en cookies. Elle est estimée, et
+  // l'interface la préfixe donc de « ≈ » elle aussi.
+  const prodClics = cadenceAffichee > 0 ? snapDown(stats.perClick * cadenceAffichee) : 0;
   return {
     parClic: stats.perClick,
     cadence: mesuree,
@@ -249,7 +254,10 @@ export function productionStats(stats, cadence = 0) {
     cadenceAffichee,
     prodClics,
     minage: stats.mining,
-    total: stats.mining + prodClics,
+    // Au repos, le total EST le minage — exactement. En jeu actif, la somme de
+    // deux valeurs propres peut franchir cent avec un quart résiduel: on la
+    // replie sur la règle, et le « ≈ » de la ligne couvre ce pli.
+    total: creditee > 0 ? snapDown(stats.mining + prodClics) : stats.mining,
     actif: creditee > 0,
     // La cadence est bornée: le joueur doit pouvoir comprendre pourquoi
     // accélérer encore ne change plus rien.

@@ -55,11 +55,14 @@ describe("les cinq chiffres", () => {
     expect(onGrid(d.sharedClick)).toBe(true);
     expect(productionStats(d, 0).total).toBe(d.mining);
 
-    // Et à cadence non nulle, l'écart au minage vaut exactement ce que les
-    // clics rapportent — rien de plus, rien de moins.
+    // Et à cadence non nulle, l'écart au minage vaut ce que les clics
+    // rapportent, POSÉ SUR LA RÈGLE des valeurs: la production des clics est
+    // « par clic × cadence affichée » replié (quarts sous cent, entiers dès
+    // cent), et le total replie la somme — c'est pour cela que la ligne
+    // active porte un « ≈ ».
     const c = productionStats(d, 4);
-    expect(c.total - c.minage).toBeCloseTo(d.perClick * 4, 9);
-    expect(c.prodClics).toBeCloseTo(d.perClick * 4, 9);
+    expect(c.prodClics).toBe(snapDown(d.perClick * 4));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
   });
 
   it("restent sur la grille même sous un buff en quarts", () => {
@@ -88,10 +91,11 @@ describe("les cinq chiffres", () => {
     }
   });
 
-  it("se lisent comme une phrase: puissance × cadence = production des clics", () => {
+  it("se lisent comme une phrase: puissance × cadence affichée = production des clics", () => {
     const c = productionStats(d, 3);
-    expect(c.prodClics).toBeCloseTo(c.parClic * c.cadence, 9);
-    expect(c.total).toBeCloseTo(c.minage + c.prodClics, 9);
+    expect(c.cadenceAffichee).toBe(3);
+    expect(c.prodClics).toBe(snapDown(c.parClic * c.cadenceAffichee));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
   });
 
   it("ne comptent que les clics crédités", () => {
@@ -112,8 +116,9 @@ describe("les cinq chiffres", () => {
 
   it("gardent la phrase vraie même quand la cadence est bornée", () => {
     const c = productionStats(d, 50);
-    expect(c.prodClics).toBeCloseTo(c.parClic * c.creditee, 9);
-    expect(c.total).toBeCloseTo(c.minage + c.prodClics, 9);
+    expect(c.cadenceAffichee).toBe(c.creditee);
+    expect(c.prodClics).toBe(snapDown(c.parClic * c.cadenceAffichee));
+    expect(c.total).toBe(snapDown(c.minage + c.prodClics));
   });
 
   it("restent finis sur un empire démesuré", () => {

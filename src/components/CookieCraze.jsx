@@ -176,9 +176,9 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Cadence</div>
           <div className="text-sm font-black text-amber-900 tabular-nums leading-tight" data-testid="stat-cadence">
-            {/* Entière: seule forme qui garde « puissance × cadence » sur la
-                grille, et la seule précision honnête pour une moyenne
-                glissante. Le « ≈ » le dit. */}
+            {/* Arrondie au quart — ≈4 · ≈4,25 · ≈4,50 — parce que c'est une
+                moyenne glissante et que le quart est la précision de toute la
+                grille. Elle ne compte que les clics crédités. */}
             {c.actif ? fmtApprox(c.cadenceAffichee) : "—"}
             <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
@@ -186,7 +186,9 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <div className={c.actif ? "" : "opacity-40"}>
           <div className="text-[11px] uppercase tracking-wide text-amber-700/80">Clics</div>
           <div className="text-sm font-black text-amber-700 tabular-nums leading-tight" data-testid="stat-clics">
-            {fmt(c.prodClics)}
+            {/* Estimée depuis la cadence affichée — le joueur peut refaire
+                « par clic × cadence » de tête — donc « ≈ » elle aussi. */}
+            {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}
             <span className="text-[11px] font-semibold opacity-70"> /s</span>
           </div>
         </div>
@@ -208,12 +210,12 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <span className="text-amber-700 font-semibold">
           <span aria-hidden="true">👆 </span>
           <span className="sr-only">Clics </span>
-          {fmt(c.prodClics)}/s
+          {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}/s
         </span>
         <span className="text-amber-400" aria-hidden="true">=</span>
         <span className="font-black text-amber-950">
           <span className="sr-only">Total </span>
-          <span data-testid="stat-total">{fmt(c.total)}</span>/s
+          <span data-testid="stat-total">{c.actif ? fmtApprox(c.total) : fmt(c.total)}</span>/s
         </span>
       </div>
     </div>
