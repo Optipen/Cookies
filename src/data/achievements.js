@@ -88,12 +88,20 @@ export const ACHIEVEMENTS = [
 
 export const ACHIEVEMENT_CATEGORIES = ["clic", "banque", "empire", "minage", "événement", "quête", "crypto", "prestige", "style"];
 
+/**
+ * Les cinq paliers, en « Miel & Braise ».
+ *
+ * Le palier ne change pas de teinte au hasard: il MONTE en intensité de miel,
+ * et seuls les deux derniers empruntent une autre couleur — la menthe du
+ * minage pour Platine, le turquoise du CRMB pour Légendaire. Un joueur voit
+ * la rareté à la luminosité, pas à un arc-en-ciel.
+ */
 export const TIER_STYLE = {
-  1: { label: "Bronze", ring: "ring-amber-600/40", bg: "from-amber-100 to-amber-50", text: "text-amber-900" },
-  2: { label: "Argent", ring: "ring-slate-400/50", bg: "from-slate-100 to-slate-50", text: "text-slate-800" },
-  3: { label: "Or", ring: "ring-yellow-500/50", bg: "from-yellow-100 to-amber-50", text: "text-yellow-900" },
-  4: { label: "Platine", ring: "ring-cyan-400/50", bg: "from-cyan-100 to-sky-50", text: "text-cyan-900" },
-  5: { label: "Légendaire", ring: "ring-fuchsia-400/60", bg: "from-fuchsia-100 to-violet-50", text: "text-fuchsia-900" },
+  1: { label: "Bronze", bg: "bg-honey-deep/10", border: "border-honey-deep/30", text: "text-honey-deep" },
+  2: { label: "Argent", bg: "bg-cream/10", border: "border-cream/25", text: "text-cream/85" },
+  3: { label: "Or", bg: "bg-honey/15", border: "border-honey/40", text: "text-honey-light" },
+  4: { label: "Platine", bg: "bg-mint/10", border: "border-mint/35", text: "text-mint" },
+  5: { label: "Légendaire", bg: "bg-crmb/10", border: "border-crmb/40", text: "text-crmb" },
 };
 
 /**

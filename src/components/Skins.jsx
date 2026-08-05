@@ -1,4 +1,5 @@
 import React, { memo } from "react";
+import Icon from "./Icon.jsx";
 import { fmt } from "../utils/format.js";
 
 const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, missing, onPreview, onStopPreview, onBuy, onEquip }) {
@@ -8,16 +9,12 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
       onMouseLeave={onStopPreview}
       onFocus={() => onPreview(skin.id)}
       onBlur={onStopPreview}
-      className={`relative p-3 rounded-2xl border transition-all duration-200 ${
-        equipped
-          ? "bg-gradient-to-br from-emerald-100 to-teal-50 border-emerald-400 ring-2 ring-emerald-300/50"
-          : owned
-            ? "bg-white/75 border-amber-200 hover:border-amber-400 hover:shadow-lg"
-            : "bg-white/55 border-amber-200/70 hover:border-amber-300"
+      className={`relative rounded-[20px] p-3 transition-all duration-200 ${
+        equipped ? "panel border-mint/40 shadow-[0_0_0_3px_rgba(127,216,168,.07)]" : owned ? "panel" : "panel-muted"
       }`}
     >
       {equipped && (
-        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+        <span className="absolute right-2.5 top-2.5 rounded-full bg-mint px-2 py-0.5 text-[9px] font-extrabold text-ink">
           Équipé
         </span>
       )}
@@ -29,45 +26,46 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
           aria-hidden="true"
           draggable="false"
           loading="lazy"
-          className={`h-16 w-16 shrink-0 select-none drop-shadow-md transition-transform duration-200 hover:scale-110 ${
+          className={`h-16 w-16 shrink-0 select-none transition-transform duration-200 hover:scale-110 ${
             skin.className || ""
-          } ${!owned ? "opacity-60 grayscale-[0.35]" : ""}`}
+          } ${!owned ? "opacity-45 saturate-50" : ""}`}
+          style={{ filter: "drop-shadow(0 8px 16px rgba(0,0,0,.55))" }}
         />
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-amber-950">{skin.name}</div>
-          {skin.description && <div className="text-[11px] text-amber-800/75 leading-snug">{skin.description}</div>}
+          <div className="text-[13px] font-bold text-cream">{skin.name}</div>
+          {skin.description && <div className="text-[10px] leading-snug text-cream/50">{skin.description}</div>}
           {!owned && (
-            <div className="mt-0.5 text-xs font-bold text-amber-700 tabular-nums">
-              {skin.crmb ? `${skin.crmb} CRMB 🪙` : `${fmt(skin.price)} 🍪`}
+            <div
+              className={`mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold tabular-nums ${
+                skin.crmb ? "text-crmb" : "text-honey"
+              }`}
+            >
+              <Icon name={skin.crmb ? "crmb" : "coin"} size={12} />
+              {skin.crmb ? `${skin.crmb} CRMB` : fmt(skin.price)}
             </div>
           )}
         </div>
       </div>
 
-      <div className="mt-2.5">
+      <div className="mt-3">
         {owned ? (
           <button
             type="button"
             onClick={() => onEquip(skin.id)}
             disabled={equipped}
-            className={`w-full min-h-11 px-3 rounded-xl border text-sm font-bold transition-colors ${
-              equipped
-                ? "bg-emerald-500/20 border-emerald-400 text-emerald-800 cursor-default"
-                : "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
+            className={`flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl px-3 text-[12px] ${
+              equipped ? "btn-ghost cursor-default border-mint/40 text-mint" : "btn-honey"
             }`}
           >
-            {equipped ? "✓ Équipé" : "Équiper"}
+            {equipped && <Icon name="check" size={13} />}
+            {equipped ? "Équipé" : "Équiper"}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => onBuy(skin.id)}
             disabled={!affordable}
-            className={`w-full min-h-11 px-3 rounded-xl border text-sm font-bold transition-colors ${
-              affordable
-                ? "bg-amber-500 border-amber-600 text-white hover:bg-amber-400 shadow"
-                : "bg-stone-100 border-stone-200 text-stone-500 cursor-not-allowed"
-            }`}
+            className={`min-h-11 w-full rounded-xl px-3 text-[12px] ${affordable ? "btn-honey" : "btn-dead"}`}
           >
             {affordable
               ? `Acheter · ${skin.crmb ? `${skin.crmb} CRMB` : fmt(skin.price)}`
@@ -85,13 +83,13 @@ function Skins({ state, skins, onBuy, onEquip, onPreview, onStopPreview }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-amber-950">Apparences</h3>
-        <span className="text-[11px] text-amber-700">
+      <div className="flex items-baseline justify-between">
+        <h3 className="eyebrow">Apparences</h3>
+        <span className="text-[10.5px] tabular-nums text-cream/50">
           {ownedCount}/{all.length} débloquées
         </span>
       </div>
-      <p className="text-[11px] text-amber-800/70">Survole un skin pour l&apos;essayer sur le grand cookie.</p>
+      <p className="text-[10px] text-cream/45">Survole un skin pour l&apos;essayer sur le grand cookie.</p>
 
       <div className="space-y-2">
         {all.map((skin) => (

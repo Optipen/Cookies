@@ -12,7 +12,10 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef 
 // Aucun rendu React n'est déclenché par l'animation.
 
 const MAX_PARTICLES = 260;
-const COLORS = ["#8b5a2b", "#6b4423", "#a0522d", "#7b4a2e", "#c98a3f"];
+// Sur fond noir, les miettes cacao de l'ancienne charte disparaissaient. Elles
+// sont maintenant éclairées par la même lumière que le cookie: du miel au
+// caramel brûlé, jamais plus sombre que le fond.
+const COLORS = ["#ffd27a", "#f5b942", "#e88b1a", "#c98a3f", "#b06a25"];
 
 const ParticleLayer = forwardRef(function ParticleLayer({ reducedMotion = false }, ref) {
   const hostRef = useRef(null);
@@ -170,7 +173,7 @@ const ParticleLayer = forwardRef(function ParticleLayer({ reducedMotion = false 
             className: "particle-gold",
             css: `position:absolute;left:0;top:0;width:${size.toFixed(1)}px;height:${size.toFixed(
               1
-            )}px;border-radius:9999px;background:linear-gradient(135deg,#fde68a,#f59e0b);box-shadow:0 0 8px rgba(245,158,11,.7);will-change:transform,opacity;pointer-events:none;`,
+            )}px;border-radius:9999px;background:linear-gradient(135deg,#fff2da,#f5b942);box-shadow:0 0 10px rgba(245,185,66,.85);will-change:transform,opacity;pointer-events:none;`,
           });
         }
       },

@@ -7,8 +7,8 @@
   "display": "standalone",
   "orientation": "any",
   "lang": "fr",
-  "theme_color": "#f59e0b",
-  "background_color": "#fffbeb",
+  "theme_color": "#0b0804",
+  "background_color": "#0b0804",
   "categories": ["games", "entertainment"],
   "icons": [
     {

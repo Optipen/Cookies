@@ -1,4 +1,5 @@
 import React, { memo, useMemo } from "react";
+import Icon from "./Icon.jsx";
 import { availableUpgrades } from "../data/upgrades.js";
 import { ITEM_BY_ID, LABELS } from "../data/items.js";
 import { deriveStats } from "../utils/selectors.js";
@@ -21,15 +22,15 @@ const targetLabel = (upgrade) => {
 const RealGain = memo(function RealGain({ mining, click }) {
   if (mining <= 0 && click <= 0) return null;
   return (
-    <div className="mt-1 flex items-baseline gap-2 text-[11px] tabular-nums">
-      <span className="text-amber-900/60">Gain réel</span>
+    <div className="mt-1.5 flex items-baseline gap-2 text-[10.5px] font-semibold tabular-nums">
+      <span className="text-cream/45">Gain réel</span>
       {mining > 0 && (
-        <span className="font-bold text-emerald-700">
+        <span className="font-extrabold text-mint">
           +{fmt(mining)} {LABELS.mine.unit}
         </span>
       )}
       {click > 0 && (
-        <span className="font-bold text-sky-700">
+        <span className="font-extrabold text-honey-light">
           +{fmt(click)} {LABELS.click.unit}
         </span>
       )}
@@ -47,45 +48,62 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
       onClick={() => onBuy(upgrade)}
       aria-label={`${upgrade.name}, ${unlocked ? `coût ${fmtPrix(upgrade.cost)}` : upgrade.hint}`}
       title={unlocked ? `${fmtExact(upgrade.cost)} cookies` : undefined}
-      className={`w-full p-3 rounded-2xl border text-left transition-all duration-150 ${
+      className={`w-full rounded-[20px] p-3.5 text-left transition-all duration-150 ${
         buyable
-          ? "bg-white/80 border-amber-300 hover:border-amber-400 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg"
+          ? "panel border-honey/30 hover:-translate-y-0.5 hover:border-honey/50"
           : unlocked
-            ? "bg-stone-100/60 border-stone-200 opacity-75 cursor-not-allowed"
-            : "bg-white/40 border-amber-200/60 opacity-70 cursor-not-allowed"
+            ? "panel-muted opacity-80 cursor-not-allowed"
+            : "panel-muted opacity-75 cursor-not-allowed"
       }`}
     >
       <div className="flex items-start gap-2.5">
-        <span className="text-xl leading-none mt-0.5" aria-hidden="true">
-          {upgrade.emoji}
+        <span
+          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl border ${
+            buyable ? "border-honey/25 bg-honey/10 text-honey-light" : "border-honey/10 bg-honey/5 text-cream/40"
+          }`}
+          aria-hidden="true"
+        >
+          <Icon emoji={upgrade.emoji} size={17} />
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="font-semibold text-amber-950 truncate">{upgrade.name}</span>
-            <span className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+            <span className="truncate text-[12.5px] font-bold text-cream">{upgrade.name}</span>
+            <span className="shrink-0 rounded-md bg-mint/15 px-2 py-0.5 text-[10px] font-extrabold text-mint">
               {upgrade.badge}
             </span>
           </div>
-          <div className="text-[11px] text-amber-800/70 truncate">{targetLabel(upgrade)}</div>
+          <div className="truncate text-[10px] text-cream/50">{targetLabel(upgrade)}</div>
           <RealGain mining={gain.mining} click={gain.click} />
         </div>
       </div>
 
       {unlocked ? (
-        <div className={`mt-1.5 text-sm font-bold tabular-nums ${affordable ? "text-amber-700" : "text-stone-500"}`}>
-          {fmtPrix(upgrade.cost)} 🍪
+        <div className="mt-2.5 flex items-center justify-between">
+          <span
+            className={`inline-flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums ${
+              affordable ? "text-honey" : "text-cream/40"
+            }`}
+          >
+            <Icon name="coin" size={13} />
+            {fmtPrix(upgrade.cost)}
+          </span>
+          <span
+            className={`rounded-xl px-4 py-2 text-[11px] font-extrabold ${affordable ? "btn-honey" : "btn-dead"}`}
+          >
+            Acheter
+          </span>
         </div>
       ) : (
-        <div className="mt-1.5">
-          <div className="flex items-center justify-between text-[11px] text-amber-700 mb-1">
-            <span className="truncate">🔒 {upgrade.hint}</span>
-            <span className="tabular-nums shrink-0 ml-2">{Math.floor(progress * 100)} %</span>
+        <div className="mt-2">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] text-cream/45">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <Icon name="lock" size={11} />
+              <span className="truncate">{upgrade.hint}</span>
+            </span>
+            <span className="ml-2 shrink-0 tabular-nums">{Math.floor(progress * 100)} %</span>
           </div>
-          <div className="h-1 rounded-full bg-amber-100 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-[width] duration-500"
-              style={{ width: `${progress * 100}%` }}
-            />
+          <div className="meter h-1">
+            <div className="meter-fill transition-[width] duration-500" style={{ width: `${progress * 100}%` }} />
           </div>
         </div>
       )}
@@ -132,19 +150,29 @@ function Upgrades({ state, stats, onBuy }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-amber-950">Améliorations</h3>
-        <span className="text-[11px] text-amber-700">{Object.keys(state.upgrades || {}).length} achetées</span>
+      <div className="flex items-baseline justify-between">
+        <h3 className="font-display text-xl text-cream-bright">Améliorations</h3>
+        <span className="text-[10.5px] text-cream/50">{Object.keys(state.upgrades || {}).length} achetées</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-amber-100/60 border border-amber-200 px-3 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-amber-700">👆 Puissance de clic</div>
-          <div className="text-sm font-bold text-amber-950 tabular-nums">{fmt(stats.perClickNoCombo)} /clic</div>
+        <div className="rounded-2xl border border-honey/20 bg-honey/[0.07] px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-[8.5px] font-semibold uppercase tracking-[0.12em] text-cream/50">
+            <Icon name="cursor" size={12} className="text-honey" />
+            Puissance de clic
+          </div>
+          <div className="mt-0.5 text-[15px] font-extrabold tabular-nums text-cream">
+            {fmt(stats.perClickNoCombo)} <span className="text-[10px] font-semibold opacity-50">/clic</span>
+          </div>
         </div>
-        <div className="rounded-xl bg-emerald-100/60 border border-emerald-200 px-3 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-emerald-700">⛏️ Minage</div>
-          <div className="text-sm font-bold text-emerald-950 tabular-nums">{fmt(stats.mining)} /s</div>
+        <div className="rounded-2xl border border-mint/20 bg-mint/[0.06] px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-[8.5px] font-semibold uppercase tracking-[0.12em] text-cream/50">
+            <Icon name="pickaxe" size={12} className="text-mint" />
+            Minage
+          </div>
+          <div className="mt-0.5 text-[15px] font-extrabold tabular-nums text-mint">
+            {fmt(stats.mining)} <span className="text-[10px] font-semibold opacity-50">/s</span>
+          </div>
         </div>
       </div>
 
@@ -158,7 +186,7 @@ function Upgrades({ state, stats, onBuy }) {
 
       {rest.length > 0 && (
         <>
-          <div className="text-[11px] font-semibold text-amber-700 pt-1">À venir</div>
+          <div className="eyebrow pt-1">À venir</div>
           <div className="space-y-2">
             {rest.map((r) => (
               <UpgradeCard key={r.upgrade.id} {...r} onBuy={onBuy} />

@@ -3,20 +3,24 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   Crumbora — feuille de style
-   Palette chaude « boulangerie »: ambre, orange et crème, avec des accents
-   cyan (crypto) et violet (prestige). Tout est déclaré une seule fois ici;
-   les composants n'utilisent que des classes Tailwind ou celles définies plus bas.
+   Crumbora — feuille de style « Miel & Braise »
+   Fond noir chaud, verre fumé bordé d'ambre, un seul accent: le miel doré.
+   Le vert menthe reste au minage, le turquoise au CRMB, l'orangé aux urgences.
+   Tout est déclaré une seule fois ici; les composants n'utilisent que des
+   classes Tailwind ou celles définies plus bas.
    ========================================================================== */
 
 :root {
-  --crust: 251 191 36;      /* amber-400  */
-  --crust-deep: 217 119 6;  /* amber-600  */
-  --cream: 255 251 235;     /* amber-50   */
-  --cocoa: 69 26 3;         /* amber-950  */
-  --mint: 16 185 129;       /* emerald-500 */
-  --sky: 6 182 212;         /* cyan-500   */
-  --grape: 139 92 246;      /* violet-500 */
+  --honey: 245 185 66;
+  --honey-light: 255 210 122;
+  --honey-deep: 232 139 26;
+  --cream: 246 234 211;
+  --ink: 11 8 4;
+  --mint: 127 216 168;
+  --crmb: 111 216 207;
+  --lava: 255 154 107;
+
+  color-scheme: dark;
 }
 
 html,
@@ -27,7 +31,9 @@ body,
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: rgb(var(--ink));
+  color: rgb(var(--cream));
+  font-family: Sora, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   /* Empêche le zoom involontaire au double-tap pendant les rafales de clics */
@@ -44,21 +50,161 @@ body {
    Arrière-plan
    ========================================================================== */
 
+/* Noir chaud, avec la lueur du four au-dessus de l'écran et deux braises en
+   bas. Le halo haut est volontairement centré: c'est le grand cookie qui
+   éclaire la pièce. */
 .bg-bakery {
-  background-color: rgb(var(--cream));
+  background-color: #0b0804;
   background-image:
-    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(251, 191, 36, 0.22), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 10% 100%, rgba(249, 115, 22, 0.14), transparent 65%),
-    radial-gradient(ellipse 60% 50% at 90% 90%, rgba(245, 158, 11, 0.12), transparent 65%);
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(245, 185, 66, 0.18), transparent 62%),
+    radial-gradient(ellipse 55% 45% at 8% 100%, rgba(232, 139, 26, 0.1), transparent 65%),
+    radial-gradient(ellipse 60% 50% at 95% 88%, rgba(245, 185, 66, 0.07), transparent 65%);
   background-attachment: fixed;
 }
 
-/* Panneaux translucides */
-.glass-warm {
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.82), rgba(255, 251, 235, 0.62));
-  border: 1px solid rgba(251, 191, 36, 0.28);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+@layer components {
+  /* ------------------------------------------------------------------------
+     Verre fumé
+     Deux profondeurs seulement: `glass-warm` pour les grandes surfaces (scène
+     du cookie, panneau latéral, barre d'onglets), `panel` pour les cartes qui
+     vivent dedans. Trois niveaux d'empilement rendaient le fond illisible.
+     ------------------------------------------------------------------------ */
+  .glass-warm {
+    background:
+      linear-gradient(168deg, rgba(255, 214, 138, 0.07), rgba(255, 214, 138, 0.02)),
+      linear-gradient(168deg, #161009, #0c0805);
+    border: 1px solid rgba(245, 185, 66, 0.16);
+    box-shadow:
+      0 20px 50px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 220, 150, 0.07);
+  }
+
+  /* Le flou est SÉPARÉ du verre, et ce n'est pas cosmétique: `backdrop-filter`
+     fait de l'élément un bloc conteneur pour ses descendants en `position:
+     fixed`. Posé sur le panneau latéral, il emprisonnait la barre d'onglets du
+     bas — elle se retrouvait mille pixels sous l'écran, hors de portée du
+     pouce. On ne l'applique donc qu'aux surfaces qui n'abritent rien de fixe. */
+  .glass-blur {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .panel {
+    background: linear-gradient(160deg, rgba(255, 214, 138, 0.08), rgba(255, 214, 138, 0.03));
+    border: 1px solid rgba(245, 185, 66, 0.14);
+  }
+
+  /* Carte hors de portée: présente, mais éteinte. */
+  .panel-muted {
+    background: rgba(255, 214, 138, 0.03);
+    border: 1px solid rgba(245, 185, 66, 0.1);
+  }
+
+  /* ------------------------------------------------------------------------
+     Boutons
+     ------------------------------------------------------------------------ */
+
+  /* L'action principale, toujours la même: du miel coulé, texte cacao. */
+  .btn-honey {
+    background: linear-gradient(135deg, #ffd27a, #f5b942 45%, #e88b1a);
+    color: #2a1704;
+    border: 1px solid rgba(232, 139, 26, 0.7);
+    box-shadow: 0 6px 24px rgba(232, 139, 26, 0.4);
+    font-weight: 800;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn-honey:hover:not(:disabled) {
+    filter: brightness(1.07);
+    box-shadow: 0 8px 28px rgba(232, 139, 26, 0.55);
+  }
+  .btn-honey:active:not(:disabled) {
+    filter: brightness(0.95);
+  }
+
+  /* L'action secondaire: du verre bordé d'ambre. */
+  .btn-ghost {
+    background: rgba(255, 214, 138, 0.07);
+    color: rgb(var(--cream));
+    border: 1px solid rgba(245, 185, 66, 0.22);
+    font-weight: 700;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 214, 138, 0.13);
+    border-color: rgba(245, 185, 66, 0.38);
+  }
+
+  /* Ce qu'on ne peut pas encore s'offrir. Jamais gris souris: du miel éteint. */
+  .btn-dead {
+    background: rgba(255, 214, 138, 0.05);
+    color: rgba(246, 234, 211, 0.4);
+    border: 1px solid rgba(245, 185, 66, 0.1);
+    cursor: not-allowed;
+  }
+
+  /* ------------------------------------------------------------------------
+     Étiquettes et pastilles
+     ------------------------------------------------------------------------ */
+
+  /* Le petit intertitre en capitales espacées de la maquette. */
+  .eyebrow {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #e88b1a;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    white-space: nowrap;
+    background: rgba(255, 214, 138, 0.08);
+    border: 1px solid rgba(245, 185, 66, 0.22);
+    color: #f5b942;
+  }
+  .pill-mint {
+    background: rgba(127, 216, 168, 0.08);
+    border-color: rgba(127, 216, 168, 0.24);
+    color: #7fd8a8;
+  }
+  .pill-crmb {
+    background: rgba(111, 216, 207, 0.08);
+    border-color: rgba(111, 216, 207, 0.24);
+    color: #6fd8cf;
+  }
+  .pill-lava {
+    background: rgba(255, 154, 107, 0.1);
+    border-color: rgba(255, 154, 107, 0.26);
+    color: #ff9a6b;
+  }
+
+  /* ------------------------------------------------------------------------
+     Jauges — un seul rail, trois remplissages
+     ------------------------------------------------------------------------ */
+  .meter {
+    border-radius: 9999px;
+    background: rgba(255, 214, 138, 0.1);
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffd27a, #e88b1a);
+    box-shadow: 0 0 10px rgba(245, 185, 66, 0.45);
+  }
+  .meter-fill-mint {
+    background: linear-gradient(90deg, #9fe8c4, #4db386);
+    box-shadow: 0 0 10px rgba(127, 216, 168, 0.45);
+  }
+  .meter-fill-lava {
+    background: linear-gradient(90deg, #ff9a6b, #ff5c38);
+    box-shadow: 0 0 10px rgba(255, 92, 56, 0.45);
+  }
 }
 
 /* ==========================================================================
@@ -70,17 +216,17 @@ body {
 .particle-text {
   font-size: 0.95rem;
   font-weight: 900;
-  color: #fffbeb;
+  color: #ffd27a;
   paint-order: stroke fill;
-  -webkit-text-stroke: 3px rgba(69, 26, 3, 0.85);
-  text-shadow: 0 2px 4px rgba(69, 26, 3, 0.45);
+  -webkit-text-stroke: 3px rgba(11, 8, 4, 0.9);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
   letter-spacing: -0.01em;
 }
 
 .particle-crumb,
 .particle-gold {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* ==========================================================================
@@ -107,7 +253,7 @@ body {
     transform: scale(1);
   }
   50% {
-    opacity: 0.85;
+    opacity: 0.9;
     transform: scale(1.06);
   }
 }
@@ -143,11 +289,11 @@ body {
 @keyframes golden-glow {
   0%,
   100% {
-    box-shadow: 0 0 22px rgba(250, 204, 21, 0.65);
+    box-shadow: 0 0 22px rgba(245, 185, 66, 0.7);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 40px rgba(250, 204, 21, 0.95);
+    box-shadow: 0 0 46px rgba(255, 210, 122, 1);
     transform: scale(1.08);
   }
 }
@@ -206,7 +352,7 @@ body {
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(217, 119, 6, 0.35) transparent;
+  scrollbar-color: rgba(245, 185, 66, 0.3) transparent;
 }
 .scrollbar-thin::-webkit-scrollbar {
   width: 7px;
@@ -216,11 +362,11 @@ body {
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(217, 119, 6, 0.3);
+  background: rgba(245, 185, 66, 0.25);
   border-radius: 9999px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(217, 119, 6, 0.5);
+  background: rgba(245, 185, 66, 0.45);
 }
 
 /* ==========================================================================
@@ -236,27 +382,34 @@ body {
 
 /* Focus visible cohérent, jamais supprimé */
 :focus-visible {
-  outline: 2px solid rgb(217, 119, 6);
+  outline: 2px solid #f5b942;
   outline-offset: 2px;
 }
 
-/* Mode contraste élevé: on renforce bordures et textes plutôt que d'inverser */
-.high-contrast {
-  --tw-text-opacity: 1;
-}
-.high-contrast .glass-warm {
-  background: #ffffff;
-  border-color: #92400e;
+/* Mode contraste élevé: sur fond noir, on OPACIFIE le verre et on renforce les
+   bordures plutôt que d'inverser la charte. Le texte crème passe au blanc. */
+.high-contrast .glass-warm,
+.high-contrast .panel,
+.high-contrast .panel-muted,
+.high-contrast .glass-blur {
+  background: #14100a;
+  border-color: #f5b942;
   border-width: 2px;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .high-contrast button {
   border-width: 2px !important;
 }
-.high-contrast .text-amber-800\/70,
-.high-contrast .text-amber-800\/75,
-.high-contrast .text-amber-800\/80 {
-  color: rgb(120 53 15) !important;
+.high-contrast .text-cream\/70,
+.high-contrast .text-cream\/60,
+.high-contrast .text-cream\/50,
+.high-contrast .text-cream\/45,
+.high-contrast .text-cream\/40 {
+  color: #fff8ea !important;
+}
+.high-contrast .eyebrow {
+  color: #ffd27a;
 }
 
 .sr-only {

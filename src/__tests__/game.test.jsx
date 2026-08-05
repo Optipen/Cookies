@@ -79,9 +79,9 @@ describe("démarrage", () => {
 describe("boucle de jeu", () => {
   it("crédite des cookies au clic", async () => {
     await startGame();
-    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
     await clickCookie();
-    expect(screen.getByText(/👆 Clics :/).textContent).toContain("1");
+    expect(screen.getByText(/^Clics :/).textContent).toContain("1");
   });
 
   it("achète un bâtiment et met à jour la production", async () => {
@@ -115,9 +115,9 @@ describe("boucle de jeu", () => {
 describe("combo", () => {
   it("affiche la jauge dès le premier clic", async () => {
     await startGame();
-    expect(screen.queryByText(/🔥 Combo/)).toBeNull();
+    expect(screen.queryByText("Combo")).toBeNull();
     await clickCookie();
-    expect(screen.getByText(/🔥 Combo/)).toBeTruthy();
+    expect(screen.getByText("Combo")).toBeTruthy();
   });
 
   it("rapporte davantage sur une rafale que sur des clics isolés", async () => {
@@ -213,7 +213,7 @@ describe("prestige", () => {
 
     expect(screen.queryByTestId("confirmation")).toBeNull();
     // La partie repart de zéro et les chips sont crédités
-    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
     expect(chipsAttendus).toBeGreaterThan(0);
     expect(screen.getAllByText(String(chipsAttendus), { selector: ".text-lg" }).length).toBeGreaterThan(0);
   });
@@ -257,7 +257,7 @@ describe("réinitialisation", () => {
     });
 
     expect(screen.queryByTestId("confirmation")).toBeNull();
-    expect(screen.getByText(/👆 Clics :/).textContent).toContain("0");
+    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
   });
 });
 

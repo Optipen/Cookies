@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
+import Icon from "./Icon.jsx";
 import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
 import { fmt, fmtExact, fmtPrix, fmtDuration } from "../utils/format.js";
@@ -45,11 +46,7 @@ const ItemCard = memo(function ItemCard({
   const clic = item.mode === "click";
 
   return (
-    <div
-      className={`rounded-2xl border overflow-hidden transition-colors ${
-        achetable ? "bg-white/85 border-amber-200" : "bg-stone-100/70 border-stone-200"
-      }`}
-    >
+    <div className={`overflow-hidden rounded-[20px] transition-colors ${achetable ? "panel" : "panel-muted"}`}>
       <div className="flex items-stretch">
         {/* Zone d'information: ouvre le détail. Large, donc facile à viser. */}
         <button
@@ -57,26 +54,28 @@ const ItemCard = memo(function ItemCard({
           onClick={onToggle}
           aria-expanded={ouverte}
           aria-label={`Détail de ${item.name}`}
-          className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left active:bg-amber-50/60"
+          className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left transition-colors active:bg-honey/[0.06]"
         >
           <span
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-2xl ${
-              clic ? "bg-amber-100" : "bg-emerald-100"
-            } ${achetable ? "" : "grayscale opacity-70"}`}
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border ${
+              clic
+                ? "border-honey/20 bg-honey/10 text-honey-light"
+                : "border-mint/25 bg-mint/10 text-mint"
+            } ${achetable ? "" : "opacity-50 saturate-50"}`}
             aria-hidden="true"
           >
-            {item.emoji}
+            <Icon emoji={item.emoji} size={20} />
           </span>
 
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline gap-1.5">
-              <span className="font-bold text-amber-950 leading-tight line-clamp-2">{item.name}</span>
+              <span className="text-[12.5px] font-bold leading-tight text-cream line-clamp-2">{item.name}</span>
               {owned > 0 && (
-                <span className="shrink-0 text-xs font-semibold text-amber-600 tabular-nums">×{owned}</span>
+                <span className="shrink-0 text-[10px] font-semibold text-honey tabular-nums">×{owned}</span>
               )}
             </span>
             {/* Le gain réel, en gros: c'est la seule chose qui décide l'achat. */}
-            <span className={`block text-sm font-bold tabular-nums ${clic ? "text-amber-700" : "text-emerald-700"}`}>
+            <span className={`block text-[11px] font-bold tabular-nums ${clic ? "text-honey-light" : "text-mint"}`}>
               +{fmt(gainMain)} {unit}
             </span>
           </span>
@@ -90,25 +89,25 @@ const ItemCard = memo(function ItemCard({
           disabled={!achetable}
           aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmtPrix(price)} cookies`}
           title={isFree ? undefined : `${fmtExact(price)} cookies`}
-          className={`relative w-24 sm:w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
+          className={`relative w-[5.5rem] sm:w-24 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l border-honey/15 transition-all ${
             achetable
-              ? "border-amber-200 bg-gradient-to-b from-amber-400 to-orange-500 text-white active:from-amber-500 active:to-orange-600"
-              : "border-stone-200 bg-stone-200/60 text-stone-500 cursor-not-allowed"
+              ? "bg-gradient-to-b from-honey-light to-honey-deep text-honey-dark active:brightness-95"
+              : "bg-honey-light/[0.04] text-cream/40 cursor-not-allowed"
           }`}
         >
           {flash && (
-            <span className="absolute -top-0.5 right-1 px-1.5 rounded-full text-[11px] font-bold bg-red-600 text-white shadow">
+            <span className="absolute -top-px right-1 rounded-full bg-lava-deep px-1.5 text-[9px] font-extrabold text-cream-bright">
               -{Math.round(flash.discount * 100)} % <FlashTimer until={flash.until} />
             </span>
           )}
-          <span className="text-[11px] font-semibold uppercase tracking-wide opacity-90">
+          <span className="text-[8.5px] font-semibold uppercase tracking-[0.1em] opacity-80">
             {isFree ? "Offert" : qty > 1 ? `Acheter ×${qty}` : "Acheter"}
           </span>
           {/* Le prix affiché EST le prix payé: plein sous le million, compact
               seulement quand il est exact — jamais « 125K » pour 124 800. */}
-          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmtPrix(price)}</span>
+          <span className="text-[13px] font-extrabold tabular-nums">{isFree ? "0" : fmtPrix(price)}</span>
           {!achetable && eta != null && eta <= 86_400_000 && (
-            <span className="text-[11px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
+            <span className="text-[9px] tabular-nums opacity-70">~{fmtDuration(eta)}</span>
           )}
         </button>
       </div>
@@ -116,37 +115,37 @@ const ItemCard = memo(function ItemCard({
       {/* Barre de progression vers l'achat: le prochain objectif est toujours
           visible, même quand on ne peut pas encore se l'offrir. */}
       {!achetable && (
-        <div className="h-1 bg-stone-200" aria-hidden="true">
+        <div className="h-1 bg-honey-light/[0.08]" aria-hidden="true">
           <div
-            className="h-full bg-gradient-to-r from-amber-300 to-orange-400 transition-[width] duration-300"
+            className="h-full bg-gradient-to-r from-honey-light to-honey-deep transition-[width] duration-300"
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>
       )}
 
       {ouverte && (
-        <div className="px-3 pb-3 pt-1 text-[11px] tabular-nums border-t border-amber-100 bg-amber-50/50">
-          <p className="text-amber-800/80 mb-1.5 not-italic">{item.desc}</p>
+        <div className="border-t border-honey/10 bg-honey/[0.04] px-3.5 pb-3 pt-2 text-[11px] tabular-nums">
+          <p className="mb-2 not-italic text-cream/55">{item.desc}</p>
           <dl className="space-y-1">
             <div className="flex justify-between gap-2">
-              <dt className="text-amber-900/60">Valeur de base</dt>
-              <dd className="font-semibold text-amber-900">
+              <dt className="text-cream/45">Valeur de base</dt>
+              <dd className="font-semibold text-cream">
                 +{fmtExact(item.value)} {unit}
               </dd>
             </div>
             {gainClick > 0 && (
               <div className="flex justify-between gap-2">
-                <dt className="text-amber-900/60">Aussi, en puissance de clic</dt>
-                <dd className="font-semibold text-sky-700">
+                <dt className="text-cream/45">Aussi, en puissance de clic</dt>
+                <dd className="font-semibold text-honey-light">
                   +{fmt(gainClick)} {LABELS.click.unit}
                 </dd>
               </div>
             )}
             <div className="flex justify-between gap-2">
-              <dt className="text-amber-900/60">{LABELS[item.mode].axis}</dt>
-              <dd className="text-amber-900">
+              <dt className="text-cream/45">{LABELS[item.mode].axis}</dt>
+              <dd className="text-cream/70">
                 {fmt(before)} <span aria-hidden="true">→</span>{" "}
-                <span className="font-bold text-emerald-700">
+                <span className="font-bold text-mint">
                   {fmt(after)} {unit}
                 </span>
               </dd>
@@ -159,15 +158,17 @@ const ItemCard = memo(function ItemCard({
 });
 
 const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ouverte, onToggle }) {
+  const mine = label === LABELS.mine;
   if (!rows.length) return null;
   return (
     <section className="space-y-2">
-      <header className="flex items-baseline justify-between gap-2 px-0.5">
-        <h4 className="text-sm font-bold text-amber-900">
-          {label.icon} {label.many}
-        </h4>
-        <span className="text-[11px] text-amber-700 tabular-nums">
-          <b>{fmt(total)}</b> {unit}
+      {/* L'intertitre en capitales espacées: la famille à gauche, ce qu'elle
+          rapporte à droite. Le miel pour les Cliqueurs, la menthe pour les
+          Mineurs — la couleur dit déjà de quel axe on parle. */}
+      <header className="flex items-baseline justify-between gap-2 px-1">
+        <h4 className={`eyebrow ${mine ? "text-mint" : ""}`}>{label.many}</h4>
+        <span className="text-[10.5px] text-cream/50 tabular-nums">
+          <b className={mine ? "text-mint" : "text-honey"}>{fmt(total)}</b> {unit}
         </span>
       </header>
       {rows.map((r) => (

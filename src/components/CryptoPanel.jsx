@@ -1,4 +1,5 @@
 import React, { memo, useMemo, useState } from "react";
+import Icon from "./Icon.jsx";
 import {
   CRMB,
   MINERS,
@@ -33,12 +34,13 @@ const PriceChart = memo(function PriceChart({ history }) {
     return { line: `M ${pts.join(" L ")}`, area: `M 0,${h} L ${pts.join(" L ")} L ${w},${h} Z` };
   }, [history]);
 
-  if (!path) return <div className="h-8" />;
+  if (!path) return <div className="h-16" />;
   const up = history[history.length - 1] >= history[0];
-  const color = up ? "#059669" : "#dc2626";
+  // Le cours monte en turquoise (la couleur du CRMB), descend en braise.
+  const color = up ? "#6fd8cf" : "#ff5c38";
 
   return (
-    <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="w-full h-8" role="img" aria-label="Évolution du cours CRMB">
+    <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="w-full h-16" role="img" aria-label="Évolution du cours CRMB">
       <defs>
         <linearGradient id="crmb-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -59,23 +61,22 @@ const StakePosition = memo(function StakePosition({ position, onUnstake }) {
   const remaining = Math.max(0, (position.unlockAt || 0) - now);
 
   return (
-    <li className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/70 border border-cyan-200">
-      <div className="min-w-0">
-        <div className="text-sm font-bold text-cyan-950 tabular-nums">{fmtCrmb(position.amount)} CRMB</div>
-        <div className="text-[11px] text-cyan-700">
+    <li className="flex items-center justify-between gap-2 rounded-2xl border border-crmb/20 bg-crmb/5 p-2.5">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border border-crmb/25 bg-crmb/10 text-crmb">
+        <Icon name="lock" size={17} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[12px] font-bold tabular-nums text-cream">{fmtCrmb(position.amount)} CRMB</div>
+        <div className="text-[10px] text-cream/50">
           {tier.name} · {fmtPct(tier.perDay)} par jour
-          {!unlocked && <span className="text-orange-600"> · 🔒 {fmtDuration(remaining)}</span>}
+          {!unlocked && <span className="text-lava"> · {fmtDuration(remaining)}</span>}
         </div>
       </div>
       <button
         type="button"
         onClick={() => onUnstake(position.id)}
         disabled={!unlocked}
-        className={`shrink-0 text-xs min-h-11 px-2.5 rounded-lg border font-semibold transition-colors ${
-          unlocked
-            ? "bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-50"
-            : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
-        }`}
+        className={`min-h-11 shrink-0 rounded-xl px-3 text-[11px] ${unlocked ? "btn-ghost" : "btn-dead"}`}
       >
         {unlocked ? "Retirer" : "Verrouillé"}
       </button>
@@ -112,45 +113,42 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
   return (
     <div className="space-y-4">
       {/* --- Marché --- */}
-      <section className="rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-sky-50 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="text-base font-bold text-cyan-950 flex items-center gap-1.5">🪙 CrumbCoin</h3>
-            <div className="text-[11px] text-cyan-700">Marché en temps réel</div>
-          </div>
-          <div className="text-right">
-            <div className="text-lg font-black text-cyan-900 tabular-nums leading-none">{fmt(price)}</div>
-            <div className={`text-xs font-bold tabular-nums ${trend >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-              {trend >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(trend), 1)}
-            </div>
-          </div>
+      <section className="rounded-3xl border border-crmb/20 bg-gradient-to-br from-crmb/[0.09] to-crmb/[0.02] p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="font-display text-xl text-cream-bright">CrumbCoin</h3>
+          <span className="text-[11px] font-bold tabular-nums text-crmb">1 CRMB = {fmt(price)}</span>
+        </div>
+
+        <div className="mt-2.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-cream/45">Portefeuille</div>
+        <div className="flex items-baseline gap-2">
+          <span data-testid="crmb-solde" className="text-[2rem] font-extrabold leading-none tabular-nums text-crmb">
+            {fmtCrmb(crypto.balance || 0)}
+          </span>
+          <span className="text-[11px] font-bold text-crmb/60">CRMB</span>
+          {/* centimes × cours entier peut rendre un demi-cookie: la valeur
+              indicative s'affiche en entier plancher, comme toute estimation. */}
+          <span className="text-[10.5px] tabular-nums text-cream/45">
+            ≈ {fmt(Math.floor((crypto.balance || 0) * price))} cookies
+          </span>
         </div>
 
         <PriceChart history={crypto.priceHistory} />
 
-        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="rounded-lg bg-white/70 border border-cyan-200 px-2 py-1.5">
-            <div className="text-cyan-700">Portefeuille</div>
-            <div data-testid="crmb-solde" className="font-bold text-cyan-950 tabular-nums">
-              {fmtCrmb(crypto.balance || 0)} CRMB
-            </div>
-          </div>
-          <div className="rounded-lg bg-white/70 border border-cyan-200 px-2 py-1.5">
-            <div className="text-cyan-700">Valeur</div>
-            {/* centimes × cours entier peut rendre un demi-cookie: la valeur
-                indicative s'affiche en entier plancher, comme toute estimation. */}
-            <div className="font-bold text-cyan-950 tabular-nums">{fmt(Math.floor((crypto.balance || 0) * price))}</div>
-          </div>
+        <div className="flex items-center justify-between text-[9px] font-semibold tabular-nums text-cream/35">
+          <span>historique</span>
+          <span className={trend >= 0 ? "text-mint" : "text-lava"}>
+            {trend >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(trend), 1)}
+          </span>
         </div>
 
-        <div className="mt-2 flex gap-1" role="group" aria-label="Quantité à échanger">
+        <div className="mt-3 flex gap-1.5" role="group" aria-label="Quantité à échanger">
           {amounts.map((a) => (
             <button
               key={a}
               type="button"
               onClick={() => setTradeAmount(a)}
-              className={`flex-1 text-xs min-h-11 rounded-md border font-semibold transition-colors ${
-                tradeAmount === a ? "bg-cyan-600 border-cyan-600 text-white" : "bg-white/70 border-cyan-200 text-cyan-800 hover:bg-cyan-50"
+              className={`min-h-11 flex-1 rounded-xl text-[11px] ${
+                tradeAmount === a ? "btn-honey" : "btn-ghost"
               }`}
             >
               {a}
@@ -163,32 +161,26 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             type="button"
             onClick={() => onBuy(tradeAmount)}
             disabled={!canBuy}
-            className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
-              canBuy
-                ? "bg-emerald-500 border-emerald-600 text-white hover:bg-emerald-400 shadow hover:shadow-md"
-                : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
-            }`}
+            className={`rounded-2xl px-3 py-2.5 text-[13px] ${canBuy ? "btn-honey" : "btn-dead"}`}
           >
             Acheter
-            <span className="block text-[11px] font-normal tabular-nums opacity-90">{fmtPrix(buyCost)} 🍪</span>
+            <span className="block text-[10px] font-semibold tabular-nums opacity-75">{fmtPrix(buyCost)}</span>
           </button>
           <button
             type="button"
             onClick={() => onSell(tradeAmount)}
             disabled={!canSell}
-            className={`px-3 py-2 rounded-lg text-sm font-bold border transition-all ${
-              canSell
-                ? "bg-red-500 border-red-600 text-white hover:bg-red-400 shadow hover:shadow-md"
-                : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
+            className={`rounded-2xl px-3 py-2.5 text-[13px] ${
+              canSell ? "btn-ghost border-crmb/35 text-crmb" : "btn-dead"
             }`}
           >
             Vendre
-            <span className="block text-[11px] font-normal tabular-nums opacity-90">+{fmtPrix(sellGain)} 🍪</span>
+            <span className="block text-[10px] font-semibold tabular-nums opacity-75">+{fmtPrix(sellGain)}</span>
           </button>
         </div>
-        <p className="mt-1.5 text-[11px] text-cyan-700/80">
-          Frais de marché {Math.round(CRMB.spread * 100)} % · Gains/pertes réalisés : {" "}
-          <b className={(crypto.realizedPnl || 0) >= 0 ? "text-emerald-700" : "text-red-700"}>
+        <p className="mt-2 text-[10px] text-cream/45">
+          Frais de marché {Math.round(CRMB.spread * 100)} % · Gains/pertes réalisés :{" "}
+          <b className={(crypto.realizedPnl || 0) >= 0 ? "text-mint" : "text-lava"}>
             {(crypto.realizedPnl || 0) >= 0 ? "+" : ""}
             {fmt(crypto.realizedPnl || 0)}
           </b>
@@ -196,31 +188,27 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
       </section>
 
       {/* --- Staking --- */}
-      <section className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-violet-950">🔒 Staking</h3>
-          <span className="text-xs font-bold text-violet-800 bg-violet-100 px-2 py-1 rounded-lg">
-            Production {fmtPct(boost - 1, 1)}
-          </span>
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="eyebrow">Staking</h3>
+          <span className="pill pill-mint">Production {fmtPct(boost - 1, 1)}</span>
         </div>
-        <p className="text-[11px] text-violet-700 mt-0.5">
+        <p className="mb-2 text-[10px] text-cream/50">
           {/* Le rendement se lit PAR JOUR, comme les paliers l'annoncent, et en
               centimes: « ≈0,08 CRMB/j ». Sous le demi-centime: « <0,01 ». */}
           {fmtCrmb(staked)} CRMB bloqués · rendement ≈{fmtCrmb(stats.stakingYield * 86_400)} CRMB/j
         </p>
 
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           {STAKE_TIERS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTierId(t.id)}
-              className={`text-left px-2 py-1.5 min-h-11 rounded-lg border transition-colors ${
-                tierId === t.id ? "bg-violet-600 border-violet-700 text-white" : "bg-white/70 border-violet-200 text-violet-900 hover:bg-violet-50"
-              }`}
+              className={`min-h-11 rounded-2xl px-2.5 py-2 text-left ${tierId === t.id ? "btn-honey" : "btn-ghost"}`}
             >
-              <div className="text-xs font-bold">{t.name}</div>
-              <div className={`text-[11px] ${tierId === t.id ? "text-violet-100" : "text-violet-600"}`}>
+              <div className="text-[11px] font-bold">{t.name}</div>
+              <div className={`text-[9.5px] ${tierId === t.id ? "opacity-75" : "text-cream/45"}`}>
                 {fmtPct(t.perDay)} par jour · poids ×{t.boostMult}
               </div>
             </button>
@@ -235,12 +223,12 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             value={stakeAmount}
             onChange={(e) => setStakeAmount(Math.max(0, Number(e.target.value) || 0))}
             aria-label="Montant à bloquer"
-            className="flex-1 min-w-0 min-h-11 text-sm px-2 rounded-lg border border-violet-200 bg-white/80 text-violet-950 tabular-nums focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-honey/20 bg-honey-light/5 px-3 text-sm tabular-nums text-cream focus:outline-none focus:ring-2 focus:ring-honey"
           />
           <button
             type="button"
             onClick={() => setStakeAmount(crypto.balance || 0)}
-            className="text-xs min-h-11 min-w-11 px-2 rounded-lg border border-violet-200 bg-white/70 text-violet-800 hover:bg-violet-50"
+            className="btn-ghost min-h-11 min-w-11 rounded-xl px-3 text-[11px]"
           >
             Max
           </button>
@@ -248,11 +236,7 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
             type="button"
             onClick={() => onStake(stakeAmount, tierId)}
             disabled={!canStake}
-            className={`px-3 min-h-11 rounded-lg text-sm font-bold border transition-colors ${
-              canStake
-                ? "bg-violet-600 border-violet-700 text-white hover:bg-violet-500"
-                : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
-            }`}
+            className={`min-h-11 rounded-xl px-4 text-[12px] ${canStake ? "btn-honey" : "btn-dead"}`}
           >
             Bloquer
           </button>
@@ -268,51 +252,52 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
       </section>
 
       {/* --- Le Registre --- */}
-      <section className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-3">
+      <section className="panel rounded-3xl p-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-amber-950">📜 Le Registre</h3>
-          <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-1 rounded-lg tabular-nums">
+          <h3 className="inline-flex items-center gap-2 font-display text-lg text-cream-bright">
+            <Icon name="scroll" size={16} className="text-honey" />
+            Le Registre
+          </h3>
+          <span className="pill tabular-nums">
             {signes} contrat{signes > 1 ? "s" : ""} · ×{fmtMult(1 + 0.25 * signes)}
           </span>
         </div>
-        <p className="text-[11px] text-amber-800/80 mt-0.5">
-          Un contrat ajoute <b>+0,25</b> à la puissance de clic <i>et</i> au minage.{" "}
-          <b>Définitivement</b> : il survit aux renaissances. Contrairement au staking, le CRMB dépensé
-          ne revient pas.
+        <p className="mt-1.5 text-[10.5px] leading-relaxed text-cream/55">
+          Un contrat ajoute <b className="text-cream">+0,25</b> à la puissance de clic <i>et</i> au minage.{" "}
+          <b className="text-cream">Définitivement</b> : il survit aux renaissances. Contrairement au staking, le CRMB
+          dépensé ne revient pas.
         </p>
         <button
           type="button"
           onClick={onSignLedger}
           disabled={!peutSigner}
-          className={`mt-2 w-full min-h-[2.75rem] px-3 rounded-xl font-bold border transition-colors ${
-            peutSigner
-              ? "bg-gradient-to-r from-amber-500 to-orange-500 border-orange-600 text-white hover:from-amber-400 hover:to-orange-400"
-              : "bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed"
+          className={`mt-3 min-h-[2.75rem] w-full rounded-2xl px-3 text-[12.5px] ${
+            peutSigner ? "btn-honey" : "btn-dead"
           }`}
         >
           Signer un contrat — {fmtCrmb(prixContrat)} CRMB
         </button>
         {!peutSigner && (
-          <p className="mt-1 text-[11px] text-amber-700/80 text-center">
+          <p className="mt-1.5 text-center text-[10px] text-cream/45">
             Il te manque {fmtCrmb(prixContrat - (crypto.balance || 0))} CRMB.
           </p>
         )}
       </section>
 
       {/* --- Minage --- */}
-      <section className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-zinc-50 p-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900">🖥️ Extraction CRMB</h3>
-          <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg tabular-nums">
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="eyebrow">Machines de minage</h3>
+          <span className="pill pill-crmb tabular-nums">
             {/* Taux posé au centième par heure dans le moteur: exact, pas ≈. */}
             {fmtCrmb(stats.crmbRate * 3600)} CRMB/h
           </span>
         </div>
-        <p className="text-[11px] text-slate-600 mt-0.5">
+        <p className="mb-2 text-[10px] text-cream/45">
           Total extrait : {fmtCrmb(crypto.totalMined || 0)} CRMB · le matériel tourne aussi hors-ligne.
         </p>
 
-        <div className="mt-2 space-y-1.5">
+        <div className="space-y-2">
           {MINERS.map((m) => {
             const owned = crypto.miners?.[m.id] || 0;
             const cost = minerCost(m.id, owned);
@@ -325,25 +310,33 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
                 type="button"
                 onClick={() => onBuyMiner(m.id)}
                 disabled={!affordable}
-                className={`w-full min-h-11 flex items-center gap-2.5 p-2 rounded-lg border text-left transition-all ${
-                  affordable
-                    ? "bg-white/80 border-slate-200 hover:border-slate-400 hover:shadow-md hover:-translate-y-0.5"
-                    : "bg-stone-100/60 border-stone-200 opacity-60 cursor-not-allowed"
+                className={`flex min-h-11 w-full items-center gap-3 rounded-[18px] p-2.5 text-left transition-all ${
+                  affordable ? "panel hover:-translate-y-0.5 hover:border-honey/30" : "panel-muted opacity-70 cursor-not-allowed"
                 }`}
               >
-                <span className="text-xl" aria-hidden="true">
-                  {m.emoji}
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border ${
+                    affordable ? "border-honey/20 bg-honey/10 text-honey-light" : "border-honey/10 bg-honey/5 text-cream/40"
+                  }`}
+                  aria-hidden="true"
+                >
+                  <Icon emoji={m.emoji} size={18} />
                 </span>
-                <span className="flex-1 min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="flex justify-between gap-2">
-                    <span className="text-sm font-semibold text-slate-900 truncate">{m.name}</span>
-                    <span className="text-xs text-slate-500 tabular-nums">×{owned}</span>
+                    <span className="truncate text-[12px] font-bold text-cream">{m.name}</span>
+                    <span className="text-[10px] tabular-nums text-crmb">×{owned}</span>
                   </span>
                   <span className="flex justify-between gap-2">
-                    <span className={`text-xs font-bold tabular-nums ${affordable ? "text-slate-700" : "text-stone-400"}`}>
-                      {fmt(cost)} 🍪
+                    <span
+                      className={`inline-flex items-center gap-1 text-[11px] font-bold tabular-nums ${
+                        affordable ? "text-honey" : "text-cream/40"
+                      }`}
+                    >
+                      <Icon name="coin" size={11} />
+                      {fmt(cost)}
                     </span>
-                    <span className="text-[11px] text-cyan-700 tabular-nums">+{fmtCrmb(m.perHour, 2)}/h</span>
+                    <span className="text-[10.5px] font-bold tabular-nums text-crmb">+{fmtCrmb(m.perHour, 2)}/h</span>
                   </span>
                 </span>
               </button>

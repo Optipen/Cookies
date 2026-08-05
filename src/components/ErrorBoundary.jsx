@@ -1,4 +1,5 @@
 import React from "react";
+import Icon from "./Icon.jsx";
 import { SAVE_KEY } from "../utils/state.js";
 
 /**
@@ -41,30 +42,33 @@ export default class ErrorBoundary extends React.Component {
     if (!this.state.error) return this.props.children;
 
     return (
-      <div className="min-h-screen grid place-items-center bg-bakery p-6 text-center">
-        <div className="max-w-md rounded-3xl glass-warm shadow-xl p-8">
-          <div className="text-5xl mb-3">🍪💥</div>
-          <h1 className="text-xl font-black text-amber-950">Le four a surchauffé</h1>
-          <p className="mt-2 text-sm text-amber-800/80">
+      <div className="min-h-screen grid place-items-center bg-bakery p-6 text-center text-cream">
+        <div className="max-w-md rounded-3xl glass-warm p-8">
+          <span className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-lava-deep/40 bg-lava-deep/10 text-lava">
+            <Icon name="flame" size={26} />
+          </span>
+          <h1 className="font-display text-2xl text-cream-bright">Le four a surchauffé</h1>
+          <p className="mt-2 text-sm text-cream/60">
             Une erreur inattendue s&apos;est produite. Ta sauvegarde est intacte : recharge la page pour reprendre.
           </p>
-          <pre className="mt-3 text-[11px] text-left text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 overflow-auto max-h-28">
+          <pre className="mt-4 max-h-28 overflow-auto rounded-xl border border-lava-deep/25 bg-lava-deep/5 p-2.5 text-left text-[11px] text-lava">
             {String(this.state.error?.message || this.state.error)}
           </pre>
           <div className="mt-4 flex flex-col gap-2">
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold shadow-lg hover:from-amber-400 hover:to-orange-400 transition-colors"
+              className="btn-honey rounded-2xl px-4 py-3 text-sm"
             >
               Recharger le jeu
             </button>
             <button
               type="button"
               onClick={this.downloadSave}
-              className="px-4 py-2 rounded-xl bg-white/70 border border-amber-200 text-amber-900 text-sm font-semibold hover:bg-white transition-colors"
+              className="btn-ghost inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-[12.5px]"
             >
-              💾 Télécharger ma sauvegarde
+              <Icon name="download" size={14} className="text-honey" />
+              Télécharger ma sauvegarde
             </button>
           </div>
         </div>
