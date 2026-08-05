@@ -100,6 +100,30 @@ export function fmt(n) {
 }
 
 /**
+ * PRIX affiché = prix payé, sans exception.
+ *
+ * Un prix de lot est une somme exacte d'unités: il peut valoir 124 800, que le
+ * compact à trois chiffres écrirait « 125K » — un mensonge de 200 cookies.
+ * Règle: en dessous du million, le nombre plein; au-delà, la forme compacte
+ * SEULEMENT si elle est exacte (mantisse entière, jusqu'à six chiffres —
+ * « 1 248K », « 124 800K »), sinon le nombre plein, aussi long soit-il.
+ */
+export function fmtPrix(n) {
+  const v = nombre(n);
+  if (v === null) return "0";
+  if (!Number.isFinite(v)) return v > 0 ? "∞" : "-∞";
+  const abs = Math.abs(v);
+  if (abs < 1_000_000) return loc(Math.round(v), 0);
+  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
+    const mant = abs / Math.pow(1000, k);
+    if (mant >= 1 && mant <= 999_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
+      return loc(Math.sign(v) * Math.round(mant), 0) + SUFFIXES[k];
+    }
+  }
+  return loc(Math.round(v), 0);
+}
+
+/**
  * Valeur exacte, jamais abrégée.
  *
  * Pour les fiches de boutique: la valeur propre d'un bâtiment est le nombre

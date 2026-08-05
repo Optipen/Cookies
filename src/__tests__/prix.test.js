@@ -32,11 +32,14 @@ describe("un achat groupé ne coûte jamais plus que la somme des achats un par 
   // en est la somme exacte, sauf quand cette somme traverse une décade — elle
   // est alors repliée vers le BAS, d'au plus un quart de son cran d'affichage.
   const verifieLot = (s, id, n, etiquette = "") => {
+    // Le lot vaut EXACTEMENT la somme des achats un par un. L'ancien repli du
+    // total « vers le bas sur la grille d'affichage » fabriquait une remise
+    // cachée récurrente — mesurée jusqu'à −19,9 % (dix Fours à 19 possédés:
+    // 124 800 un par un, 100 000 en lot) — et « Max » redevenait secrètement
+    // meilleur que ×1. Aucune tolérance: égalité stricte.
     const lot = costOf(s, id, n, LATER);
     const un = unParUn(s, id, n);
-    expect(lot, etiquette).toBeLessThanOrEqual(un);
-    const cran = un >= 100_000 ? Math.pow(10, Math.floor(Math.log10(un))) / 4 : 1;
-    expect(un - lot, etiquette).toBeLessThan(cran);
+    expect(lot, etiquette).toBe(un);
     return lot;
   };
 

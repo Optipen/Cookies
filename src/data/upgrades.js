@@ -1,5 +1,6 @@
 import { ITEMS, BALANCE, itemUnlocked } from "./items.js";
 import { fmtExact } from "../utils/format.js";
+import { prixLisible } from "../utils/grid.js";
 
 // === Améliorations ===
 //
@@ -43,8 +44,12 @@ export function tierMultiplier() {
   return 2;
 }
 
-/** Coût d'un palier: environ vingt exemplaires du bâtiment au seuil atteint. */
-const tierCost = (item, threshold) => Math.ceil(item.base * Math.pow(item.growth, threshold) * 20);
+/**
+ * Coût d'un palier: environ vingt exemplaires du bâtiment au seuil atteint,
+ * POSÉ sur la grille des prix — un coût brut de 46 283 712 s'affichait
+ * « 46 300K » tout en se payant au cookie près: l'affiché doit être le payé.
+ */
+const tierCost = (item, threshold) => prixLisible(Math.ceil(item.base * Math.pow(item.growth, threshold) * 20));
 
 function makeTierUpgrade(item, n) {
   const threshold = tierThreshold(n);

@@ -369,14 +369,16 @@ export function costOf(state, itemId, count = 1, now = Date.now()) {
     const brut = unitPrice(item, owned + k);
     if (!isFinite(brut)) return Infinity;
     // Chaque UNITÉ est posée sur la grille des prix (remise comprise): le lot
-    // reste ainsi la somme exacte des achats un par un.
+    // est ainsi la somme EXACTE des achats un par un — ni plus, ni moins.
     total += Math.max(1, prixLisible(Math.ceil(brut * mult)));
     if (!isFinite(total)) return Infinity;
   }
-  // Une somme d'unités propres peut déborder de la grille de SON ordre de
-  // grandeur quand le lot traverse une décade. On la replie vers le BAS: un
-  // lot ne coûte jamais plus que la somme des unités.
-  return prixLisible(total, Math.floor);
+  // AUCUN repli final. L'ancien « repli vers le bas sur la grille d'affichage »
+  // quand le lot traversait une décade fabriquait une remise cachée récurrente
+  // — mesurée jusqu'à −19,9 % (dix Fours à 19 possédés: 124 800 un par un,
+  // 100 000 en lot) — et « Max » redevenait secrètement meilleur que ×1.
+  // L'affichage exact d'une somme quelconque est le travail de `fmtPrix`.
+  return total;
 }
 
 /** Quantité d'achat selon les modificateurs clavier. */

@@ -4,7 +4,7 @@ import { ITEM_BY_ID, LABELS } from "../data/items.js";
 import { deriveStats } from "../utils/selectors.js";
 import { snapDown } from "../utils/grid.js";
 import { useClock } from "../hooks/useClock.js";
-import { fmt } from "../utils/format.js";
+import { fmt, fmtPrix, fmtExact } from "../utils/format.js";
 
 const targetLabel = (upgrade) => {
   if (upgrade.target === "all") return "Cliqueurs et Mineurs";
@@ -45,7 +45,8 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
       type="button"
       disabled={!buyable}
       onClick={() => onBuy(upgrade)}
-      aria-label={`${upgrade.name}, ${unlocked ? `coût ${fmt(upgrade.cost)}` : upgrade.hint}`}
+      aria-label={`${upgrade.name}, ${unlocked ? `coût ${fmtPrix(upgrade.cost)}` : upgrade.hint}`}
+      title={unlocked ? `${fmtExact(upgrade.cost)} cookies` : undefined}
       className={`w-full p-3 rounded-2xl border text-left transition-all duration-150 ${
         buyable
           ? "bg-white/80 border-amber-300 hover:border-amber-400 hover:bg-white hover:-translate-y-0.5 hover:shadow-lg"
@@ -72,7 +73,7 @@ const UpgradeCard = memo(function UpgradeCard({ upgrade, unlocked, affordable, p
 
       {unlocked ? (
         <div className={`mt-1.5 text-sm font-bold tabular-nums ${affordable ? "text-amber-700" : "text-stone-500"}`}>
-          {fmt(upgrade.cost)} 🍪
+          {fmtPrix(upgrade.cost)} 🍪
         </div>
       ) : (
         <div className="mt-1.5">

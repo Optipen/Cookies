@@ -7,7 +7,7 @@
 // Séparateurs français partout, aucune notation anglaise.
 
 import { describe, expect, it } from "vitest";
-import { fmt, fmtInt, fmtExact, fmtApprox, COMPACT_FROM } from "../utils/format.js";
+import { fmt, fmtInt, fmtExact, fmtApprox, fmtPrix, COMPACT_FROM } from "../utils/format.js";
 
 // toLocaleString("fr-FR") sépare les milliers par une espace fine insécable.
 const espaces = (s) => s.replace(/[\s  ]/g, " ");
@@ -78,6 +78,26 @@ describe("le compact préfère un suffixe plus bas à une décimale", () => {
     expect(fmt(2.5)).toBe("2,5");
     expect(fmt(20.75)).toBe("20,75");
     expect(fmt(1)).toBe("1");
+  });
+});
+
+describe("fmtPrix: le prix affiché est le prix payé, sans exception", () => {
+  it("écrit le nombre plein sous le million", () => {
+    expect(espaces(fmtPrix(124_800))).toBe("124 800"); // « 125K » aurait menti de 200
+    expect(espaces(fmtPrix(999_999))).toBe("999 999");
+    expect(fmtPrix(100)).toBe("100");
+  });
+
+  it("ne compacte au-delà que si c'est EXACT", () => {
+    expect(espaces(fmtPrix(1_248_000))).toBe("1 248K");
+    expect(espaces(fmtPrix(124_800_000))).toBe("124 800K"); // mantisse à six chiffres, exacte
+    expect(espaces(fmtPrix(27_500_000_000))).toBe("27 500M"); // pas « 27,5B »
+    expect(fmtPrix(2_000_000)).toBe("2M");
+  });
+
+  it("préfère le nombre plein à un compact menteur", () => {
+    expect(espaces(fmtPrix(1_248_300))).toBe("1 248 300"); // 1 248,3K n'existe pas
+    expect(espaces(fmtPrix(12_345_678))).toBe("12 345 678");
   });
 });
 

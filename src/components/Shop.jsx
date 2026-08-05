@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
-import { fmt, fmtExact, fmtDuration } from "../utils/format.js";
+import { fmt, fmtExact, fmtPrix, fmtDuration } from "../utils/format.js";
 import { snapDown } from "../utils/grid.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
@@ -88,7 +88,8 @@ const ItemCard = memo(function ItemCard({
           type="button"
           onClick={onBuy}
           disabled={!achetable}
-          aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmt(price)} cookies`}
+          aria-label={`Acheter ${qty > 1 ? `${qty} ` : ""}${item.name} pour ${fmtPrix(price)} cookies`}
+          title={isFree ? undefined : `${fmtExact(price)} cookies`}
           className={`relative w-24 sm:w-28 shrink-0 flex flex-col items-center justify-center gap-0.5 border-l transition-all ${
             achetable
               ? "border-amber-200 bg-gradient-to-b from-amber-400 to-orange-500 text-white active:from-amber-500 active:to-orange-600"
@@ -103,7 +104,9 @@ const ItemCard = memo(function ItemCard({
           <span className="text-[11px] font-semibold uppercase tracking-wide opacity-90">
             {isFree ? "Offert" : qty > 1 ? `Acheter ×${qty}` : "Acheter"}
           </span>
-          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmt(price)}</span>
+          {/* Le prix affiché EST le prix payé: plein sous le million, compact
+              seulement quand il est exact — jamais « 125K » pour 124 800. */}
+          <span className="text-sm font-black tabular-nums">{isFree ? "0" : fmtPrix(price)}</span>
           {!achetable && eta != null && eta <= 86_400_000 && (
             <span className="text-[11px] tabular-nums opacity-80">~{fmtDuration(eta)}</span>
           )}
