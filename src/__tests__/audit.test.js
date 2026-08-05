@@ -51,7 +51,7 @@ describe("P0 — le CRMB était produit puis détruit", () => {
   });
 
   it("compte les débits du matériel et du staking dans les bonnes unités", () => {
-    expect(miningRate({ cpu: 1 }) * 3600).toBeCloseTo(0.01, 6); // 0,05 CRMB/h
+    expect(miningRate({ cpu: 1 }) * 3600).toBeCloseTo(0.01, 6); // 0,01 CRMB/h
     expect(stakingYieldPerSecond([{ amount: 100, tierId: "flex" }]) * 86_400).toBeCloseTo(1, 6); // 1 %/jour
   });
 });

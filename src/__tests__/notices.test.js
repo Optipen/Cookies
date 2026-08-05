@@ -181,19 +181,22 @@ describe("ce que voit une vraie session", () => {
     return e;
   };
 
-  it("reste sous six notifications par minute sur le premier quart d'heure", () => {
+  it("reste sous quatre notifications par minute sur le premier quart d'heure", () => {
+    // Seize secondes de silence entre deux ordinaires = 3,75 par minute au
+    // plus. La session type doit rester SOUS cette borne théorique, pas
+    // seulement sous l'ancienne barre de six.
     const file = createNoticeQueue();
     const vus = derouler(file, session(900_000), 900_000, 250);
     const cadence = parMinute(vus, 900_000);
-    expect(cadence, `${cadence.toFixed(2)} par minute`).toBeLessThanOrEqual(6);
+    expect(cadence, `${cadence.toFixed(2)} par minute`).toBeLessThanOrEqual(4);
     expect(vus.length, "et il s'en passe quand même quelque chose").toBeGreaterThan(3);
   });
 
-  it("reste sous six notifications par minute sur une heure", () => {
+  it("reste sous quatre notifications par minute sur une heure", () => {
     const file = createNoticeQueue();
     const vus = derouler(file, session(3_600_000), 3_600_000, 250);
     const cadence = parMinute(vus, 3_600_000);
-    expect(cadence, `${cadence.toFixed(2)} par minute`).toBeLessThanOrEqual(6);
+    expect(cadence, `${cadence.toFixed(2)} par minute`).toBeLessThanOrEqual(4);
   });
 
   it("ne fait jamais réapparaître deux fois le même identifiant", () => {
