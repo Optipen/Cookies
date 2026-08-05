@@ -35,44 +35,46 @@ const loc = (v, max, min = 0) =>
   v.toLocaleString(LOCALE, { minimumFractionDigits: min, maximumFractionDigits: max });
 
 /**
- * Forme compacte à trois chiffres significatifs: 1,23M · 12,3M · 123M.
+ * Forme compacte SANS décimale: « 1 910K » plutôt que « 1,91M ».
  *
- * L'arrondi peut faire franchir le millier — 999 999 999 arrondi à trois
- * chiffres vaut 1 000 M. On remonte alors d'un cran plutôt que d'écrire
- * « 1 000M », qui est à la fois plus long et moins lisible que « 1B ».
+ * Un suffixe ne porte jamais de virgule. Quand la mantisse à trois chiffres
+ * significatifs en aurait une, on descend d'un suffixe pour retrouver un
+ * entier: 5 750 000 s'écrit « 5 750K », 20 941 234 s'écrit « 20 900K ».
+ * Et un nombre exactement représentable s'affiche EXACTEMENT — les prix sont
+ * posés sur 0,25 × 10^k, « 11,8M » pour 11 750 000 serait un mensonge; on
+ * écrit « 11 750K ». La mantisse entière la plus haute gagne: « 25M », pas
+ * « 25 000K ».
  */
 function compact(n) {
   const signe = n < 0 ? -1 : 1;
-  let abs = Math.abs(n);
-  let cran = Math.min(SUFFIXES.length - 1, Math.floor(Math.log10(abs) / 3));
-  let valeur = abs / Math.pow(1000, cran);
-
-  // Une mantisse posée sur la grille des quarts s'affiche EXACTEMENT, quelle
-  // que soit sa taille: « 11,75M » plutôt que « 11,8M ». Les prix sont tous
-  // construits ainsi; les autres nombres gardent les trois chiffres
-  // significatifs habituels.
-  const decimales = (v) => {
-    const quarts = v * 4;
-    if (Math.abs(quarts - Math.round(quarts)) < 1e-6) {
-      const q = Math.round(quarts);
-      return q % 4 === 0 ? 0 : q % 2 === 0 ? 1 : 2;
-    }
-    return v >= 100 ? 0 : v >= 10 ? 1 : 2;
-  };
-  let arrondi = Number(valeur.toFixed(decimales(valeur)));
-  if (arrondi >= 1000 && cran < SUFFIXES.length - 1) {
-    cran += 1;
-    valeur = abs / Math.pow(1000, cran);
-    arrondi = Number(valeur.toFixed(decimales(valeur)));
-  }
+  const abs = Math.abs(n);
 
   // Au-delà du dernier suffixe, un nom inventé serait un mensonge: on passe à
   // la notation scientifique, que tout le monde sait lire pour ce qu'elle est.
-  if (cran >= SUFFIXES.length - 1 && abs >= Math.pow(1000, SUFFIXES.length)) {
+  if (abs >= Math.pow(1000, SUFFIXES.length)) {
     return (signe * abs).toExponential(2).replace(".", ",");
   }
 
-  return loc(signe * arrondi, decimales(arrondi)) + SUFFIXES[cran];
+  // 1. La représentation exacte, si elle existe: la plus grande unité dont la
+  //    mantisse est un entier d'au plus cinq chiffres.
+  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
+    const mant = abs / Math.pow(1000, k);
+    if (mant >= 1 && mant <= 99_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
+      return loc(signe * Math.round(mant), 0) + SUFFIXES[k];
+    }
+  }
+
+  // 2. Sinon, trois chiffres significatifs — et si la mantisse arrondie garde
+  //    une décimale, elle descend d'un suffixe pour redevenir entière.
+  const ordre = Math.floor(Math.log10(abs));
+  const arrondi = Math.round(abs / Math.pow(10, ordre - 2)) * Math.pow(10, ordre - 2);
+  let cran = Math.min(SUFFIXES.length - 1, Math.floor((Math.log10(arrondi) + 1e-9) / 3));
+  let mant = arrondi / Math.pow(1000, cran);
+  if (Math.abs(mant - Math.round(mant)) > 1e-9 && cran >= 1) {
+    cran -= 1;
+    mant = arrondi / Math.pow(1000, cran);
+  }
+  return loc(signe * Math.round(mant), 0) + SUFFIXES[cran];
 }
 
 /**
