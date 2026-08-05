@@ -64,17 +64,25 @@ export function auditerLaPage() {
     const r = el.getClientRects();
     return r.length > 0 && r[0].width > 0;
   };
-  // Zone CRMB: la section parle de CrumbCoin/Staking/Registre/Extraction, ou le
-  // texte lui-même mentionne le CRMB. Les centièmes y sont permis, pas au-delà.
+  // Zone CRMB: la section parle de CrumbCoin/Staking/Registre/Extraction, le
+  // texte lui-même mentionne le CRMB, ou un PETIT ancêtre le mentionne — la
+  // pastille d'en-tête écrit « CRMB » et « 11,41 » dans deux nœuds séparés.
+  // Les centièmes y sont permis, pas au-delà.
   const estZoneCrmb = (el, texte) => {
     if (/CRMB|CrumbCoin/i.test(texte)) return true;
     let n = el;
+    let profondeur = 0;
     while (n && n !== document.body) {
       if (n.tagName === "SECTION") {
         const h = n.querySelector("h3, h2");
         if (h && /CrumbCoin|Staking|Registre|Extraction/i.test(h.textContent)) return true;
       }
       if (n.dataset && n.dataset.testid === "crmb-solde") return true;
+      if (profondeur < 4) {
+        const t = n.textContent || "";
+        if (t.length <= 80 && /CRMB|CrumbCoin/i.test(t)) return true;
+      }
+      profondeur += 1;
       n = n.parentElement;
     }
     return false;
