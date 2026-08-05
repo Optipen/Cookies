@@ -16,6 +16,13 @@
 > jusqu'à 365 jours simulés. Rien n'a été fusionné dans main ; la branche
 > seule a été poussée pour générer une Preview. — Les limites restantes sont
 > listées en §20, sans fard.
+>
+> **Passe corrective du 5 août** (§21) : quatre défauts retenus par l'analyse
+> externe — remise cachée des achats groupés, cibles tactiles sous 44 px,
+> CRMB trop abondant, notifications trop nombreuses — corrigés à la racine,
+> re-mesurés en navigateur (11 profils rejoués, arrêt demandé ensuite) et
+> re-simulés. Un errata est assumé : le rapport initial décrivait à tort le
+> Registre comme un puits fini.
 
 ---
 
@@ -437,3 +444,67 @@ Si l'intégration Git du projet Vercel `cookies` (`prj_u8bZmUZiACxcchVQ8KdMaIutq
    reste extrapolée.
 8. **Les grands entiers perdent l'exactitude au-delà de 9,01e15** (~60ᵉ jour
    simulé), sans conséquence de gameplay — connu, documenté, inchangé.
+
+## 21. Passe corrective du 5 août (après analyse externe)
+
+L'analyse externe des rapports a retenu quatre défauts bloquants avant toute
+publicité. Tous quatre sont reproduits, corrigés à la racine, testés, et
+mesurés à nouveau — détail au tableau « passe corrective » de
+`qa/rapport/defauts.md` (défauts 15 à 18).
+
+**Les quatre corrections :**
+
+1. **Le lot vaut exactement la somme des unités** (défaut 15). Reproduit au
+   pire cas mesuré: Four ×10 à 19 possédés = 100 000 quand les unités font
+   124 800 (−19,9 %). `costOf` ne replie plus le total du lot; `prix.test`
+   exige désormais l'égalité STRICTE (l'ancien test tolérait l'écart, c'était
+   lui le complice). Le bouton affiche le prix exact via `fmtPrix` (mantisse
+   entière), la valeur pleine en infobulle.
+2. **Toute cible tactile fait au moins 44 × 44 px** (défaut 16). La synthèse
+   mobile annonçait zéro cible fautive parce qu'elle ne regardait que
+   l'accueil (défaut de harnais H6): relance de quête 20 px, montants CRMB
+   27 px, volume 34 px, miettes 36 px vivaient dans les onglets et le
+   dialogue. Tout est passé à `min-h-11`/`min-w-11`, et `scripts/mobile.mjs`
+   parcourt maintenant les six onglets ET les réglages sur les six gabarits:
+   **zéro cible sous 44 px sur 6 × 8 contextes**, zéro texte sous 11 px,
+   zéro débordement.
+3. **Le CRMB redevient rare** (défaut 17). Matériel ÷5 (0,01 à 5 CRMB/h),
+   croissance des prix ×1,3. Simulé après correctif: 339 CRMB au 1ᵉʳ jour
+   (au lieu de 445), 16 486 au 30ᵉ (au lieu de 57 664) — §13, avec errata
+   sur le faux « puits fini ».
+4. **Les notifications respirent** (défaut 18). Silence entre ordinaires
+   11 → 16 s, écart majeurs 2,5 → 6 s, plafond majeurs 6 → 3 par minute,
+   déduplication 30 → 45 s, dorés redescendus au rang ordinaire. Le test de
+   session exige ≤ 4 par minute.
+
+**Vérification en navigateur — campagne 3, arrêtée à la demande du
+propriétaire.** Onze profils automatisés sur vingt ont été rejoués sur le
+build final (mêmes graines, mêmes scénarios, mêmes durées que les campagnes
+1 et 2) avant l'arrêt demandé pour économiser le temps machine: p01–p05,
+p09–p11, p13, p16, p17. **Les onze: zéro erreur console, zéro nombre hors
+règle, zéro vérification anti-triche injustifiée.**
+
+Notifications mesurées (textes apparus dans la zone de notification par
+10 minutes, MutationObserver, même méthode que les campagnes 1 et 2):
+
+| Profil | Campagne 2 | Campagne 3 | Écart |
+| --- | --- | --- | --- |
+| p05 normal 5 clics/s | 84,1 | 36,2 | **−57 %** |
+| p13 mauvaise stratégie | 97,0 | 36,5 | **−62 %** |
+| p11 achats au hasard | 78,7 | 34,4 | −56 % |
+| p16 sauvegarde v3 | 71,2 | 28,8 | −60 % |
+| p04 occasionnel | 47,5 | 23,8 | −50 % |
+| Moyenne des 11 rejoués | 53,3 | 30,5 | **−43 %** |
+
+Le pire profil passe d'une notification toutes les 6 secondes à une toutes
+les 16 — la borne voulue. (p03 et p10, riches en bandeaux de découverte,
+restent vers 51/10 min: ce sont des majeurs légitimes de début de partie,
+sous le plafond.)
+
+**Couverture, honnêtement dit**: p06–p08 (cadences hautes et autoclicker),
+p12, p14–p15 et p18–p20 n'ont pas été rejoués en campagne 3 — l'arrêt est
+un choix du propriétaire, pas un échec. Leur référence navigateur reste la
+campagne 2; les correctifs qui les concernent sont couverts par les tests
+unitaires durcis, par les onze profils rejoués et par la passe mobile
+étendue. La passe console du build final: 0 erreur, 0 avertissement sur
+1 600 clics simulés.

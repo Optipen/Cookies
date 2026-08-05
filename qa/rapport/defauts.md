@@ -58,9 +58,16 @@ mesures).
 | H3 | Bascule v5 de p17 annulée par l'autosauvegarde de `pagehide` après `clear()` — le jeu, correctement, reprenait la partie v4 | campagne 1, sondes de migration | bascule one-shot au chargement, avant le code du jeu |
 | H4 | Note d'achat de machine d'extraction sans vérification d'état (p14: note émise, 0 machine persistée) | campagne 1 | vérification de la sauvegarde après chaque clic d'achat |
 | H5 | Auditeur: photographie d'état construite mais jamais retournée | lint no-unused-vars | retournée; chronologies complètes en campagne 2 |
+| H6 | `scripts/mobile.mjs` ne mesurait que l'écran d'accueil: les cibles des onglets (relance de quête 20 px, montants CRMB 27 px) et du dialogue de réglages (volume 34 px) échappaient au comptage — d'où un « zéro cible < 44 px » vrai pour ce qu'il voyait, faux comme affirmation globale | contradiction relevée par l'analyse externe entre synthèse mobile et mesures par profil | le script parcourt les six onglets ET les réglages sur chaque gabarit (6 × 8 contextes), avec un portefeuille CRMB et un prestige en fixture pour que les panneaux montrent leur vrai contenu |
 
 ## Verdicts finals (après relance des scénarios marqués)
 
+- **Passe corrective, campagne 3 partielle** (11 profils rejoués sur le build
+  corrigé avant arrêt demandé par le propriétaire — p01–p05, p09–p11, p13,
+  p16, p17): **0 erreur console, 0 nombre hors règle, 0 vérification
+  injustifiée sur les onze**; notifications moyennes 53,3 → 30,5 par 10 min
+  (−43 %), pire profil 97 → 36,5. Mobile étendu: 0 cible < 44 px sur
+  6 gabarits × 8 contextes. Détail au rapport §21.
 - **Nombres hors règle: 1 056 (campagne 1) → 0 (campagne 2 + relances), sur les vingt profils.**
 - **Erreurs console: 0 partout, sur les deux campagnes et les relances.**
 - **Régressions: 0** (analyse comparée `qa/rapport/analyse-comparee.md`).
