@@ -264,7 +264,29 @@ jouée deux fois → résultat identique, sauvegarde illisible archivée sous
 
 ## 16. Performances
 
-<!-- PERFORMANCES -->
+**Sur le build final**, mesures dédiées :
+
+| Mesure (`scripts/console.mjs`, GC forcé) | Résultat |
+| --- | --- |
+| Erreurs console (1 600 clics + achats + onglets) | **0** |
+| Avertissements console | **0** |
+| Nœuds du document | 461, stable |
+| Tas mémoire (GC forcé) | 5,3 Mo → 7,5 Mo |
+
+| Gabarits (`scripts/mobile.mjs`) | Résultat |
+| --- | --- |
+| Débordement horizontal (6 gabarits, 320→1440 px) | **aucun** |
+| Cibles tactiles < 44 px | **0** |
+| Textes < 11 px | **0** |
+| Boutique au-dessus de la ligne de flottaison | oui partout (528 px sur 320×568) |
+
+**Sur quarante sessions de campagne** (10–13 min chacune, sans GC forcé) :
+tas relevé toutes les 20 s, 4 Mo au chargement → 8 à 33 Mo selon le profil,
+sans dérive continue — les pics suivent l'activité, pas le temps.
+**Zéro erreur console sur les 40 sessions**, campagne 1 comme campagne 2,
+et zéro pendant les relances. Les vidéos des sessions montrent une interface
+fluide, y compris à 12–15 clics/s (une boucle de jeu à commit unique de
+500 ms, particules hors React).
 
 ## 17. Tests
 
@@ -327,4 +349,34 @@ multipliée par ~50 (famille complète: 5,7e9/s → 6,3e11/s en total au
 
 ## 20. Limites restantes
 
-<!-- LIMITES -->
+1. **La vérification de la Preview Vercel n'a pas pu être faite d'ici.**
+   `vercel.app` est inaccessible depuis cet environnement (politique réseau du
+   proxy: connexion refusée même vers le domaine de production connu), et
+   aucun connecteur Vercel n'est disponible dans la session. La branche seule
+   a été poussée; si l'intégration Git du projet `cookies`
+   (`prj_u8bZmUZiACxcchVQ8KdMaIutqmrr`) est active, la Preview se construit
+   automatiquement. **À réautoriser pour que je vérifie moi-même**: un
+   connecteur Vercel (ou l'accès réseau à `*.vercel.app`). En attendant, le
+   contrôle se fait au tableau de bord: projet `cookies` → déploiement du
+   commit de tête de `claude/cookie-craze-audit-tests-jo1ddp` → statut READY,
+   cible Preview, aucun rattachement à Nyzora ni à cookie-craze.
+2. **La protection anti-autoclicker reste entièrement côté client** — bornée,
+   mesurée, honnête sur ce qu'elle ne peut pas faire (localStorage, console,
+   recompilation). Rien ne change sans serveur.
+3. **L'extraction CRMB déborde ses puits au très long terme** (§13):
+   rééquilibrage à décider par le propriétaire, pas fait en silence ici.
+4. **La courbe s'aplatit après J90** une fois l'Horizon complet — mieux qu'un
+   plateau (Éclat/Écho continuent), pas une courbe qui tient l'année.
+5. **Le plaisir n'est pas mesuré.** Vingt scripts ne remplacent pas vingt
+   personnes: rien ici ne dit si le jeu est agréable, seulement qu'il est
+   exact, stable et cadencé.
+6. **Deux différences de scénario entre campagnes, assumées et documentées**:
+   la bascule v5 de p17 (le scénario de campagne 1 testait — utilement — la
+   continuité après `clear()`), et le `scrollIntoView` des clics mobiles
+   (campagne 1 sous-créditait p01/p02 par artefact de harnais). Les
+   comparaisons avant/après de ces cases se lisent avec cette note.
+7. **Sessions de plusieurs heures non observées en navigateur** — dix à
+   treize minutes par session, quarante sessions; la mémoire longue durée
+   reste extrapolée.
+8. **Les grands entiers perdent l'exactitude au-delà de 9,01e15** (~60ᵉ jour
+   simulé), sans conséquence de gameplay — connu, documenté, inchangé.
