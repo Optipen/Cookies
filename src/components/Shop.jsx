@@ -41,12 +41,29 @@ const ItemCard = memo(function ItemCard({
   progress,
   ouverte,
   onToggle,
+  designe,
 }) {
   const achetable = affordable || isFree;
   const clic = item.mode === "click";
 
   return (
-    <div className={`overflow-hidden rounded-[20px] transition-colors ${achetable ? "panel" : "panel-muted"}`}>
+    <div
+      id={`item-${item.id}`}
+      // `designe`: le Guide parle de CE bâtiment. Un anneau qui bat, et une
+      // étiquette qui le nomme. Dire « prends le Four » à quelqu'un qui n'a
+      // jamais vu la liste ne suffit pas — il faut le lui MONTRER.
+      className={`relative overflow-hidden rounded-[20px] transition-colors ${achetable ? "panel" : "panel-muted"} ${
+        designe ? "ring-2 ring-honey ring-offset-2 ring-offset-ink-900 animate-designe" : ""
+      }`}
+      data-designe={designe ? "true" : undefined}
+    >
+      {designe && (
+        // À GAUCHE et non centrée: au centre elle chevauchait le bouton
+        // d'achat, c'est-à-dire exactement l'endroit qu'elle désigne.
+        <span className="pointer-events-none absolute -top-px left-3 z-10 rounded-b-lg bg-honey px-2.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-honey-dark">
+          C&apos;est ici
+        </span>
+      )}
       <div className="flex items-stretch">
         {/* Zone d'information: ouvre le détail. Large, donc facile à viser. */}
         <button
@@ -157,7 +174,7 @@ const ItemCard = memo(function ItemCard({
   );
 });
 
-const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ouverte, onToggle }) {
+const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ouverte, onToggle, designe }) {
   const mine = label === LABELS.mine;
   if (!rows.length) return null;
   return (
@@ -177,6 +194,7 @@ const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ou
           {...r}
           qty={qty}
           ouverte={ouverte === r.item.id}
+          designe={designe === r.item.id}
           onToggle={() => onToggle(r.item.id)}
           onBuy={() => onBuy(r.item.id, qty)}
         />
@@ -185,7 +203,7 @@ const Section = memo(function Section({ label, total, unit, rows, qty, onBuy, ou
   );
 });
 
-function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
+function Shop({ state, filter = "all", onBuy, qty = 1, stats, designe = null }) {
   const now = useClock(500);
   const [ouverte, setOuverte] = useState(null);
   const toggle = useCallback((id) => setOuverte((v) => (v === id ? null : id)), []);
@@ -252,6 +270,7 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
         qty={qty}
         onBuy={onBuy}
         ouverte={ouverte}
+        designe={designe}
         onToggle={toggle}
       />
       <Section
@@ -262,6 +281,7 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats }) {
         qty={qty}
         onBuy={onBuy}
         ouverte={ouverte}
+        designe={designe}
         onToggle={toggle}
       />
     </div>

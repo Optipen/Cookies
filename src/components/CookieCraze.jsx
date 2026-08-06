@@ -511,17 +511,27 @@ export default function CookieCraze() {
    * cookie et sous le guide. Le joueur appuyait, rien ne bougeait dans son
    * champ de vision, et la consigne devenait un mensonge.
    */
-  const allerA = useCallback((onglet) => {
-    setTab(onglet);
-    // Après le commit, sinon on fait défiler vers un panneau qui affiche
-    // encore l'onglet précédent.
-    requestAnimationFrame(() => {
-      panneauRef.current?.scrollIntoView({
-        behavior: stateRef.current?.ui?.reducedMotion ? "auto" : "smooth",
-        block: "start",
+  const allerA = useCallback(
+    (c) => {
+      if (!c?.onglet) return;
+      setTab(c.onglet);
+      // LE FILTRE, et c'est le défaut qui rendait le guide inutilisable:
+      // « prends le Four » ouvrait la Boutique en laissant le filtre sur
+      // « Clic ». Le Four n'était pas dans la liste. Le joueur cherchait un
+      // bâtiment que l'écran ne montrait pas.
+      if (c.filtre) setShopFilter(c.filtre);
+
+      // Après le commit — sinon on fait défiler vers un panneau qui affiche
+      // encore l'onglet et le filtre précédents.
+      requestAnimationFrame(() => {
+        const doux = stateRef.current?.ui?.reducedMotion ? "auto" : "smooth";
+        // On vise la CARTE quand le guide en désigne une, le panneau sinon.
+        const carte = c.cible ? document.getElementById(`item-${c.cible}`) : null;
+        (carte || panneauRef.current)?.scrollIntoView({ behavior: doux, block: carte ? "center" : "start" });
       });
-    });
-  }, [stateRef]);
+    },
+    [stateRef]
+  );
 
   const masquerGuide = useCallback(
     () => setState((s) => ({ ...s, guide: { ...s.guide, masque: true } })),
@@ -574,7 +584,22 @@ export default function CookieCraze() {
   useAchievements(state, setState, notify, celebrate);
   // Verrouille les étapes franchies: une Renaissance vide le parc, elle ne doit
   // pas rouvrir « achète ton premier Curseur ».
-  useGuide(state, setState);
+  // Chaque étape franchie se FÊTE: un bandeau qui nomme ce qu'on vient de
+  // débloquer, une gerbe dorée, un son, et des cookies en prime. Sans ce
+  // retour, franchir une étape ne se distinguait pas de ne rien faire.
+  const etapeFranchie = useCallback(
+    (etape) => {
+      particlesRef.current?.burstGold(34);
+      audio.play("golden", 0.5);
+      fx.banner({ title: "Étape franchie", sub: etape.titre, ms: 2400 });
+      notify.major(
+        etape.recompense ? `✅ ${etape.titre} · +${fmt(etape.recompense)} cookies` : `✅ ${etape.titre}`,
+        "gold"
+      );
+    },
+    [audio, fx, notify]
+  );
+  useGuide(state, setState, etapeFranchie);
 
   const events = useEvents({ stateRef, setState, notify, fx, audio });
 
@@ -1711,6 +1736,7 @@ export default function CookieCraze() {
                     perItemMult={stats.perItemMult}
                     qty={buyQty}
                     stats={stats}
+                    designe={conseil?.cible && conseil.cible !== "cookie" ? conseil.cible : null}
                   />
                 </>
               )}

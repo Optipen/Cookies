@@ -19,9 +19,10 @@ const CHECK_MS = 1000;
  * genre de boucle que le reste du jeu a déjà appris à éviter (voir
  * `useAchievements`, bâti sur le même modèle).
  */
-export function useGuide(state, setState) {
+export function useGuide(state, setState, onFranchie) {
   const stateRef = useLatestRef(state);
   const setStateRef = useLatestRef(setState);
+  const franchieRef = useLatestRef(onFranchie);
 
   useEffect(() => {
     const iv = setInterval(() => {
@@ -31,20 +32,34 @@ export function useGuide(state, setState) {
       const nouvelles = ETAPES.filter((e) => !s.guide?.faites?.[e.id] && e.fait(s));
       if (!nouvelles.length) return;
 
+      const franchies = [];
       setStateRef.current((prev) => {
         const faites = { ...(prev.guide?.faites || {}) };
         let change = false;
+        let prime = 0;
         for (const e of nouvelles) {
           // Re-vérifié sur `prev`: l'état a pu bouger depuis le calcul.
           if (!faites[e.id] && e.fait(prev)) {
             faites[e.id] = true;
             change = true;
+            prime += e.recompense || 0;
+            franchies.push(e);
           }
         }
-        return change ? { ...prev, guide: { ...prev.guide, faites } } : prev;
+        if (!change) return prev;
+        // La récompense est versée ICI, dans la même transition que le verrou:
+        // une étape franchie ne peut donc jamais payer deux fois.
+        return {
+          ...prev,
+          cookies: (prev.cookies || 0) + prime,
+          lifetime: (prev.lifetime || 0) + prime,
+          guide: { ...prev.guide, faites },
+        };
       });
+      // Hors du `setState`: on n'appelle pas l'interface depuis un réducteur.
+      for (const e of franchies) franchieRef.current?.(e);
     }, CHECK_MS);
 
     return () => clearInterval(iv);
-  }, [stateRef, setStateRef]);
+  }, [stateRef, setStateRef, franchieRef]);
 }

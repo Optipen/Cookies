@@ -81,10 +81,12 @@ describe("un joueur qui découvre", () => {
   it("voit le guide à l'écran, avec quoi faire ET pourquoi", async () => {
     await demarrer(neuf());
     const guide = screen.getByTestId("guide");
-    expect(guide.textContent).toMatch(/Étape 1 sur 7/);
-    expect(guide.textContent).toMatch(/Appuie sur le cookie/i);
+    expect(guide.textContent).toMatch(/À faire · 1\/7/);
+    expect(guide.textContent).toMatch(/Appuie sur le gros cookie/i);
     // La promesse: sans elle, la consigne n'est qu'un ordre.
-    expect(guide.textContent).toMatch(/banque/i);
+    expect(guide.textContent).toMatch(/rapporte des cookies/i);
+    // Et la récompense, annoncée AVANT l'effort.
+    expect(guide.textContent).toMatch(/cookies à la clé/i);
   });
 
   it("avance d'étape quand il fait ce qu'on lui demande", () => {
@@ -95,24 +97,47 @@ describe("un joueur qui découvre", () => {
     expect(c.onglet).toBe("shop");
   });
 
-  it("propose un bouton qui ouvre le bon onglet ET l'amène à l'écran", async () => {
-    // Changer l'onglet ne suffit pas: sur téléphone le panneau vit sous le
-    // cookie et sous le guide. Sans le défilement, le joueur appuie et rien ne
-    // bouge dans son champ de vision.
+  it("« Montre-moi » ouvre l'onglet, POSE LE BON FILTRE et désigne la carte", async () => {
+    // Le défaut qui rendait le guide inutilisable: « prends le Four » ouvrait
+    // la Boutique en laissant le filtre sur « Clic ». Le Four n'était pas dans
+    // la liste — le joueur cherchait un bâtiment que l'écran ne montrait pas.
     const defilements = [];
     window.HTMLElement.prototype.scrollIntoView = function (opts) {
-      defilements.push(opts);
+      defilements.push({ opts, id: this.id });
     };
-    await demarrer(neuf((s) => (s.lifetimeStats.clicks = 10)));
+    await demarrer(
+      neuf((s) => {
+        s.lifetimeStats.clicks = 10;
+        s.items = { cursor: 1 }; // étape « le Four », donc filtre Minage
+        s.guide.faites = { clic: true, curseur: true };
+      })
+    );
     const guide = screen.getByTestId("guide");
+    expect(guide.textContent).toMatch(/Four/i);
+
     await act(async () => {
-      fireEvent.click(within(guide).getByRole("button", { name: /J'y vais/i }));
+      fireEvent.click(within(guide).getByRole("button", { name: /Montre-moi/i }));
     });
     expect(screen.getByRole("tab", { name: "Boutique" }).getAttribute("aria-selected")).toBe("true");
+    // Le filtre « Minage » est bien celui qui est actif.
+    expect(screen.getByRole("button", { name: "Minage" }).getAttribute("aria-pressed")).toBe("true");
+    // Et le Four est visible, désigné, et c'est vers LUI qu'on a défilé.
+    const four = document.getElementById("item-oven");
+    expect(four).not.toBeNull();
+    expect(four.getAttribute("data-designe")).toBe("true");
+    expect(within(four).getByText(/C'est ici/i)).toBeTruthy();
     await act(async () => {
       await new Promise((r) => requestAnimationFrame(r));
     });
-    expect(defilements.length).toBeGreaterThan(0);
+    expect(defilements.some((d) => d.id === "item-oven")).toBe(true);
+  });
+
+  it("récompense chaque étape franchie, en cookies", () => {
+    // Un guide qui ne promet rien n'est qu'une liste de corvées.
+    for (const e of ETAPES) expect(e.recompense, e.id).toBeGreaterThan(0);
+    // Et la récompense grandit avec l'effort demandé.
+    const primes = ETAPES.map((e) => e.recompense);
+    expect([...primes].sort((a, b) => a - b)).toEqual(primes);
   });
 
   it("enchaîne les sept étapes dans l'ordre, sans trou", () => {

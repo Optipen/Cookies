@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (513 tests)                    |
+| `npm test`          | Suite de tests (514 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -693,7 +693,7 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 513 tests
+npm test                      # 514 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -1121,7 +1121,20 @@ La cadence a disparu de l'écran **mais pas du moteur** : elle continue de
 borner ce qui est crédité, et l'avertissement reste. Un joueur dont les clics
 cessent de compter doit l'apprendre, même si on ne lui montre plus son rythme.
 
-### 2. Un guide qui dit quoi faire, et pourquoi
+### 2. L'accueil dit la règle du jeu, pas le catalogue
+
+L'écran d'accueil annonçait « 16 bâtiments · Quêtes & quotidiennes · Marché
+crypto · Arbre céleste ». Quatre promesses qui ne veulent rien dire à quelqu'un
+qui n'a jamais joué : ce sont des noms de contenu, pas une règle. Il annonce
+maintenant ce que le joueur va **faire** :
+
+```
+①  Appuie sur le cookie      chaque appui te rapporte des cookies
+②  Achète des bâtiments      ils en fabriquent tout seuls, sans toi
+③  Reviens plus tard         tout a continué pendant ton absence
+```
+
+### 3. Un guide qui dit quoi faire, et pourquoi
 
 Sous le cookie, une carte dit trois choses, toujours dans le même ordre — c'est
 ce qui permet de la lire d'un coup d'œil dès la troisième fois :
@@ -1135,9 +1148,24 @@ rien. C'est là que le jeu se met à jouer pour toi.
 ```
 
 **Quoi faire** en un geste, **pourquoi** en une phrase qui promet quelque chose
-de concret, et **où** — avec un bouton qui ouvre l'onglet *et l'amène à
-l'écran*. Changer l'onglet ne suffisait pas : sur téléphone le panneau vit sous
-le cookie, le joueur appuyait et rien ne bougeait dans son champ de vision.
+de concret, **ce que ça rapporte**, et **où** — avec un bouton qui montre.
+
+« Montre-moi » fait trois choses, et il a fallu les trois pour que ça marche :
+
+| | Sans ça |
+| --- | --- |
+| ouvre l'onglet | — |
+| **pose le bon filtre de boutique** | « Prends le Four » ouvrait la Boutique en laissant le filtre sur « Clic » : **le Four n'était pas dans la liste**. Le joueur cherchait un bâtiment que l'écran ne montrait pas |
+| **fait défiler jusqu'à la carte, et la désigne** — anneau qui bat, étiquette « C'est ici » | Sur téléphone le panneau vit sous le cookie : on appuyait, rien ne bougeait dans le champ de vision. Et « le Four » ne veut rien dire tant qu'on ne l'a pas vu |
+
+Chaque étape **paie** : 25, 50, 100, 250, 500, 1 000 puis 2 500 cookies, annoncés
+avant l'effort. Un guide qui ne promet rien n'est qu'une liste de corvées. La
+récompense est versée dans la même transition que le verrou de l'étape : elle
+ne peut donc jamais tomber deux fois.
+
+Et une étape franchie **se fête** : bandeau, gerbe dorée, son, et le montant
+gagné. Sans ce retour, franchir une étape ne se distinguait pas de ne rien
+faire.
 
 Les sept étapes ouvrent **un** mécanisme chacune, dans l'ordre où le jeu les
 rend utiles : cliquer → premier Cliqueur → premier Mineur → dix bâtiments →

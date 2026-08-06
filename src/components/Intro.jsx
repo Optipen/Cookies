@@ -26,13 +26,16 @@ const FLOATING_CRUMBS = Array.from({ length: 16 }, (_, i) => ({
   duration: 9 + Math.random() * 8,
 }));
 
-const FEATURES = [
-  // Seize dès la première partie: les huit rangs d'Ascension ne se
-  // promettent pas à quelqu'un qui n'a pas encore cliqué une fois.
-  { icon: "bag", label: "16 bâtiments", tone: "text-honey" },
-  { icon: "scroll", label: "Quêtes & quotidiennes", tone: "text-honey" },
-  { icon: "crmb", label: "Marché crypto", tone: "text-crmb" },
-  { icon: "spark", label: "Arbre céleste", tone: "text-honey" },
+// LE PRINCIPE DU JEU, en trois lignes.
+//
+// L'écran annonçait « 16 bâtiments · Quêtes & quotidiennes · Marché crypto ·
+// Arbre céleste ». Quatre promesses qui ne disent rien à qui n'a jamais joué:
+// ce sont des noms de contenu, pas une règle du jeu. Quelqu'un qui découvre a
+// besoin de savoir ce qu'il va FAIRE, et pourquoi ça vaut le coup de rester.
+const REGLE = [
+  { n: "1", texte: "Appuie sur le cookie", detail: "chaque appui te rapporte des cookies" },
+  { n: "2", texte: "Achète des bâtiments", detail: "ils en fabriquent tout seuls, sans toi" },
+  { n: "3", texte: "Reviens plus tard", detail: "tout a continué pendant ton absence" },
 ];
 
 function Intro({ onStart, soundsOn, onToggleSound }) {
@@ -122,22 +125,30 @@ function Intro({ onStart, soundsOn, onToggleSound }) {
           <b className="text-crmb">CrumbCoin</b>.
         </motion.p>
 
-        <motion.ul
+        <motion.ol
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.26 }}
-          className="mt-5 grid w-full max-w-sm grid-cols-2 gap-2"
+          className="mt-5 w-full max-w-sm space-y-1.5"
         >
-          {FEATURES.map((f) => (
+          {REGLE.map((r) => (
             <li
-              key={f.label}
-              className="flex items-center gap-2 rounded-2xl border border-honey/20 bg-cream-bright/[0.06] px-2.5 py-2.5 text-left text-[0.6875rem] font-semibold text-cream/80 backdrop-blur-sm"
+              key={r.n}
+              className="flex items-center gap-3 rounded-2xl border border-honey/20 bg-cream-bright/[0.06] px-3 py-2.5 text-left backdrop-blur-sm"
             >
-              <Icon name={f.icon} size={15} className={f.tone} />
-              {f.label}
+              <span
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-honey-light to-honey-deep text-[0.8125rem] font-extrabold text-honey-dark"
+                aria-hidden="true"
+              >
+                {r.n}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[0.8125rem] font-bold leading-tight text-cream-bright">{r.texte}</span>
+                <span className="block text-[0.6875rem] leading-tight text-cream/55">{r.detail}</span>
+              </span>
             </li>
           ))}
-        </motion.ul>
+        </motion.ol>
 
         <motion.button
           type="button"
