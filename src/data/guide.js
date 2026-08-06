@@ -21,10 +21,41 @@
 // reçoit bien la première étape, et qu'un vétéran ne se fait pas expliquer le
 // clic après quatre-vingts heures de jeu.
 
-import { ITEMS, MINER_ITEMS } from "./items.js";
+import { ITEMS, ITEM_BY_ID, MINER_ITEMS } from "./items.js";
 import { availableUpgrades, nextMilestone } from "./upgrades.js";
 import { PRESTIGE_MIN_LIFETIME } from "./prestige.js";
+import { unitPrice } from "../utils/selectors.js";
 import { fmt } from "../utils/format.js";
+
+/**
+ * Prix du tout premier Curseur, LU dans le catalogue.
+ *
+ * Il est la mesure de tout le début de partie: c'est le premier objet que le
+ * guide demande d'acheter, et donc le premier mur possible.
+ */
+export const PRIX_PREMIER_ACHAT = unitPrice(ITEM_BY_ID.cursor, 0);
+
+/**
+ * Clics demandés par la première étape.
+ *
+ * Le défaut mesuré: dix clics donnaient dix cookies, le Curseur en coûtait
+ * soixante-quinze, et le guide demandait pourtant de l'acheter tout de suite.
+ * Le joueur arrivait en boutique devant un bouton éteint — le pire moment
+ * possible pour découvrir un jeu.
+ *
+ * Un test vérifie la propriété qui compte: **au moment où le guide demande
+ * d'acheter le Curseur, le Curseur est payable.** Recalibrer les prix ne peut
+ * donc plus rouvrir ce trou en silence.
+ */
+export const CLICS_PREMIERE_ETAPE = 25;
+
+/**
+ * Échelle des primes, ancrée sur ce même prix et doublée à chaque étape.
+ *
+ * La première vaut exactement le premier achat: la récompense n'est pas un
+ * bonus décoratif, c'est ce qui DÉBLOQUE l'étape suivante.
+ */
+const prime = (n) => PRIX_PREMIER_ACHAT * Math.pow(2, n);
 
 const mineursPossedes = (s) => MINER_ITEMS.reduce((n, it) => n + (s.items?.[it.id] || 0), 0);
 const batimentsPossedes = (s) => ITEMS.reduce((n, it) => n + (s.items?.[it.id] || 0), 0);
@@ -52,14 +83,15 @@ export const ETAPES = [
   {
     id: "clic",
     titre: "Appuie sur le gros cookie",
-    pourquoi: "Chaque appui te rapporte des cookies. C'est ta seule source pour l'instant — dans une minute, ça ne le sera plus.",
+    pourquoi:
+      "Chaque appui te rapporte des cookies. Vas-y franchement: au bout, tu auras de quoi t'offrir ta première amélioration.",
     ou: "Le gros cookie au milieu de l'écran",
     onglet: null,
     // La cible est le cookie lui-même: il se met à battre tant que l'étape dure.
     cible: "cookie",
-    recompense: 25,
-    fait: (s) => clics(s) >= 10,
-    progres: (s) => ({ fait: Math.min(10, clics(s)), but: 10 }),
+    recompense: prime(0),
+    fait: (s) => clics(s) >= CLICS_PREMIERE_ETAPE,
+    progres: (s) => ({ fait: Math.min(CLICS_PREMIERE_ETAPE, clics(s)), but: CLICS_PREMIERE_ETAPE }),
   },
   {
     id: "curseur",
@@ -71,7 +103,7 @@ export const ETAPES = [
     // le poser le laissait chercher un bâtiment que la liste n'affichait pas.
     filtre: "click",
     cible: "cursor",
-    recompense: 50,
+    recompense: prime(1),
     fait: (s) => (s.items?.cursor || 0) >= 1,
     progres: (s) => ({ fait: Math.min(1, s.items?.cursor || 0), but: 1 }),
   },
@@ -83,7 +115,7 @@ export const ETAPES = [
     onglet: "shop",
     filtre: "mine",
     cible: "oven",
-    recompense: 100,
+    recompense: prime(2),
     fait: (s) => mineursPossedes(s) >= 1,
     progres: (s) => ({ fait: Math.min(1, mineursPossedes(s)), but: 1 }),
   },
@@ -94,7 +126,7 @@ export const ETAPES = [
     ou: "Boutique, n'importe lesquels",
     onglet: "shop",
     filtre: "all",
-    recompense: 250,
+    recompense: prime(3),
     fait: (s) => batimentsPossedes(s) >= 10,
     progres: (s) => ({ fait: Math.min(10, batimentsPossedes(s)), but: 10 }),
   },
@@ -104,7 +136,7 @@ export const ETAPES = [
     pourquoi: "Une amélioration fait rapporter DEUX FOIS PLUS à un bâtiment, d'un coup. C'est le meilleur achat du jeu.",
     ou: "Onglet « Amélior. », en bas",
     onglet: "upgrades",
-    recompense: 500,
+    recompense: prime(4),
     fait: (s) => ameliorations(s) >= 1,
     progres: (s) => ({ fait: Math.min(1, ameliorations(s)), but: 1 }),
   },
@@ -114,7 +146,7 @@ export const ETAPES = [
     pourquoi: "Les quêtes te donnent des cookies et du CrumbCoin, la monnaie qui achète des bonus définitifs.",
     ou: "Onglet « Quêtes », en bas",
     onglet: "quests",
-    recompense: 1000,
+    recompense: prime(5),
     fait: (s) => quetes(s) >= 1,
     progres: (s) => ({ fait: Math.min(1, quetes(s)), but: 1 }),
   },
@@ -124,7 +156,7 @@ export const ETAPES = [
     pourquoi: "Il apparaît tout seul quelque part à l'écran et disparaît en dix secondes. Un seul peut multiplier tes gains par cinq.",
     ou: "Il apparaîtra tout seul — reste attentif",
     onglet: null,
-    recompense: 2500,
+    recompense: prime(6),
     fait: (s) => dores(s) >= 1,
     progres: (s) => ({ fait: Math.min(1, dores(s)), but: 1 }),
   },

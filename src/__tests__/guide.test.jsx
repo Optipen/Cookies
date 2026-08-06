@@ -19,8 +19,16 @@ import React from "react";
 import { render, screen, fireEvent, act, cleanup, within, waitFor } from "@testing-library/react";
 import CookieCraze from "../components/CookieCraze.jsx";
 import { SAVE_KEY, createFreshState, createResetState, couchesConservees, migrate } from "../utils/state.js";
-import { ETAPES, conseil, etapeCourante, etapeFaite, prochainObjectif } from "../data/guide.js";
-import { deriveStats } from "../utils/selectors.js";
+import {
+  ETAPES,
+  CLICS_PREMIERE_ETAPE,
+  PRIX_PREMIER_ACHAT,
+  conseil,
+  etapeCourante,
+  etapeFaite,
+  prochainObjectif,
+} from "../data/guide.js";
+import { deriveStats, costOf } from "../utils/selectors.js";
 import { PRESTIGE_MIN_LIFETIME } from "../data/prestige.js";
 
 beforeEach(() => {
@@ -90,7 +98,7 @@ describe("un joueur qui découvre", () => {
   });
 
   it("avance d'étape quand il fait ce qu'on lui demande", () => {
-    const apres = neuf((s) => (s.lifetimeStats.clicks = 10));
+    const apres = neuf((s) => (s.lifetimeStats.clicks = CLICS_PREMIERE_ETAPE));
     const c = conseil(apres, {});
     expect(c.index).toBe(2);
     expect(c.titre).toMatch(/Curseur/i);
@@ -107,7 +115,7 @@ describe("un joueur qui découvre", () => {
     };
     await demarrer(
       neuf((s) => {
-        s.lifetimeStats.clicks = 10;
+        s.lifetimeStats.clicks = CLICS_PREMIERE_ETAPE;
         s.items = { cursor: 1 }; // étape « le Four », donc filtre Minage
         s.guide.faites = { clic: true, curseur: true };
       })
@@ -131,6 +139,44 @@ describe("un joueur qui découvre", () => {
     });
     expect(defilements.some((d) => d.id === "item-oven")).toBe(true);
   });
+
+  it("laisse de quoi ACHETER le Curseur au moment où il le demande", () => {
+    // Le mur mesuré: dix clics donnaient dix cookies, le Curseur en coûtait
+    // soixante-quinze, et le guide demandait pourtant de l'acheter tout de
+    // suite. Le joueur arrivait en boutique devant un bouton éteint.
+    const neufJoueur = neuf();
+    const gainParClic = deriveStats(neufJoueur, 0, 0).perClickNoCombo;
+    const prix = costOf(neufJoueur, "cursor", 1, 0);
+
+    // Ce que le joueur a EXACTEMENT quand l'étape 1 se referme: ses clics, plus
+    // la prime de l'étape. Rien d'autre — surtout pas la récompense d'un succès
+    // qui tombe une seconde et demie plus tard et masquerait le trou.
+    const enPoche = CLICS_PREMIERE_ETAPE * gainParClic + ETAPES[0].recompense;
+
+    expect(prix).toBe(PRIX_PREMIER_ACHAT);
+    expect(enPoche).toBeGreaterThanOrEqual(prix);
+  });
+
+  it("verse la prime de l'étape 1 et rend le Curseur achetable, à l'écran", async () => {
+    // La même propriété, mais vue du joueur: le bouton doit être ALLUMÉ.
+    await demarrer(neuf((s) => (s.lifetimeStats.clicks = CLICS_PREMIERE_ETAPE - 1)));
+    const cookie = screen.getByRole("button", { name: /Cliquer le cookie/i });
+    await act(async () => {
+      fireEvent.click(cookie);
+    });
+    // Le verrou d'étape tourne à la seconde: on le laisse passer.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 1200));
+    });
+    const solde = Number(screen.getByTestId("solde").textContent.replace(/\D/g, ""));
+    expect(solde).toBeGreaterThanOrEqual(PRIX_PREMIER_ACHAT);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: "Boutique" }));
+    });
+    const acheter = screen.getByRole("button", { name: /^Acheter Curseur/i });
+    expect(acheter.disabled).toBe(false);
+  }, 15000);
 
   it("récompense chaque étape franchie, en cookies", () => {
     // Un guide qui ne promet rien n'est qu'une liste de corvées.
