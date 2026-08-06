@@ -22,7 +22,7 @@ import { render, screen, act, cleanup } from "@testing-library/react";
 import fs from "node:fs";
 import path from "node:path";
 import CookieCraze from "../components/CookieCraze.jsx";
-import { SAVE_KEY, createFreshState, exportSave, importSave } from "../utils/state.js";
+import { SAVE_KEY, LEGACY_KEYS, createFreshState, exportSave, importSave } from "../utils/state.js";
 
 const RACINE = path.resolve(import.meta.dirname, "../..");
 
@@ -86,9 +86,15 @@ describe("les métadonnées servies disent Crumbora", () => {
 });
 
 describe("une partie Cookie Craze s'ouvre telle quelle dans Crumbora", () => {
-  it("garde la clé de sauvegarde historique, à la lettre", () => {
+  it("garde le préfixe de stockage historique, quelle que soit la version", () => {
     // Le renommage ne touche PAS au stockage: c'est la garantie de continuité.
-    expect(SAVE_KEY).toBe("cookieCrazeSaveV6");
+    // Le NUMÉRO, lui, suit le schéma de sauvegarde — figer « V6 » ici faisait
+    // échouer ce test à chaque évolution du schéma, alors que ce qu'il protège
+    // est le préfixe: c'est lui qui relie un joueur à sa partie.
+    expect(SAVE_KEY).toMatch(/^cookieCrazeSaveV\d+$/);
+    // Et toutes les clés précédentes restent lues, la plus récente en premier.
+    expect(LEGACY_KEYS[0]).toBe("cookieCrazeSaveV6");
+    expect(LEGACY_KEYS).toContain("cookieCrazeSaveV1");
   });
 
   it("recharge la progression depuis la clé historique sans rien perdre", async () => {
@@ -100,7 +106,7 @@ describe("une partie Cookie Craze s'ouvre telle quelle dans Crumbora", () => {
     });
     // La partie chargée est bien celle du joueur, sous la marque Crumbora.
     expect(screen.getByRole("heading", { name: "CRUMBORA" })).toBeTruthy();
-    const s = JSON.parse(localStorage.getItem("cookieCrazeSaveV6"));
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
     expect(s.cookies).toBeGreaterThanOrEqual(123456);
     expect(s.crypto.balance).toBe(42.5);
     expect(s.crypto.ledger).toBe(3);

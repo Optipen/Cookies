@@ -20,12 +20,18 @@ const SkinCard = memo(function SkinCard({ skin, owned, equipped, affordable, mis
       )}
 
       <div className="flex items-center gap-3">
+        {/* La VIGNETTE, pas le grand cookie: 128 px pour un rendu de 64, au
+            lieu du fichier plein format. Ouvrir cet onglet téléchargeait
+            5,3 Mo d'images pour cette seule liste. */}
         <img
-          src={skin.src}
+          src={skin.apercu || skin.src}
           alt=""
+          width="128"
+          height="128"
           aria-hidden="true"
           draggable="false"
           loading="lazy"
+          decoding="async"
           className={`h-16 w-16 shrink-0 select-none transition-transform duration-200 hover:scale-110 ${
             skin.className || ""
           } ${!owned ? "opacity-45 saturate-50" : ""}`}

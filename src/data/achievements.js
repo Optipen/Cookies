@@ -7,16 +7,35 @@ import { lisible } from "../utils/grid.js";
 const totalBuildings = (s) => ITEMS.reduce((sum, it) => sum + (s.items?.[it.id] || 0), 0);
 const totalMiners = (s) => MINERS.reduce((sum, m) => sum + (s.crypto?.miners?.[m.id] || 0), 0);
 const heldCrmb = (s) => (s.crypto?.balance || 0) + (s.crypto?.positions || []).reduce((a, p) => a + p.amount, 0);
-const questsDone = (s) => Object.values(s.quests?.completed || {}).reduce((a, b) => a + b, 0);
+
+// === Cumuls: toujours les compteurs À VIE ===
+//
+// Cinq succès comptent un total qui se construit sur des jours — cent mille
+// clics, cent cinquante quêtes, deux cents dorés, sept jours de série,
+// vingt-cinq cookies croqués. Branchés sur les compteurs de PARTIE, ils
+// exigeaient de ne jamais renaître, alors que le jeu propose une renaissance
+// dès la quatre-vingtième minute et la répète ensuite sans arrêt. Ils lisent
+// donc `lifetimeStats`, que rien ne remet à zéro.
+//
+// Le repli sur les compteurs de partie couvre l'instant qui suit une migration
+// et les états de test construits à la main: un succès déjà mérité ne doit pas
+// disparaître le temps d'un rechargement.
+const aVie = (s, cle, partie = 0) => Math.max(s?.lifetimeStats?.[cle] || 0, partie || 0);
+const totalClicks = (s) => aVie(s, "clicks", s?.stats?.clicks);
+const totalGolden = (s) => aVie(s, "goldenClicks", s?.stats?.goldenClicks);
+const totalEaten = (s) => aVie(s, "cookiesEaten", s?.cookieEatenCount);
+const questsDone = (s) =>
+  aVie(s, "questsCompleted", Object.values(s?.quests?.completed || {}).reduce((a, b) => a + b, 0));
+const bestStreak = (s) => aVie(s, "bestStreak", s?.quests?.streak);
 
 // `tier` pilote le style de la carte: 1 bronze → 5 légendaire
 export const ACHIEVEMENTS = [
   // --- Clics ---
-  { id: "click_1", tier: 1, cat: "clic", name: "Premier croc", desc: "Ton tout premier clic.", cond: (s) => (s.stats?.clicks || 0) >= 1 },
-  { id: "click_100", tier: 1, cat: "clic", name: "Ça clique sec", desc: "100 clics.", cond: (s) => (s.stats?.clicks || 0) >= 100 },
-  { id: "click_1k", tier: 2, cat: "clic", name: "Cliqueur fou", desc: "1 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 1_000 },
-  { id: "click_10k", tier: 3, cat: "clic", name: "Tendinite", desc: "10 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 10_000 },
-  { id: "click_100k", tier: 4, cat: "clic", name: "Main bionique", desc: "100 000 clics.", cond: (s) => (s.stats?.clicks || 0) >= 100_000 },
+  { id: "click_1", tier: 1, cat: "clic", name: "Premier croc", desc: "Ton tout premier clic.", cond: (s) => totalClicks(s) >= 1 },
+  { id: "click_100", tier: 1, cat: "clic", name: "Ça clique sec", desc: "100 clics.", cond: (s) => totalClicks(s) >= 100 },
+  { id: "click_1k", tier: 2, cat: "clic", name: "Cliqueur fou", desc: "1 000 clics.", cond: (s) => totalClicks(s) >= 1_000 },
+  { id: "click_10k", tier: 3, cat: "clic", name: "Tendinite", desc: "10 000 clics, renaissances comprises.", cond: (s) => totalClicks(s) >= 10_000 },
+  { id: "click_100k", tier: 4, cat: "clic", name: "Main bionique", desc: "100 000 clics, renaissances comprises.", cond: (s) => totalClicks(s) >= 100_000 },
 
   { id: "combo_max", tier: 2, cat: "clic", name: "Enchaînement", desc: `Atteindre un combo ×${fmtMult(COMBO.max)}.`, cond: (s) => (s.stats?.bestCombo || 0) >= COMBO.max - 1e-9 },
   { id: "power_1k", tier: 3, cat: "clic", name: "Doigts de fée", desc: "Atteindre 1 000 de puissance de clic.", cond: (s, ctx) => (ctx?.perClickNoCombo || 0) >= 1_000 },
@@ -52,18 +71,18 @@ export const ACHIEVEMENTS = [
   { id: "cps_1m", tier: 4, cat: "minage", name: "Usine à ciel ouvert", desc: "Miner 1 million de cookies par seconde.", cond: (s, ctx) => (ctx?.mining || 0) >= 1e6 },
 
   // --- Événements ---
-  { id: "golden_1", tier: 1, cat: "événement", name: "Doré !", desc: "Attraper un cookie doré.", cond: (s) => (s.stats?.goldenClicks || 0) >= 1 },
-  { id: "golden_25", tier: 2, cat: "événement", name: "Chasseur d'or", desc: "25 cookies dorés.", cond: (s) => (s.stats?.goldenClicks || 0) >= 25 },
-  { id: "golden_200", tier: 4, cat: "événement", name: "Roi Midas", desc: "200 cookies dorés.", cond: (s) => (s.stats?.goldenClicks || 0) >= 200 },
-  { id: "eaten_1", tier: 1, cat: "événement", name: "Miam", desc: "Croquer un cookie entier.", cond: (s) => (s.cookieEatenCount || 0) >= 1 },
-  { id: "eaten_25", tier: 3, cat: "événement", name: "Appétit d'ogre", desc: "25 cookies croqués.", cond: (s) => (s.cookieEatenCount || 0) >= 25 },
+  { id: "golden_1", tier: 1, cat: "événement", name: "Doré !", desc: "Attraper un cookie doré.", cond: (s) => totalGolden(s) >= 1 },
+  { id: "golden_25", tier: 2, cat: "événement", name: "Chasseur d'or", desc: "25 cookies dorés.", cond: (s) => totalGolden(s) >= 25 },
+  { id: "golden_200", tier: 4, cat: "événement", name: "Roi Midas", desc: "200 cookies dorés, renaissances comprises.", cond: (s) => totalGolden(s) >= 200 },
+  { id: "eaten_1", tier: 1, cat: "événement", name: "Miam", desc: "Croquer un cookie entier.", cond: (s) => totalEaten(s) >= 1 },
+  { id: "eaten_25", tier: 3, cat: "événement", name: "Appétit d'ogre", desc: "25 cookies croqués, renaissances comprises.", cond: (s) => totalEaten(s) >= 25 },
   { id: "offline", tier: 1, cat: "événement", name: "Rentier", desc: "Encaisser des gains hors-ligne.", cond: (s) => !!s.flags?.offlineCollected },
 
   // --- Quêtes ---
   { id: "quest_1", tier: 1, cat: "quête", name: "Première mission", desc: "Terminer une quête.", cond: (s) => questsDone(s) >= 1 },
   { id: "quest_25", tier: 2, cat: "quête", name: "Aventurier", desc: "25 quêtes terminées.", cond: (s) => questsDone(s) >= 25 },
-  { id: "quest_150", tier: 4, cat: "quête", name: "Légende du biscuit", desc: "150 quêtes terminées.", cond: (s) => questsDone(s) >= 150 },
-  { id: "streak_7", tier: 3, cat: "quête", name: "Assidu", desc: "7 jours de série quotidienne.", cond: (s) => (s.quests?.streak || 0) >= 7 },
+  { id: "quest_150", tier: 4, cat: "quête", name: "Légende du biscuit", desc: "150 quêtes terminées, renaissances comprises.", cond: (s) => questsDone(s) >= 150 },
+  { id: "streak_7", tier: 3, cat: "quête", name: "Assidu", desc: "7 jours de série quotidienne.", cond: (s) => bestStreak(s) >= 7 },
 
   // --- Crypto ---
   { id: "crmb_first", tier: 1, cat: "crypto", name: "Premier satoshi", desc: "Obtenir du CRMB.", cond: (s) => heldCrmb(s) > 0 },
@@ -79,7 +98,7 @@ export const ACHIEVEMENTS = [
   { id: "prestige_1", tier: 2, cat: "prestige", name: "Renaissance", desc: "Faire un prestige.", cond: (s) => (s.stats?.prestigeCount || 0) >= 1 },
   { id: "prestige_10", tier: 4, cat: "prestige", name: "Cycle éternel", desc: "10 prestiges.", cond: (s) => (s.stats?.prestigeCount || 0) >= 10 },
   { id: "chips_100", tier: 3, cat: "prestige", name: "Constellation", desc: "100 chips célestes.", cond: (s) => (s.prestige?.chips || 0) >= 100 },
-  { id: "tree_maxed", tier: 5, cat: "prestige", name: "Ascension", desc: "Un nœud de l'arbre céleste au maximum.", cond: (s) => Object.values(s.prestige?.upgrades || {}).some((l) => l >= 20) },
+  { id: "tree_maxed", tier: 5, cat: "prestige", name: "Ascension", desc: "Monter un nœud sans fin de l'arbre céleste au niveau 20.", cond: (s) => Object.values(s.prestige?.upgrades || {}).some((l) => l >= 20) },
 
   // --- Style ---
   { id: "skin_1", tier: 1, cat: "style", name: "Relooking", desc: "Acheter un skin.", cond: (s) => Object.values(s.skinsOwned || {}).filter(Boolean).length >= 2 },

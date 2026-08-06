@@ -10,14 +10,13 @@
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Typographie « Miel & Braise »: Marcellus pour les grands moments,
-         Sora pour l'interface. Le jeu reste lisible si les polices ne
-         chargent pas: la pile système prend le relais. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Marcellus&family=Sora:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+         Sora pour l'interface. AUTO-HÉBERGÉES (`node scripts/polices.mjs`):
+         elles venaient de fonts.googleapis.com par une feuille externe qui
+         bloquait le premier rendu et envoyait l'IP de chaque joueur chez
+         Google. Le jeu reste lisible si elles ne chargent pas: la pile système
+         prend le relais, et `font-display: swap` n'attend personne. -->
+    <link rel="preload" href="/fonts/sora-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/polices.css" />
 
     <!-- SEO -->
     <meta name="description" content="Crumbora — Clique, forge des cookies, gagne des Goldens, mine des CrumbCoins (CRMB) et vise l’infini." />
@@ -26,8 +25,11 @@
     <meta property="og:title" content="Crumbora" />
     <meta property="og:description" content="Forge des cookies, Goldens &amp; CRMB. Clique vers l’infini." />
     <meta property="og:type" content="website" />
-    <!-- Remplace l’URL ci-dessous par l’URL finale de ton site si tu l’as -->
-    <!-- <meta property="og:url" content="https://ton-domaine.vercel.app/" /> -->
+    <!-- `og:url`, `canonical` et l'URL ABSOLUE de l'image sont injectées au
+         build depuis `VITE_SITE_URL` (voir vite.config.js). Sans domaine
+         configuré, elles sont simplement absentes: une balise vide ou pointant
+         vers un domaine d'exemple vaut moins que pas de balise du tout. -->
+    <!--%SITE_META%-->
     <meta property="og:image" content="/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />

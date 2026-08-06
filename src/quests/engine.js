@@ -342,6 +342,20 @@ export function tickQuests(state, ctx, now = Date.now(), rng = Math.random) {
     lastDailyClaim = now;
   }
 
+  // Compteurs à vie: `quests.completed` repart à zéro à chaque renaissance,
+  // mais « 150 quêtes terminées » et « 7 jours de série » se comptent sur toute
+  // la vie du joueur. Rien ne les redescend jamais.
+  const finies = events.filter((e) => e.type === "completed").length;
+  const vieAvant = next.lifetimeStats || {};
+  const vie = {
+    clicks: vieAvant.clicks || 0,
+    goldenClicks: vieAvant.goldenClicks || 0,
+    cookiesEaten: vieAvant.cookiesEaten || 0,
+    questsCompleted: (vieAvant.questsCompleted || 0) + finies,
+    bestStreak: Math.max(vieAvant.bestStreak || 0, streak),
+  };
+  if (finies > 0 || vie.bestStreak !== (vieAvant.bestStreak || 0)) changed = true;
+
   // Réapprovisionnement
   const refilledActive = refill(active, ACTIVE_SLOTS, next, ctx, cooldowns, false, now, rng);
   const refilledDaily = refill(daily, DAILY_SLOTS, next, ctx, cooldowns, true, now, rng);
@@ -352,6 +366,7 @@ export function tickQuests(state, ctx, now = Date.now(), rng = Math.random) {
   return {
     state: {
       ...next,
+      lifetimeStats: vie,
       quests: {
         ...questsState,
         active: refilledActive,

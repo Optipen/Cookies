@@ -16,7 +16,7 @@ import CookieBiteMask from "./CookieBiteMask.jsx";
 import Intro from "./Intro.jsx";
 import Icon from "./Icon.jsx";
 
-import { ITEMS } from "../data/items.js";
+import { ITEMS, itemUnlocked } from "../data/items.js";
 import { nextMilestone, tierThreshold } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
@@ -51,6 +51,8 @@ import {
   loadState,
   saveState,
   createResetState,
+  couchesConservees,
+  storageDisponible,
   isFeatureEnabled,
   exportSave as serializeSave,
   importSave as parseSave,
@@ -530,6 +532,13 @@ export default function CookieCraze() {
   const [offlineReport, setOfflineReport] = useState(null);
   const [buyQty, setBuyQty] = useState(1);
   const [shopFilter, setShopFilter] = useState("all");
+  // Le stockage refuse-t-il d'écrire ? Navigation privée, iframe sandboxée,
+  // quota plein. Le jeu tournait parfaitement dans ce cas sans jamais le dire,
+  // et le joueur perdait une heure au rechargement sans avoir rien vu venir.
+  //
+  // La sonde est éprouvée à l'initialisation, comme `loadState` juste au-dessus:
+  // c'est une capacité du navigateur, elle ne change pas d'un rendu à l'autre.
+  const [sauvegardeKo, setSauvegardeKo] = useState(() => !storageDisponible());
 
   const particlesRef = useRef(null);
   const bootedRef = useRef(false);
@@ -586,7 +595,11 @@ export default function CookieCraze() {
 
   // --- Systèmes ------------------------------------------------------------
   useGameLoop(state, setState);
-  useAutosave(state, saveState);
+  // Une écriture qui échoue en cours de partie (quota atteint) lève le même
+  // drapeau que la sonde du démarrage: le joueur doit l'apprendre quand ça
+  // arrive, pas au rechargement suivant.
+  const signalerEchecSauvegarde = useCallback(() => setSauvegardeKo(true), []);
+  useAutosave(state, saveState, { onEchec: signalerEchecSauvegarde });
 
   const celebrate = useCallback(() => {
     particlesRef.current?.burstGold(24);
@@ -653,7 +666,12 @@ export default function CookieCraze() {
         const threshold = early ? 30_000 : 75_000;
         if (idleFor < threshold) return s;
 
-        const pick = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+        // Uniquement parmi les bâtiments RÉELLEMENT en vente: le tirage portait
+        // sur le catalogue entier, rangs d'Ascension verrouillés compris, et
+        // une vente flash sur une carte invisible est une vente perdue.
+        const enVente = ITEMS.filter((it) => itemUnlocked(it, s));
+        if (!enVente.length) return s;
+        const pick = enVente[Math.floor(Math.random() * enVente.length)];
         return {
           ...s,
           flags: {
@@ -756,6 +774,13 @@ export default function CookieCraze() {
           handmade: (s.stats.handmade || 0) + gain,
           bestCombo: Math.max(s.stats.bestCombo || 1, derived.combo),
         },
+        // Deux compteurs, deux usages: `stats.clicks` décrit la PARTIE (les
+        // quêtes en mesurent des écarts, le cookie s'y fait croquer),
+        // `lifetimeStats.clicks` décrit le JOUEUR et ne redescend jamais.
+        lifetimeStats: {
+          ...s.lifetimeStats,
+          clicks: (s.lifetimeStats?.clicks || 0) + 1,
+        },
       }));
 
       if (isFeatureEnabled("ENABLE_PARTICLES")) {
@@ -813,8 +838,12 @@ export default function CookieCraze() {
           },
           flags: { ...prev.flags, flash: null },
         };
-        // Le premier bâtiment automatique offert ne l'est qu'une fois
-        if (price === 0 && item?.mode === "cps" && !prev.flags.freeFirstAutoGiven) {
+        // Le premier Mineur offert ne l'est qu'une fois. La condition testait
+        // `mode === "cps"`, un mode qui n'existe pas — les seuls sont "click"
+        // et "mine" —, donc le drapeau n'était jamais posé. Sans conséquence
+        // (le garde « zéro Mineur possédé » de `premierOffert` faisait le
+        // travail), mais la branche ne pouvait pas fonctionner.
+        if (price === 0 && item?.mode === "mine" && !prev.flags.freeFirstAutoGiven) {
           next.flags = { ...next.flags, freeFirstAutoGiven: true, freeFirstAutoItemId: itemId };
         }
         if (big) {
@@ -1069,7 +1098,13 @@ export default function CookieCraze() {
         particlesRef.current?.burstGold(60);
 
         setState((prev) => {
+          // Tout ce qui survit est CONFIÉ à `createResetState`, couche par
+          // couche. Le report se faisait avant dans un `{ ...fresh, … }` écrit
+          // à la suite, et les apparences y avaient été oubliées: le joueur
+          // perdait Ice et Lava — trente-cinq CRMB — alors même que le
+          // portefeuille qui les avait payées, lui, survivait.
           const fresh = createResetState({
+            ...couchesConservees(prev),
             preservePrestige: true,
             prestige: { chips: potential, spent: prev.prestige?.spent || 0, upgrades: prev.prestige?.upgrades || {} },
             ascension: prev.ascension,
@@ -1084,17 +1119,13 @@ export default function CookieCraze() {
             lifetime: head,
             ui: { ...prev.ui, introSeen: true },
             stats: { ...fresh.stats, prestigeCount: (prev.stats?.prestigeCount || 0) + 1 },
-            // Le portefeuille CRMB et le matériel survivent au prestige, et la
-            // renaissance elle-même en rapporte: c'était annoncé dans le README
-            // mais aucune ligne de code ne le faisait.
+            // La renaissance elle-même rapporte des CRMB: c'était annoncé dans
+            // le README mais aucune ligne de code ne le faisait.
             crypto: {
-              ...prev.crypto,
-              balance: addCrmb(prev.crypto?.balance, CRMB_PAR_PRESTIGE),
-              totalEarned: addCrmb(prev.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
-              lastMarketTs: Date.now(),
-              lastYieldTs: Date.now(),
+              ...fresh.crypto,
+              balance: addCrmb(fresh.crypto?.balance, CRMB_PAR_PRESTIGE),
+              totalEarned: addCrmb(fresh.crypto?.totalEarned, CRMB_PAR_PRESTIGE),
             },
-            unlocked: prev.unlocked,
           };
         });
         notify.major(`Renaissance céleste — +${gain} chips · +${CRMB_PAR_PRESTIGE} CRMB`, "gold");
@@ -1131,6 +1162,7 @@ export default function CookieCraze() {
 
         setState((prev) => {
           const fresh = createResetState({
+            ...couchesConservees(prev),
             preservePrestige: false,
             ascension: {
               stars: (prev.ascension?.stars || 0) + gagne,
@@ -1144,10 +1176,6 @@ export default function CookieCraze() {
             ...fresh,
             ui: { ...prev.ui, introSeen: true },
             stats: { ...fresh.stats, prestigeCount: prev.stats?.prestigeCount || 0 },
-            crypto: { ...prev.crypto, lastMarketTs: Date.now(), lastYieldTs: Date.now() },
-            unlocked: prev.unlocked,
-            skin: prev.skin,
-            skinsOwned: prev.skinsOwned,
           };
         });
         notify.major(`Ascension — +${gagne} étoile${gagne > 1 ? "s" : ""}`, "gold");
@@ -1227,6 +1255,10 @@ export default function CookieCraze() {
       lifetime: prev.lifetime + bonus,
       cookieEatenCount: count,
       cookieBites: [],
+      lifetimeStats: {
+        ...prev.lifetimeStats,
+        cookiesEaten: (prev.lifetimeStats?.cookiesEaten || 0) + 1,
+      },
       fx: { ...prev.fx, banner: { title: "Cookie croqué !", sub: `+${fmt(bonus)}`, until: Date.now() + 2200 } },
     }));
     notify.major(`Cookie croqué — +${fmt(bonus)}`, "gold");
@@ -1278,17 +1310,26 @@ export default function CookieCraze() {
       const full = event?.altKey || event?.shiftKey;
       setConfirmation({
         titre: full ? "Tout effacer" : "Réinitialiser la partie",
+        // Le dialogue ÉNUMÈRE ce qui reste. L'ancien texte disait « le prestige
+        // et l'arbre céleste sont conservés » et emportait pourtant les
+        // étoiles, la Voûte, le portefeuille CRMB, le Registre, les apparences
+        // et les succès — une phrase rassurante devant un geste destructeur.
         corps: full
-          ? "Tout effacer, y compris le prestige et l'arbre céleste ? Il n'y a pas de retour en arrière."
-          : "Réinitialiser la partie ? Le prestige et l'arbre céleste sont conservés.",
+          ? "Tout effacer : la partie, le prestige, l'arbre céleste, les étoiles, la Voûte, ton CRMB, le Registre, tes apparences, tes succès et tes compteurs à vie. Il n'y a pas de retour en arrière."
+          : "Repartir d'une partie neuve ? Tu gardes tes chips célestes et l'arbre céleste, tes étoiles et la Voûte, ton CRMB et le Registre, tes apparences, tes succès et tes compteurs à vie.",
         libelle: full ? "Tout effacer" : "Réinitialiser",
         action: () => {
           const s = stateRef.current;
-          const payload = {
-            preservePrestige: !full,
-            prestige: full ? null : s.prestige,
-            sounds: !!s.ui.sounds,
-          };
+          // Même contrat qu'une renaissance: on CONFIE les couches à garder.
+          const payload = full
+            ? { preservePrestige: false, sounds: !!s.ui.sounds }
+            : {
+                ...couchesConservees(s),
+                preservePrestige: true,
+                prestige: s.prestige,
+                ascension: s.ascension,
+                sounds: !!s.ui.sounds,
+              };
 
           try {
             localStorage.removeItem(SAVE_KEY);
@@ -1345,6 +1386,29 @@ export default function CookieCraze() {
       {/* La marge basse réserve la place de la navigation fixe: aucun bouton de
           la boutique ne peut finir caché dessous. */}
       <div className="mx-auto max-w-7xl px-3 py-2 sm:py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-6">
+        {/* Sauvegarde impossible: un bandeau PERSISTANT, pas une notification
+            de trois secondes. Le joueur doit pouvoir l'apprendre à la minute
+            quarante comme à la minute deux, et repartir avec son fichier. */}
+        {sauvegardeKo && (
+          <div
+            role="alert"
+            data-testid="sauvegarde-ko"
+            className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2xl border border-lava-deep/50 bg-lava-deep/10 px-3.5 py-2.5 text-[11.5px] text-lava"
+          >
+            <Icon name="flame" size={14} className="shrink-0" />
+            <span className="min-w-0 flex-1">
+              <b className="text-cream">Ta partie ne peut pas être sauvegardée.</b> Le navigateur refuse le stockage
+              (navigation privée, ou espace saturé) : tout sera perdu en rechargeant la page.
+            </span>
+            <button
+              type="button"
+              onClick={exportSave}
+              className="btn-ghost min-h-11 shrink-0 rounded-xl px-3 text-[11px] text-cream"
+            >
+              Exporter un fichier
+            </button>
+          </div>
+        )}
         {/* ---------- En-tête ---------- */}
         {/* L'en-tête tenait sur TROIS lignes en 320 px de large — titre, puis
             quatre pastilles, puis le bouton de réglages tout seul — et poussait

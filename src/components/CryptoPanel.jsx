@@ -334,7 +334,10 @@ function CryptoPanel({ state, stats, onBuy, onSell, onStake, onUnstake, onBuyMin
                       }`}
                     >
                       <Icon name="coin" size={11} />
-                      {fmt(cost)}
+                      {/* `fmtPrix` et non `fmt`: un prix affiché est un prix
+                          payé, la forme compacte n'est admise que si elle est
+                          exacte. Même règle que la boutique. */}
+                      {fmtPrix(cost)}
                     </span>
                     <span className="text-[10.5px] font-bold tabular-nums text-crmb">+{fmtCrmb(m.perHour, 2)}/h</span>
                   </span>

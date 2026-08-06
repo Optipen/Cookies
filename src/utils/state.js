@@ -24,12 +24,13 @@ export const FEATURES = {
 /**
  * Version du schéma de sauvegarde.
  *
- * Elle passe à 6 avec l'Ascension et le Registre: deux blocs qui n'existaient
- * dans aucune sauvegarde précédente. La version est ÉCRITE dans la sauvegarde
- * et `migratedFrom` garde celle d'où l'on vient — sans quoi il est impossible
- * de dire, devant une partie cassée, quelle transformation l'a produite.
+ * Elle passe à 7 avec les COMPTEURS À VIE (`lifetimeStats`): un bloc qui
+ * n'existait dans aucune sauvegarde précédente. La version est ÉCRITE dans la
+ * sauvegarde et `migratedFrom` garde celle d'où l'on vient — sans quoi il est
+ * impossible de dire, devant une partie cassée, quelle transformation l'a
+ * produite.
  */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 // === État neuf ===
 // Fonction (et non constante) pour que chaque appel produise des objets frais:
@@ -49,6 +50,10 @@ export function createFreshState(now = Date.now()) {
     lastTs: now,
     createdAt: now,
 
+    // Statistiques de la PARTIE EN COURS. Elles repartent à zéro à chaque
+    // renaissance, et c'est voulu: les quêtes mesurent des écarts depuis leur
+    // instanciation, le cookie croqué compte les clics de la partie, et
+    // « 40 000 clics » n'a de sens que rapporté à une partie.
     stats: {
       clicks: 0,
       lastPurchaseTs: now,
@@ -59,6 +64,27 @@ export function createFreshState(now = Date.now()) {
       prestigeCount: 0,
       handmade: 0,
       bestCombo: 1,
+    },
+
+    // === Compteurs à VIE ===
+    //
+    // Ils ne sont JAMAIS remis à zéro — ni par un prestige, ni par une
+    // ascension, ni par une réinitialisation de partie. Seul « Tout effacer »
+    // les emporte.
+    //
+    // Ils existent parce que cinq succès sur cinquante-cinq comptent un cumul
+    // — cent mille clics, cent cinquante quêtes, deux cents dorés, sept jours
+    // de série, vingt-cinq cookies croqués — alors que le jeu pousse à renaître
+    // toutes les quatre-vingts minutes. Branchés sur `stats`, ces succès
+    // demandaient de ne jamais renaître: exactement l'inverse de ce que le jeu
+    // demande. Les compteurs de partie restent à côté, intacts, pour tout ce
+    // qui décrit la partie en cours.
+    lifetimeStats: {
+      clicks: 0,
+      goldenClicks: 0,
+      cookiesEaten: 0,
+      questsCompleted: 0,
+      bestStreak: 0,
     },
 
     flags: {
@@ -111,11 +137,12 @@ export function createFreshState(now = Date.now()) {
 }
 
 // === Clés de stockage ===
-export const SAVE_KEY = "cookieCrazeSaveV6";
+export const SAVE_KEY = "cookieCrazeSaveV7";
 // Lues dans l'ordre, de la plus récente à la plus ancienne. Elles ne sont
 // jamais effacées: une sauvegarde qu'on a su lire une fois doit rester lisible
 // si le joueur revient sur une version antérieure.
 export const LEGACY_KEYS = [
+  "cookieCrazeSaveV6",
   "cookieCrazeSaveV5",
   "cookieCrazeSaveV4",
   "cookieCrazeSaveV3",
@@ -219,6 +246,26 @@ export function migrate(savedState, now = Date.now()) {
     // Le combo allait jusqu'à ×3; il s'arrête à ×1,75. Un record hérité de
     // l'ancienne échelle afficherait une valeur devenue inatteignable.
     merged.stats.bestCombo = clampBestCombo(savedState.stats?.bestCombo);
+
+    // --- Compteurs à vie: arrivent en v7 ---
+    //
+    // Une sauvegarde d'avant n'en a aucun. Les mettre à zéro effacerait le
+    // travail déjà fait: un joueur à quatre-vingt mille clics repartirait de
+    // rien pour un succès qu'il touchait presque. On les SÈME donc avec ce que
+    // la partie en cours a accumulé — c'est un plancher, jamais un plafond, et
+    // on ne redescend jamais un compteur déjà écrit.
+    const vieSauvee = isObj(savedState.lifetimeStats) ? savedState.lifetimeStats : {};
+    const quetesFaites = isObj(savedState.quests?.completed)
+      ? Object.values(savedState.quests.completed).reduce((a, b) => a + (num(b) > 0 ? Math.floor(num(b)) : 0), 0)
+      : 0;
+    const auMoins = (sauve, partie) => Math.max(0, Math.floor(num(sauve)), Math.floor(num(partie)));
+    merged.lifetimeStats = {
+      clicks: auMoins(vieSauvee.clicks, savedState.stats?.clicks),
+      goldenClicks: auMoins(vieSauvee.goldenClicks, savedState.stats?.goldenClicks),
+      cookiesEaten: auMoins(vieSauvee.cookiesEaten, savedState.cookieEatenCount),
+      questsCompleted: auMoins(vieSauvee.questsCompleted, quetesFaites),
+      bestStreak: auMoins(vieSauvee.bestStreak, savedState.quests?.streak),
+    };
 
     // --- Prestige: l'arbre céleste arrive en v5 ---
     merged.prestige = {
@@ -337,18 +384,65 @@ export function saveState(state) {
   }
 }
 
+/**
+ * Le stockage accepte-t-il vraiment une écriture ?
+ *
+ * `localStorage` peut EXISTER et refuser d'écrire — navigation privée sur
+ * certains navigateurs, iframe sandboxée, quota déjà plein, réglage de
+ * confidentialité. On ne se fie donc pas à sa présence: on écrit une sonde,
+ * on la relit, on l'efface.
+ *
+ * Cette vérification existe parce que le jeu tournait parfaitement dans ces
+ * conditions sans jamais le dire: le joueur jouait une heure, rechargeait, et
+ * trouvait une partie vide sans avoir vu le moindre avertissement.
+ */
+export function storageDisponible() {
+  const sonde = `${SAVE_KEY}__sonde`;
+  try {
+    localStorage.setItem(sonde, "1");
+    const lu = localStorage.getItem(sonde);
+    localStorage.removeItem(sonde);
+    return lu === "1";
+  } catch {
+    return false;
+  }
+}
+
 // === Feature flags ===
 export const isFeatureEnabled = (name) => FEATURES[name] ?? false;
 
 // === Reset ===
 /**
- * Nouvelle partie. `preservePrestige` garde les chips et l'arbre céleste.
+ * Nouvelle partie, et le CONTRAT de ce qui lui survit.
+ *
+ * Une seule règle: **rien ne survit qu'on ne lui ait explicitement confié**.
+ * Chaque couche est un paramètre nommé, `null` par défaut, et l'appelant dit
+ * ce qu'il garde. C'est verbeux exprès: la version précédente laissait le
+ * report des couches à un `{ ...fresh, … }` écrit après coup chez l'appelant,
+ * et deux couches y ont été oubliées sans que rien ne le signale —
+ * l'Ascension entière disparaissait à la réinitialisation de partie, et les
+ * apparences (dont deux payées 35 CRMB) à chaque renaissance.
+ *
+ * Ce qu'un appelant ne passe pas repart donc à neuf, visiblement, à la
+ * lecture du site d'appel.
+ *
  * Chaque appel repart d'un état frais: aucune mutation partagée possible.
  */
 export function createResetState({
   preservePrestige = true,
   prestige = null,
   ascension = null,
+  // Portefeuille CRMB, Registre et matériel d'extraction: la couche monétaire.
+  crypto = null,
+  // Apparences possédées et apparence équipée. Deux d'entre elles s'achètent
+  // en CRMB — une monnaie qui survit aux renaissances: l'objet acheté avec
+  // doit y survivre aussi.
+  skin = null,
+  skinsOwned = null,
+  // Succès déjà décrochés.
+  unlocked = null,
+  // Compteurs à vie: ils ne se remettent à zéro que sur « Tout effacer ».
+  lifetimeStats = null,
   sounds = true,
   // Un joueur qui relance une partie a déjà vu l'écran d'accueil: le lui
   // réimposer n'apporte rien. Seule une toute première partie l'affiche.
@@ -372,10 +466,48 @@ export function createResetState({
       count: Math.max(0, Math.floor(num(ascension.count))),
     };
   }
+  if (isObj(crypto)) {
+    // Les horodatages du marché et du rendement repartent de maintenant: repris
+    // tels quels, une partie reprise après plusieurs heures verserait d'un coup
+    // tout le rendement de l'absence, en plus du rapport hors-ligne.
+    s.crypto = { ...crypto, lastMarketTs: now, lastYieldTs: now };
+  }
+  if (isObj(skinsOwned)) {
+    // On repart du jeu neuf pour que l'apparence par défaut soit toujours là,
+    // même si une sauvegarde bricolée prétend le contraire.
+    s.skinsOwned = { ...s.skinsOwned, ...skinsOwned, default: true };
+  }
+  if (typeof skin === "string" && s.skinsOwned[skin]) s.skin = skin;
+  if (isObj(unlocked)) s.unlocked = { ...unlocked };
+  if (isObj(lifetimeStats)) {
+    const n = (v) => Math.max(0, Math.floor(num(v)));
+    s.lifetimeStats = {
+      clicks: n(lifetimeStats.clicks),
+      goldenClicks: n(lifetimeStats.goldenClicks),
+      cookiesEaten: n(lifetimeStats.cookiesEaten),
+      questsCompleted: n(lifetimeStats.questsCompleted),
+      bestStreak: n(lifetimeStats.bestStreak),
+    };
+  }
   s.ui.sounds = !!sounds;
   s.ui.introSeen = !!introSeen;
   return s;
 }
+
+/**
+ * Tout ce qu'une renaissance ou une réinitialisation de partie conserve, sauf
+ * les chips et les étoiles — que chaque appelant traite à sa façon.
+ *
+ * Un seul endroit décrit ces couches: les trois gestes du jeu (renaissance,
+ * ascension, réinitialisation) ne peuvent plus diverger sans qu'on le voie.
+ */
+export const couchesConservees = (state) => ({
+  crypto: state?.crypto || null,
+  skin: state?.skin || null,
+  skinsOwned: state?.skinsOwned || null,
+  unlocked: state?.unlocked || null,
+  lifetimeStats: state?.lifetimeStats || null,
+});
 
 // === Validation ===
 export function validateState(state) {

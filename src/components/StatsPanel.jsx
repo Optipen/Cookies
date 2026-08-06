@@ -48,6 +48,16 @@ function StatsPanel({ state, stats }) {
     [state.quests?.completed]
   );
 
+  // Compteurs à VIE: rien ne les remet à zéro, et ce sont eux que les succès
+  // cumulatifs comptent. Le repli couvre une sauvegarde à peine migrée.
+  const vie = state.lifetimeStats || {
+    clicks: state.stats?.clicks || 0,
+    goldenClicks: state.stats?.goldenClicks || 0,
+    cookiesEaten: state.cookieEatenCount || 0,
+    questsCompleted: questsDone,
+    bestStreak: state.quests?.streak || 0,
+  };
+
   const visible = useMemo(
     () => (filter === "tous" ? ACHIEVEMENTS : ACHIEVEMENTS.filter((a) => a.cat === filter)),
     [filter]
@@ -62,12 +72,28 @@ function StatsPanel({ state, stats }) {
           <Stat label="Cuits au total" value={fmtInt(state.lifetime)} />
           <Stat label="Minage" value={`${fmt(stats.mining)} /s`} hint={`Record ${fmt(state.stats?.bestCps || 0)} /s`} />
           <Stat label="Puissance de clic" value={`${fmt(stats.perClickNoCombo)} /clic`} />
-          <Stat label="Clics" value={fmtInt(state.stats?.clicks || 0)} />
-          <Stat label="Cookies dorés" value={fmtInt(state.stats?.goldenClicks || 0)} />
+          {/* Les cumuls affichés sont ceux de la VIE du joueur — ce sont eux que
+              les succès comptent. Le chiffre de la partie en cours reste juste
+              en dessous: sans lui, un compteur qui ne redescend jamais donne
+              l'impression que la renaissance n'a rien remis à zéro. */}
+          <Stat label="Clics" value={fmtInt(vie.clicks)} hint={`Partie en cours ${fmtInt(state.stats?.clicks || 0)}`} />
+          <Stat
+            label="Cookies dorés"
+            value={fmtInt(vie.goldenClicks)}
+            hint={`Partie en cours ${fmtInt(state.stats?.goldenClicks || 0)}`}
+          />
           <Stat label="Cliqueurs + Mineurs" value={fmtInt(buildings)} />
           <Stat label="Améliorations" value={`${Object.keys(state.upgrades || {}).length}`} />
-          <Stat label="Quêtes terminées" value={fmtInt(questsDone)} hint={`Série ${state.quests?.streak || 0} j`} />
-          <Stat label="Cookies croqués" value={fmtInt(state.cookieEatenCount || 0)} />
+          <Stat
+            label="Quêtes terminées"
+            value={fmtInt(vie.questsCompleted)}
+            hint={`Série ${state.quests?.streak || 0} j · record ${vie.bestStreak || 0} j`}
+          />
+          <Stat
+            label="Cookies croqués"
+            value={fmtInt(vie.cookiesEaten)}
+            hint={`Partie en cours ${fmtInt(state.cookieEatenCount || 0)}`}
+          />
           <Stat label="CRMB extrait" value={fmtCrmb(state.crypto?.totalMined || 0)} hint={`${miners} machines`} />
           <Stat label="Boost staking" value={fmtPct(stats.stakeMult - 1, 1)} />
           <Stat label="Chips célestes" value={fmtInt(state.prestige?.chips || 0)} hint={`${state.stats?.prestigeCount || 0} prestiges`} />

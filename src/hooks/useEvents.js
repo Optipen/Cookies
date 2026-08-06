@@ -106,6 +106,12 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
       const next = {
         ...prev,
         stats: { ...prev.stats, goldenClicks: (prev.stats?.goldenClicks || 0) + 1 },
+        // Le compteur à vie monte en même temps: « 200 dorés » se compte sur
+        // toute la vie du joueur, pas sur une partie qu'il vient de sacrifier.
+        lifetimeStats: {
+          ...prev.lifetimeStats,
+          goldenClicks: (prev.lifetimeStats?.goldenClicks || 0) + 1,
+        },
         flags: { ...prev.flags, goldenLastTs: now, goldenStacks: stacks },
       };
 
@@ -231,6 +237,10 @@ export function useEvents({ stateRef, setState, notify, fx, audio }) {
       ...prev,
       buffs: { cpsMulti: 1, cpcMulti: 2, until: Date.now() + 20_000, label: "Clic ×2" },
       stats: { ...prev.stats, goldenClicks: (prev.stats?.goldenClicks || 0) + 1 },
+      lifetimeStats: {
+        ...prev.lifetimeStats,
+        goldenClicks: (prev.lifetimeStats?.goldenClicks || 0) + 1,
+      },
     }));
     event("Cookie volant — puissance de clic ×2 pendant 20 s", "gold");
   }, [audio, fx, scheduleFlying, setState, event]);

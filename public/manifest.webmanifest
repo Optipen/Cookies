@@ -9,7 +9,10 @@
   "lang": "fr",
   "theme_color": "#0b0804",
   "background_color": "#0b0804",
-  "categories": ["games", "entertainment"],
+  "categories": [
+    "games",
+    "entertainment"
+  ],
   "icons": [
     {
       "src": "/favicon.ico",
@@ -17,14 +20,14 @@
       "type": "image/x-icon"
     },
     {
-      "src": "/cookie.png",
-      "sizes": "1024x1024",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/cookie.png",
-      "sizes": "1024x1024",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }

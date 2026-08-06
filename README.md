@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (463 tests)                    |
+| `npm test`          | Suite de tests (495 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -482,8 +482,9 @@ quantité et le début de la boutique.
 
 ### Sauvegardes : rien ne se perd
 
-Le schéma passe en **version 6** — l'Ascension et le Registre sont deux blocs
-qui n'existaient dans aucune sauvegarde antérieure. La version est écrite dans
+Le schéma passe en **version 7** — les compteurs à vie sont un bloc qui
+n'existait dans aucune sauvegarde antérieure (la v6 avait apporté l'Ascension
+et le Registre). La version est écrite dans
 la partie, et `migratedFrom` retient celle d'où l'on vient : sans elle, devant
 une partie cassée, il est impossible de dire quelle transformation l'a produite.
 
@@ -492,7 +493,7 @@ sur une version antérieure du jeu doit retrouver sa partie ; écraser sa clé l
 lui prendrait définitivement. Une sauvegarde illisible est **archivée**, pas
 supprimée.
 
-Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
+Vérifié sur des sauvegardes réelles v3, v4, v5, v6 et v7 :
 
 | Cas | Comportement |
 | --- | --- |
@@ -507,6 +508,7 @@ Vérifié sur des sauvegardes réelles v3, v4, v5 et v6 :
 | Horloge reculée / avancée de dix ans | Aucune valeur négative ni infinie |
 | Buff, remise ou notification en cours | Jamais rejoués : le temps a passé |
 | Migration jouée deux fois | **Résultat identique** — sinon chaque ouverture ferait dériver la partie |
+| Sauvegarde d'avant les compteurs à vie | **Semés** depuis la partie en cours : un joueur à 80 000 clics ne repart pas de zéro |
 
 ### Le rythme
 
@@ -684,18 +686,23 @@ fois le dernier suffixe dépassé, plutôt qu'un nom d'unité inventé.
 
 ### Reproduire les mesures
 
-Les trois outils de mesure ne sont pas des dépendances du projet : ils se
-lancent à la main. Playwright et son navigateur s'installent en une commande.
+Les outils de mesure et de fabrication d'assets ne sont pas des dépendances du
+projet : ils se lancent à la main, et ce qu'ils produisent est versionné — il
+n'y a donc rien à installer pour construire ou déployer le jeu. Playwright,
+son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 463 tests
+npm test                      # 495 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
 npm run balance               # rapport actif/passif par cadence et par horizon
 npm run simulations           # deux familles de profils, onze horizons
 npm run simulations mecanique # une seule famille (plus rapide)
+
+npm i --no-save sharp && node scripts/images.mjs   # regénère les images servies
+node scripts/polices.mjs            # regénère les polices auto-hébergées
 
 npm i playwright && npx playwright install chromium
 npm run mobile                # six gabarits: cibles, textes, débordements
@@ -802,7 +809,7 @@ défaut n'a simplement pas été mesuré.
 - **Améliorations infinies** : générées à la demande. Chaque bâtiment débloque
   un palier ×2 à 10, 20, 40, 80, 160 exemplaires — un doublement à chaque fois.
   Il n'y a pas de dernière amélioration.
-- **26 quêtes** réparties en 8 catégories (clic, banque, achat, production,
+- **26 quêtes** réparties en 8 catégories (clic, banque, achat, minage,
   crypto, événement, style, quotidien). Trois quêtes actives, trois
   quotidiennes, une série de jours consécutifs, et un bouton pour passer une
   quête qui ne te plaît pas.
@@ -981,6 +988,108 @@ hors-ligne. Recalibrer le jeu ne demande donc pas de toucher au code — et un
 test vérifie qu'aucune clé de `balance` n'est morte, pour qu'aucun réglage ne
 fasse croire à un levier qui ne fait rien.
 
+### Ce qui survit à quoi
+
+Trois gestes remettent la partie à zéro, et ils ne gardent pas la même chose.
+Le tableau est le **contrat**, et il est vérifié par des tests qui jouent le
+geste réel du joueur, écran compris :
+
+| | Partie | Chips & arbre | Étoiles & Voûte | CRMB, Registre, matériel | Apparences | Succès | Compteurs à vie |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Renaissance** (prestige) | ✗ | ✓ recalculés | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Ascension** | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Réinitialiser la partie** | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Tout effacer** (Maj + clic) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+
+Deux colonnes de ce tableau étaient fausses, et personne ne le voyait :
+
+- **« Réinitialiser la partie »** annonçait « le prestige et l'arbre céleste
+  sont conservés » et emportait pourtant l'Ascension entière — quarante
+  étoiles et les trois voies, mesuré. Avec Horizon partaient aussi les huit
+  bâtiments qu'il débloque. Irréversible, sans avertissement.
+- **La renaissance** emportait les apparences, dont Ice et Lava payées 10 et
+  25 CRMB — alors que le portefeuille CRMB qui les avait achetées, lui,
+  survivait. Le joueur gardait la monnaie et perdait l'objet.
+
+La cause était commune, et elle est instructive : le report des couches se
+faisait chez l'appelant, dans un `{ ...fresh, … }` écrit à la suite de l'appel.
+Rien ne signale une ligne absente d'un littéral d'objet. `createResetState`
+prend désormais chaque couche en **paramètre nommé**, `null` par défaut : ce
+qu'un appelant ne confie pas repart à neuf, et ça se lit sur le site d'appel.
+
+Les tests, eux, éprouvaient `createResetState` **isolément** — une fonction
+correcte appelée avec un argument manquant reste correcte. Ils jouent
+maintenant les deux bouts : le contrat de la fonction, et le geste du joueur.
+
+### Les compteurs à vie
+
+Cinq succès comptent un cumul qui se construit sur des jours : cent mille
+clics, cent cinquante quêtes, deux cents dorés, sept jours de série,
+vingt-cinq cookies croqués. Ils lisaient les compteurs de **partie** — que
+chaque renaissance remet à zéro, et le jeu propose sa première renaissance dès
+la quatre-vingtième minute, puis la répète sans arrêt. Il fallait donc ne
+jamais renaître pour les décrocher : exactement l'inverse de ce que le jeu
+demande.
+
+Il y a maintenant **deux** jeux de compteurs, et ils ne servent pas à la même
+chose :
+
+| | `stats` (partie) | `lifetimeStats` (vie) |
+| --- | --- | --- |
+| Remis à zéro par une renaissance | oui | **jamais** |
+| Lu par | les quêtes (écarts depuis leur tirage), le cookie qui se fait croquer, l'écran de la partie | les succès cumulatifs |
+
+Empêcher toute statistique de se remettre à zéro aurait cassé les quêtes, qui
+mesurent des écarts *depuis leur instanciation* : « réaliser 40 clics » n'a de
+sens que sur un compteur qui repart. Les deux coexistent, et le panneau Profil
+affiche le total à vie avec le chiffre de la partie en cours juste en dessous.
+
+Une sauvegarde d'avant ne perd rien : les compteurs à vie sont **semés** avec
+ce que la partie en cours a déjà accumulé. C'est un plancher, jamais un
+plafond.
+
+### Le poids servi
+
+Le jeu pesait **8,7 Mo d'images pour 135 Ko de code gzippé** — cinquante fois
+plus de pixels que de logique. Mesuré au navigateur : 1,5 Mo rien qu'à l'écran
+d'accueil (`cookie.png`, 1024×1024, affiché à 144 px sur téléphone), puis
+5,3 Mo de plus à l'ouverture de l'onglet Profil, qui téléchargeait les quatre
+autres cookies en pleine résolution pour des vignettes de 64 px. Sur un clic
+venu d'un réseau social en 4G, c'est le joueur qui part avant d'avoir joué.
+
+Ce qui a changé :
+
+| | Avant | Après |
+| --- | --- | --- |
+| Écran d'accueil | 1 496 Ko | **163 Ko** |
+| Onglet Profil (apparences) | + 5 426 Ko | **+ 30 Ko** |
+| `welcome.png`, référencé nulle part | 1 242 Ko livrés | supprimé |
+| `dist/` complet | 9,0 Mo | **1,7 Mo** |
+
+Les sources 1024×1024 vivent dans `assets-source/` et ne sont **jamais**
+servies. [`scripts/images.mjs`](scripts/images.mjs) en tire les deux seules
+tailles que l'interface utilise — 768 px pour le grand cookie, 128 px pour les
+vignettes — plus l'icône 512 px du manifeste. Les fichiers produits sont
+versionnés : il n'y a rien à installer pour construire ou déployer.
+
+**PNG palettisé et non WebP**, et c'est un choix, pas un oubli : le grand
+cookie est peint dans un `<image>` SVG masqué (les morsures), où un format non
+supporté ne donne pas une image de repli mais un trou — et un cookie invisible,
+c'est un jeu injouable. Le PNG-8 divise déjà le poids par dix et se lit partout.
+
+### Les polices sont auto-hébergées
+
+Sora et Marcellus arrivaient de `fonts.googleapis.com` par un
+`<link rel="stylesheet">` posé dans le `<head>`. Deux problèmes, et le second
+est le vrai : le premier écran **attendait un serveur qui n'est pas le nôtre**,
+et l'adresse IP de chaque joueur partait chez Google avant qu'il ait rien vu —
+pour un jeu francophone, c'est un sujet RGPD, pas seulement une milliseconde.
+
+[`scripts/polices.mjs`](scripts/polices.mjs) récupère les woff2, ne garde que
+les sous-ensembles latin et latin-étendu (64 Ko en tout) et réécrit les URL
+vers `/fonts/`. `font-display: swap` conserve le comportement d'origine : le
+texte s'affiche tout de suite dans la pile système, puis se substitue.
+
 ## Montée en charge
 
 Le jeu est entièrement client : la partie vit dans le `localStorage` du
@@ -997,23 +1106,29 @@ Ce qui est en place pour ça :
 - Service worker ([`public/sw.js`](public/sw.js)) : démarrage instantané aux
   visites suivantes et jeu utilisable hors connexion ;
 - Sauvegarde tolérante aux pannes : `localStorage` indisponible, quota dépassé
-  ou sauvegarde corrompue n'empêchent jamais le jeu de démarrer.
+  ou sauvegarde corrompue n'empêchent jamais le jeu de démarrer — **et le
+  joueur en est averti**. Le jeu tournait parfaitement en navigation privée
+  sans jamais le dire : on jouait une heure, on rechargeait, on trouvait une
+  partie vide. Une sonde écrit puis relit une clé au démarrage (la présence de
+  `localStorage` ne prouve rien : il peut exister et refuser), et un bandeau
+  persistant propose d'exporter un fichier. Une écriture qui échoue en cours
+  de partie lève le même bandeau.
 
 ## Sauvegardes
 
-La partie est stockée sous la clé `cookieCrazeSaveV6`. Le préfixe est
+La partie est stockée sous la clé `cookieCrazeSaveV7`. Le préfixe est
 historique — le jeu s'appelait Cookie Craze avant de devenir Crumbora — et il
 est **volontairement conservé** : renommer les clés déconnecterait chaque
 joueur de sa partie, et la continuité des sauvegardes prime sur la cohérence
-du nom. Les sauvegardes des versions 1 à 5 sont migrées automatiquement au
+du nom. Les sauvegardes des versions 1 à 6 sont migrées automatiquement au
 chargement : fusion profonde avec l'état par défaut, valeurs aberrantes
 assainies, ancien staking converti en position flexible, champs morts
 supprimés, record de combo ramené sur la nouvelle échelle, Ascension et
-Registre ajoutés à zéro.
+Registre ajoutés à zéro, compteurs à vie **semés** depuis la partie en cours.
 
 Les anciennes clés **ne sont jamais effacées** : un joueur qui reviendrait sur
 une version antérieure du jeu doit retrouver sa partie. Une sauvegarde illisible
-est archivée sous `cookieCrazeSaveV6_corrupted_<horodatage>`, pas supprimée.
+est archivée sous `cookieCrazeSaveV7_corrupted_<horodatage>`, pas supprimée.
 
 Export et import se font depuis ⚙️ → *Exporter / Importer la sauvegarde*.
 Les nouveaux exports portent l'étiquette `game: "crumbora"` ; les fichiers
@@ -1022,6 +1137,13 @@ exportés sous l'ancienne étiquette s'importent pour toujours.
 ## Déploiement
 
 - **Vercel** : importer le dépôt, le reste est déjà configuré.
+- **Une variable d'environnement, optionnelle mais recommandée** :
+  `VITE_SITE_URL=https://ton-domaine.fr`. Elle injecte au build
+  `<link rel="canonical">`, `og:url` et les URL **absolues** des images de
+  partage — un chemin relatif n'est pas résolu par tous les robots sociaux.
+  Non définie, ces balises sont simplement absentes : mieux vaut pas de balise
+  qu'une balise pointant vers un domaine d'exemple, ce qui était le cas
+  jusqu'ici (l'`og:url` dormait en commentaire dans `index.html`).
 - **Netlify / autre statique** : `npm run build`, publier `dist/`, avec une
   réécriture de toutes les routes vers `/index.html`.
 
@@ -1033,3 +1155,11 @@ compris un champ `comment` — donc elles sont expliquées ici :
 | --- | --- | --- |
 | `/assets/*` | un an, `immutable` | les fichiers produits par Vite portent un hash dans leur nom : un contenu différent a forcément une URL différente |
 | `/sw.js` | `max-age=0, must-revalidate` | sans revalidation, un navigateur garderait l'ancien service worker et figerait le jeu sur une version périmée |
+
+Le service worker applique la même distinction, et pour la même raison — le nom
+du fichier change-t-il quand son contenu change ?
+
+| Chemin | Stratégie | Pourquoi |
+| --- | --- | --- |
+| `/assets/*` | cache d'abord, sans réseau | le hash garantit qu'un contenu différent a une autre URL : le cache ne peut pas être périmé |
+| tout le reste (images, sons, manifeste) | cache d'abord **puis rafraîchissement en arrière-plan** | ces fichiers gardent leur nom d'une version à l'autre. En cache pur, un joueur déjà venu ne recevait **jamais** un cookie retouché — il gardait l'ancien pour toujours |

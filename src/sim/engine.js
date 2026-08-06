@@ -222,7 +222,17 @@ function avancerEvenements(state, now, trancheMs, ev, cpsCredite, revenuParSecon
   let bonus = 0;
 
   // --- Clics accumulés: les quêtes et succès de clics en dépendent ---------
-  state.stats.clicks = (state.stats.clicks || 0) + Math.round((cpsCredite * trancheMs) / 1000);
+  // Deux compteurs, comme dans le jeu: celui de la partie (les quêtes en
+  // mesurent des écarts) et celui de la VIE, que les renaissances ne touchent
+  // pas. Sans le second, la simulation décrirait un joueur dont les succès
+  // cumulatifs repartent de zéro toutes les quatre-vingts minutes — c'est
+  // précisément le défaut que le jeu vient de corriger.
+  const nouveaux = Math.round((cpsCredite * trancheMs) / 1000);
+  state.stats.clicks = (state.stats.clicks || 0) + nouveaux;
+  state.lifetimeStats = {
+    ...state.lifetimeStats,
+    clicks: (state.lifetimeStats?.clicks || 0) + nouveaux,
+  };
 
   // --- Cookies dorés, pluie, volant: en espérance ---------------------------
   if (trancheMs > 0 && ev.dores > 0) {
@@ -524,12 +534,14 @@ export function play({
         // les succès SURVIVENT à la renaissance — et elle rapporte ses 5 CRMB.
         const cryptoGarde = state.crypto;
         const succesGardes = state.unlocked;
+        const vieGardee = state.lifetimeStats;
         Object.assign(state, createFreshState(now), {
           createdAt: 0,
           prestige: { chips: gagne, spent: garde.spent, upgrades: { ...garde.upgrades } },
           ascension: asc,
           crypto: cryptoGarde,
           unlocked: succesGardes,
+          lifetimeStats: vieGardee,
         });
         state.crypto.balance = addCrmb(state.crypto.balance, CRMB_PAR_PRESTIGE);
         state.ui.introSeen = true;
@@ -552,14 +564,17 @@ export function play({
         tracks: { ...(state.ascension?.tracks || {}) },
         count: (state.ascension?.count || 0) + 1,
       };
-      // L'ascension emporte chips et arbre, mais garde CRMB, Registre, succès.
+      // L'ascension emporte chips et arbre, mais garde CRMB, Registre, succès
+      // et compteurs à vie.
       const cryptoGarde = state.crypto;
       const succesGardes = state.unlocked;
+      const vieGardee = state.lifetimeStats;
       Object.assign(state, createFreshState(now), {
         createdAt: 0,
         ascension: asc,
         crypto: cryptoGarde,
         unlocked: succesGardes,
+        lifetimeStats: vieGardee,
       });
       state.ui.introSeen = true;
       ascensions++;

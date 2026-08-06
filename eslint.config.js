@@ -46,6 +46,12 @@ export default [
     rules: { "no-console": "off" },
   },
   {
+    // Les fichiers de configuration tournent sous Node au moment du build:
+    // `process.env` y est légitime (c'est ainsi que `VITE_SITE_URL` arrive).
+    files: ["*.config.js"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     files: ["public/sw.js"],
     languageOptions: { globals: { ...globals.serviceworker } },
   },

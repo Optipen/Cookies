@@ -3,8 +3,11 @@
 import { chromium } from "playwright";
 
 const URL = process.argv[2] || "http://127.0.0.1:4173/";
-const SHOTS = "/home/user/Cookies/qa-artifacts/crumbora";
 import fs from "node:fs";
+import path from "node:path";
+
+// Relatif au dépôt: un chemin absolu de machine ne vaut que sur une machine.
+const SHOTS = path.join(process.cwd(), "qa-artifacts", "crumbora");
 fs.mkdirSync(SHOTS, { recursive: true });
 
 const navigateur = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });

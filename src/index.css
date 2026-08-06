@@ -373,10 +373,12 @@ body {
    Accessibilité
    ========================================================================== */
 
-/* Cible de clic confortable sur mobile pour tous les boutons du jeu */
+/* Cible de clic confortable sur mobile pour tous les boutons du jeu.
+   44 px, comme les classes `min-h-11` posées un peu partout: ce filet était
+   réglé à 40 px, donc SOUS la règle qu'il est censé garantir. */
 @media (pointer: coarse) {
   button {
-    min-height: 40px;
+    min-height: 44px;
   }
 }
 

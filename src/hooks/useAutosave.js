@@ -9,9 +9,10 @@ import tuning from "../data/tuning.json";
  * la boucle de jeu modifie l'état 2 fois par seconde, ce qui déclenchait
  * autant de `JSON.stringify` sur l'objet complet.
  */
-export function useAutosave(state, saveFn, { enabled = true } = {}) {
+export function useAutosave(state, saveFn, { enabled = true, onEchec } = {}) {
   const stateRef = useLatestRef(state);
   const saveRef = useLatestRef(saveFn);
+  const echecRef = useLatestRef(onEchec);
 
   useEffect(() => {
     if (!enabled) return;
@@ -23,7 +24,10 @@ export function useAutosave(state, saveFn, { enabled = true } = {}) {
       if (!s) return;
       // On ne sérialise jamais la notification ni les effets visuels en cours
       const { notice, fx, ...persistable } = s;
-      saveRef.current({ ...persistable, notice: null, fx: { banner: null, shakeUntil: 0, tag: null }, lastTs: Date.now() });
+      const ok = saveRef.current({ ...persistable, notice: null, fx: { banner: null, shakeUntil: 0, tag: null }, lastTs: Date.now() });
+      // Une sauvegarde qui échoue doit se voir. Elle était jusqu'ici avalée en
+      // silence: le jeu continuait, et la partie disparaissait au rechargement.
+      if (ok === false) echecRef.current?.();
     };
 
     const iv = setInterval(persist, autosaveMs);
@@ -46,5 +50,5 @@ export function useAutosave(state, saveFn, { enabled = true } = {}) {
       document.removeEventListener("visibilitychange", onVisibility);
       persist();
     };
-  }, [enabled, stateRef, saveRef]);
+  }, [enabled, stateRef, saveRef, echecRef]);
 }

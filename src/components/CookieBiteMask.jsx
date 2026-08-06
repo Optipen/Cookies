@@ -61,7 +61,17 @@ function CookieBiteMask({ skinSrc, clicks, bitesTotal = 80, onFinished, enabled 
     }
     const prev = prevClicksRef.current || 0;
     const curr = clicks || 0;
-    if (curr <= prev) return;
+    // Le compteur de clics de la PARTIE retombe à zéro à chaque renaissance.
+    // Le repère restait alors bloqué sur l'ancien total et `curr <= prev` était
+    // vrai à chaque clic: le cookie ne se faisait plus jamais croquer pour le
+    // reste de la session. On repart du compteur neuf, cookie entier.
+    if (curr < prev) {
+      prevClicksRef.current = curr;
+      finishedRef.current = false;
+      setBites([]);
+      return;
+    }
+    if (curr === prev) return;
     prevClicksRef.current = curr;
 
     const newBites = Math.floor(curr / CLICKS_PER_BITE) - Math.floor(prev / CLICKS_PER_BITE);
