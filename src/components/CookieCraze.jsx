@@ -5,6 +5,7 @@ import Shop from "./Shop.jsx";
 import Upgrades from "./Upgrades.jsx";
 import QuestBoard from "./QuestBoard.jsx";
 import ParticleLayer from "./ParticleLayer.jsx";
+import Guide from "./Guide.jsx";
 
 // Panneaux rarement ouverts en début de partie: chargés à la demande pour
 // alléger le premier rendu (utile sur mobile et connexion lente).
@@ -17,7 +18,7 @@ import Intro from "./Intro.jsx";
 import Icon from "./Icon.jsx";
 
 import { ITEMS, itemUnlocked } from "../data/items.js";
-import { nextMilestone, tierThreshold } from "../data/upgrades.js";
+import { tierThreshold } from "../data/upgrades.js";
 import { SKINS } from "../data/skins.js";
 import { PRESTIGE_BY_ID, availableChips, upgradeCost, chipsFor, prestigeEffects, PRESTIGE_MIN_LIFETIME, CRMB_PAR_PRESTIGE } from "../data/prestige.js";
 import {
@@ -35,7 +36,6 @@ import {
   productionStats,
   costOf,
   isEarlyWindow,
-  timeToAfford,
   maxAffordable,
   COMBO,
   comboStep,
@@ -46,7 +46,7 @@ import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
 import { gainCroque } from "../utils/gains.js";
 import { offlineGains } from "../utils/offline.js";
 import { STEP } from "../utils/grid.js";
-import { fmt, fmtInt, fmtApprox, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
+import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
   saveState,
@@ -62,6 +62,7 @@ import {
 } from "../utils/state.js";
 import { coutAchatCrmb, gainVenteCrmb, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
+import { conseil as conseilDuGuide } from "../data/guide.js";
 
 import { useAudio } from "../hooks/useAudio.js";
 import { useNotify } from "../hooks/useNotify.js";
@@ -73,6 +74,7 @@ import { useAchievements } from "../hooks/useAchievements.js";
 import { useCombo } from "../hooks/useCombo.js";
 import { useClickRate } from "../hooks/useClickRate.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
+import { useGuide } from "../hooks/useGuide.js";
 import { useLatestRef } from "../hooks/useLatestRef.js";
 
 // Six onglets: production et clic partagent la boutique, et le profil regroupe
@@ -150,51 +152,46 @@ const ComboMeter = memo(function ComboMeter({ display }) {
 });
 
 /**
- * Les cinq chiffres qui décrivent la partie, côte à côte.
+ * Les DEUX chiffres qui décident quelque chose.
  *
- * Le jeu n'en affichait qu'un seul en /s — le minage. Impossible, donc, de
- * répondre à la seule question qui compte: « est-ce que cliquer vaut le coup ? »
- * Les trois colonnes se lisent comme une phrase:
+ * L'écran en affichait cinq: par clic, cadence, production des clics, minage,
+ * total. Cinq nombres dont trois bougent en permanence, pour répondre à une
+ * question — « est-ce que cliquer vaut le coup ? » — que personne ne se pose
+ * avant d'avoir compris le jeu. Un joueur qui découvre voyait un tableau de
+ * bord d'avion et ne savait pas où regarder.
  *
- *      puissance × cadence  =  production des clics
- *                    + minage
- *                    ─────────
- *                    = total
+ * Il en reste deux, et ce sont les deux seuls sur lesquels le joueur agit:
  *
- * La cadence est une moyenne glissante, donc préfixée de « ≈ » et arrondie au
- * quart: prétendre à « 4,3333 clics/s » serait faussement précis. Elle s'éteint
- * quand on arrête de cliquer, et la colonne du milieu avec elle — c'est
- * exactement ce qu'on veut montrer: sans les doigts, il ne reste que le minage.
+ *      PAR CLIC          ce que rapporte un appui, tout compris
+ *      MINAGE   /s       ce qui tombe même quand il ne fait rien
+ *
+ * La cadence a disparu de l'écran mais PAS du moteur: elle continue de borner
+ * ce qui est crédité, et l'avertissement reste — un joueur dont les clics ne
+ * comptent plus doit l'apprendre, même si on ne lui montre plus son rythme.
  */
 const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
   const c = productionStats(stats, cadence);
 
   return (
     <div className="panel mt-2.5 mx-auto w-full max-w-sm rounded-[20px] px-3 py-2.5 backdrop-blur-md">
-      <div className="grid grid-cols-3 gap-1 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center">
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-cream/45">Par clic</div>
-          <div className="text-[15px] font-extrabold text-cream tabular-nums leading-tight" data-testid="stat-par-clic">
+          <div className="inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-cream/45">
+            <Icon name="cursor" size={11} className="text-honey" />
+            Par clic
+          </div>
+          <div className="text-[19px] font-extrabold text-honey tabular-nums leading-tight" data-testid="stat-par-clic">
             {fmt(c.parClic)}
           </div>
         </div>
-        <div className={c.actif ? "" : "opacity-40"}>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-cream/45">Cadence</div>
-          <div className="text-[15px] font-extrabold text-cream tabular-nums leading-tight" data-testid="stat-cadence">
-            {/* Arrondie au quart — ≈4 · ≈4,25 · ≈4,50 — parce que c'est une
-                moyenne glissante et que le quart est la précision de toute la
-                grille. Elle ne compte que les clics crédités. */}
-            {c.actif ? fmtApprox(c.cadenceAffichee) : "—"}
-            <span className="text-[10px] font-semibold opacity-60"> /s</span>
+        <div className="border-l border-honey/15">
+          <div className="inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-cream/45">
+            <Icon name="pickaxe" size={11} className="text-mint" />
+            Minage
           </div>
-        </div>
-        <div className={c.actif ? "" : "opacity-40"}>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-cream/45">Clics</div>
-          <div className="text-[15px] font-extrabold text-honey tabular-nums leading-tight" data-testid="stat-clics">
-            {/* Estimée depuis la cadence affichée — le joueur peut refaire
-                « par clic × cadence » de tête — donc « ≈ » elle aussi. */}
-            {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}
-            <span className="text-[10px] font-semibold opacity-60"> /s</span>
+          <div className="text-[19px] font-extrabold text-mint tabular-nums leading-tight">
+            <span data-testid="stat-minage">{fmt(c.minage)}</span>
+            <span className="text-[11px] font-semibold opacity-60"> /s</span>
           </div>
         </div>
       </div>
@@ -204,75 +201,6 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
         <p className="mt-1.5 text-center text-[11px] font-semibold text-lava">
           Cadence créditée limitée à {CREDIT_MAX_CPS} clics/s
         </p>
-      )}
-      <div className="mt-2 pt-2 border-t border-honey/15 flex items-center justify-center gap-2 text-[11px] font-semibold tabular-nums">
-        <span className="inline-flex items-center gap-1 text-mint">
-          <Icon name="pickaxe" size={11} />
-          <span className="sr-only">Minage </span>
-          <span data-testid="stat-minage">{fmt(c.minage)}</span>/s
-        </span>
-        <span className="text-honey/50" aria-hidden="true">+</span>
-        <span className="inline-flex items-center gap-1 text-honey">
-          <Icon name="cursor" size={11} />
-          <span className="sr-only">Clics </span>
-          {c.actif ? fmtApprox(c.prodClics) : fmt(c.prodClics)}/s
-        </span>
-        <span className="text-honey/50" aria-hidden="true">=</span>
-        <span className="font-extrabold text-cream">
-          <span className="sr-only">Total </span>
-          <span data-testid="stat-total">{c.actif ? fmtApprox(c.total) : fmt(c.total)}</span>/s
-        </span>
-      </div>
-    </div>
-  );
-});
-
-/**
- * Objectif permanent.
- *
- * Toujours quelque chose à viser: soit le prochain palier de bâtiment, soit le
- * temps restant avant le prochain achat. Le joueur n'est jamais devant un écran
- * sans horizon.
- */
-const NextGoal = memo(function NextGoal({ state, stats }) {
-  const goal = useMemo(() => nextMilestone(state), [state]);
-  const cheapest = useMemo(() => {
-    let best = null;
-    for (const item of ITEMS) {
-      const price = costOf(state, item.id, 1);
-      if (price <= state.cookies) return null; // quelque chose est déjà achetable
-      if (!best || price < best.price) best = { item, price };
-    }
-    return best;
-  }, [state]);
-
-  if (!goal && !cheapest) return null;
-
-  return (
-    <div
-      className="mt-2.5 sm:mt-3 mx-auto max-w-sm rounded-2xl border border-honey/10 bg-honey-light/5 px-3.5 py-2.5"
-      data-testid="objectif"
-    >
-      {goal && (
-        <div className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="inline-flex min-w-0 items-center gap-1.5 text-cream/70">
-            <Icon emoji={goal.item.emoji} size={12} className="text-honey-light" />
-            <span className="truncate">
-              Prochain palier :{" "}
-              <b className="tabular-nums text-cream">
-                {goal.owned}/{goal.upgrade.threshold}
-              </b>{" "}
-              {goal.item.name}
-            </span>
-          </span>
-          <span className="shrink-0 font-bold text-mint">{goal.upgrade.badge}</span>
-        </div>
-      )}
-      {cheapest && (
-        <div className="mt-1 text-[10.5px] text-cream/45">
-          Prochain achat dans ~
-          <b className="tabular-nums text-cream/75">{fmtDuration(timeToAfford(state, cheapest.price, stats, 5))}</b>
-        </div>
       )}
     </div>
   );
@@ -541,6 +469,9 @@ export default function CookieCraze() {
   const [sauvegardeKo, setSauvegardeKo] = useState(() => !storageDisponible());
 
   const particlesRef = useRef(null);
+  // Le panneau latéral: « J'y vais » doit l'amener SOUS LES YEUX, pas seulement
+  // changer l'onglet actif — sur téléphone il est souvent hors de l'écran.
+  const panneauRef = useRef(null);
   const bootedRef = useRef(false);
   // Dernier clic effectivement crédité: sert de garde-fou anti-automatisation.
   // Le garde-fou anti-automatisation. Créé une seule fois: il a sa propre
@@ -567,6 +498,39 @@ export default function CookieCraze() {
   const stats = useMemo(() => deriveStats(state, now, combo.display.streak), [state, now, combo.display.streak]);
   const questCtx = useMemo(() => buildContext(state), [state]);
   const effects = useMemo(() => prestigeEffects(state), [state]);
+
+  // --- Le Guide -------------------------------------------------------------
+  // Ce qu'il faut faire maintenant, et pourquoi. Recalculé à chaque changement
+  // d'état: c'est une fonction pure de l'état, il n'y a rien à synchroniser.
+  const conseil = useMemo(() => conseilDuGuide(state, stats), [state, stats]);
+
+  /**
+   * « J'y vais »: on ouvre l'onglet ET on l'amène à l'écran.
+   *
+   * Changer l'onglet ne suffit pas: sur un téléphone, le panneau vit sous le
+   * cookie et sous le guide. Le joueur appuyait, rien ne bougeait dans son
+   * champ de vision, et la consigne devenait un mensonge.
+   */
+  const allerA = useCallback((onglet) => {
+    setTab(onglet);
+    // Après le commit, sinon on fait défiler vers un panneau qui affiche
+    // encore l'onglet précédent.
+    requestAnimationFrame(() => {
+      panneauRef.current?.scrollIntoView({
+        behavior: stateRef.current?.ui?.reducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, [stateRef]);
+
+  const masquerGuide = useCallback(
+    () => setState((s) => ({ ...s, guide: { ...s.guide, masque: true } })),
+    []
+  );
+  const montrerGuide = useCallback(
+    () => setState((s) => ({ ...s, guide: { ...s.guide, masque: false } })),
+    []
+  );
 
   // --- Effets visuels: API stable partagée avec les hooks d'événements ------
   const fx = useMemo(
@@ -608,6 +572,9 @@ export default function CookieCraze() {
 
   const { reroll } = useQuests(state, setState, notify, celebrate);
   useAchievements(state, setState, notify, celebrate);
+  // Verrouille les étapes franchies: une Renaissance vide le parc, elle ne doit
+  // pas rouvrir « achète ton premier Curseur ».
+  useGuide(state, setState);
 
   const events = useEvents({ stateRef, setState, notify, fx, audio });
 
@@ -1436,21 +1403,9 @@ export default function CookieCraze() {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap justify-end" data-menu-root>
-            <span className="hidden sm:contents">
-              <HeaderStat
-                label="Par clic"
-                value={fmt(stats.perClick)}
-                icon="cursor"
-                title={`Gain réel d'un appui, combo ×${fmtMult(stats.combo)} compris`}
-              />
-              <HeaderStat
-                label="Minage"
-                value={`${fmt(stats.mining)}/s`}
-                tone="mint"
-                icon="pickaxe"
-                title="Cookies générés automatiquement chaque seconde"
-              />
-            </span>
+            {/* « Par clic » et « Minage » vivaient ici ET dans la barre juste
+                en dessous — le même nombre écrit deux fois à deux centimètres
+                d'écart. L'en-tête ne garde que ce que la scène ne montre pas. */}
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
               <HeaderStat label="Chips" value={availableChips(state)} icon="spark" title="Chips célestes disponibles" />
             )}
@@ -1520,6 +1475,9 @@ export default function CookieCraze() {
                       label={state.ui.reducedMotion ? "Animations réduites" : "Animations complètes"}
                       onClick={() => setState((s) => ({ ...s, ui: { ...s.ui, reducedMotion: !s.ui.reducedMotion } }))}
                     />
+                    {state.guide?.masque && (
+                      <MenuToggle icon="flame" label="Réafficher le guide" onClick={montrerGuide} />
+                    )}
                     <MenuToggle icon="download" label="Exporter la sauvegarde" onClick={exportSave} />
                     <label className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 border-b border-honey/10 px-4 py-2.5 text-left text-sm text-cream transition-colors hover:bg-honey/10">
                       <Icon name="upload" size={15} className="text-honey" />
@@ -1576,12 +1534,6 @@ export default function CookieCraze() {
                 data-testid="solde"
               >
                 {fmtInt(state.cookies)}
-              </div>
-              {/* Le total cuit ne sert à aucune décision immédiate: il coûtait une
-                  ligne au-dessus de la boutique sur un écran de 568 px. Il reste
-                  visible dès `xs`, et dans Profil → Statistiques partout. */}
-              <div className="mt-1 hidden xs:block text-[11px] md:text-sm text-cream/45">
-                {fmtInt(state.lifetime)} cuits au total
               </div>
               <ProductionBar stats={stats} cadence={clickRate.rate} />
               <ComboMeter display={combo.display} />
@@ -1641,29 +1593,21 @@ export default function CookieCraze() {
               </div>
             </div>
 
-            <NextGoal state={state} stats={stats} />
+            {/* Le Guide: quoi faire, pourquoi, et un bouton qui y emmène.
+                Il occupe exactement la place de l'ancien « prochain objectif »,
+                donc il ne pousse la boutique nulle part. */}
+            <Guide conseil={conseil} onAller={allerA} onMasquer={masquerGuide} reducedMotion={reducedMotion} />
 
-            {/* Décoratifs: ils ne servent à aucune décision et coûtaient une
-                ligne au-dessus de la boutique. Ils restent visibles à partir de
-                la tablette, et dans Profil → Statistiques sur mobile. */}
-            <div className="relative mt-3 hidden sm:flex items-center justify-center gap-3 text-[11px] text-cream/50">
-              <span className="inline-flex items-center gap-1.5">
-                <Icon name="cookie" size={12} className="text-honey-light" />
-                Croqués : <b className="tabular-nums text-cream/80">{state.cookieEatenCount || 0}</b>
-              </span>
-              <span aria-hidden="true" className="text-honey/40">·</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Icon name="cursor" size={12} className="text-honey-light" />
-                Clics : <b className="tabular-nums text-cream/80">{fmtInt(state.stats.clicks || 0)}</b>
-              </span>
-            </div>
           </section>
 
           {/* --- Panneau latéral ---
               Sur mobile il n'y a pas de « côté »: le panneau suit le cookie et
               la navigation descend sous le pouce, en barre fixe. Le lecteur
               d'écran, lui, ne voit qu'un seul jeu d'onglets — celui d'en bas. */}
-          <section className="rounded-[2rem] glass-warm overflow-hidden flex flex-col lg:max-h-[80vh]">
+          <section
+            ref={panneauRef}
+            className="scroll-mt-3 rounded-[2rem] glass-warm overflow-hidden flex flex-col lg:max-h-[80vh]"
+          >
             {/* Une seule barre d'onglets, deux positions.
                 Sous `lg` elle se détache en bas de l'écran, sous le pouce, avec
                 la marge de sécurité iOS; au-dessus, elle reprend sa place en

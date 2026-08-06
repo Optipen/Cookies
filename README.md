@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (495 tests)                    |
+| `npm test`          | Suite de tests (513 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -693,7 +693,7 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 495 tests
+npm test                      # 513 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -829,6 +829,8 @@ défaut n'a simplement pas été mesuré.
   flash. Chaque gain d'événement est **posé sur la règle des valeurs avant
   d'être crédité** (`src/utils/gains.js`) : une miette à ×2,5 sur un clic de
   1,25 crédite 3, pas 3,125.
+- **Guide intégré** : sept étapes pour découvrir le jeu, puis l'objectif du
+  moment en permanence — voir plus bas.
 - Progression hors-ligne, sauvegarde automatique, export/import, mode contraste
   élevé, animations réduites, réglage du volume.
 
@@ -1089,6 +1091,84 @@ pour un jeu francophone, c'est un sujet RGPD, pas seulement une milliseconde.
 les sous-ensembles latin et latin-étendu (64 Ko en tout) et réécrit les URL
 vers `/fonts/`. `font-display: swap` conserve le comportement d'origine : le
 texte s'affiche tout de suite dans la pile système, puis se substitue.
+
+## Pourquoi je joue ? — le Guide
+
+C'est la question qu'un jeu incrémental doit répondre dans ses trente
+premières secondes, et Crumbora ne la répondait pas. Un joueur ouvrait l'écran,
+voyait un cookie et **cinq nombres**, cliquait dix fois, ne comprenait pas où
+ça menait, et refermait l'onglet. Tout le jeu — les paliers, les quêtes, le
+CRMB, la Renaissance — vivait derrière ce mur.
+
+Deux réponses, et elles vont ensemble.
+
+### 1. L'écran ne montre plus que ce sur quoi on agit
+
+|  | Avant | Après |
+| --- | --- | --- |
+| Chiffres à la une | Par clic · Cadence · Clics /s · Minage /s · **Total /s** | **Par clic** · **Minage /s** |
+| En-tête | répétait « Par clic » et « Minage » | chips et CRMB seulement |
+| Sous le solde | « X cuits au total » | — (dans Profil) |
+| Sous le cookie | « Croqués : X · Clics : Y » | — (dans Profil) |
+
+Cinq nombres dont trois bougeaient en permanence, pour répondre à une question
+— « est-ce que cliquer vaut le coup ? » — que personne ne se pose avant
+d'avoir compris le jeu. Il en reste **deux**, et ce sont les deux seuls sur
+lesquels le joueur agit : ce que rapporte un appui, et ce qui tombe quand il ne
+fait rien.
+
+La cadence a disparu de l'écran **mais pas du moteur** : elle continue de
+borner ce qui est crédité, et l'avertissement reste. Un joueur dont les clics
+cessent de compter doit l'apprendre, même si on ne lui montre plus son rythme.
+
+### 2. Un guide qui dit quoi faire, et pourquoi
+
+Sous le cookie, une carte dit trois choses, toujours dans le même ordre — c'est
+ce qui permet de la lire d'un coup d'œil dès la troisième fois :
+
+```
+ÉTAPE 3 SUR 7                                      ×
+Prends le Four — il est offert
+Le Four cuit tout seul, même quand tu ne touches à
+rien. C'est là que le jeu se met à jouer pour toi.
+→ Boutique → Minage                      [ J'y vais ]
+```
+
+**Quoi faire** en un geste, **pourquoi** en une phrase qui promet quelque chose
+de concret, et **où** — avec un bouton qui ouvre l'onglet *et l'amène à
+l'écran*. Changer l'onglet ne suffisait pas : sur téléphone le panneau vit sous
+le cookie, le joueur appuyait et rien ne bougeait dans son champ de vision.
+
+Les sept étapes ouvrent **un** mécanisme chacune, dans l'ordre où le jeu les
+rend utiles : cliquer → premier Cliqueur → premier Mineur → dix bâtiments →
+première amélioration → première quête → premier doré. On ne parle du CRMB
+qu'à quelqu'un qui possède déjà une boutique.
+
+Ensuite le guide ne se tait pas, il change de registre : il affiche **l'objectif
+du moment**, par ordre de ce qui change le plus la partie tout de suite.
+
+| Priorité | Ce qu'il montre | Pourquoi en premier |
+| --- | --- | --- |
+| 1 | « Tu peux renaître » | Le plus gros moment du jeu, et il passait inaperçu : le bouton s'allume dans un onglet qu'on n'ouvre pas de soi-même |
+| 2 | Une amélioration payable **maintenant** | Toujours le meilleur achat disponible, et le plus souvent oublié |
+| 3 | Le palier de bâtiment le plus proche | « 3 Fours avant le palier — au 10ᵉ, chacun rapporte deux fois plus » |
+| 4 | L'avancement vers la Renaissance | Le dernier recours : **aucun écran n'est jamais sans horizon** |
+
+Deux garde-fous, tous deux couverts par des tests :
+
+- **Un vétéran ne se fait jamais réexpliquer le clic.** Trois étapes se mesurent
+  sur le parc, et une Renaissance vide le parc : les étapes franchies sont donc
+  verrouillées dans la sauvegarde. Une partie déjà avancée n'a rien à
+  verrouiller — les étapes se mesurent sur l'état réel, un joueur qui possède
+  trente bâtiments les a toutes franchies sans qu'on écrive quoi que ce soit.
+- **Le joueur reste maître.** Une croix masque le guide, définitivement ; ⚙️ →
+  *Réafficher le guide* le ramène. Un conseil qu'on a fermé ne revient jamais
+  tout seul.
+
+Tout vit dans [`src/data/guide.js`](src/data/guide.js), en **fonctions pures** :
+aucune ne touche à React, au DOM ni à l'horloge. C'est ce qui permet de vérifier
+par des tests qu'un joueur neuf reçoit bien sa première consigne, et qu'un
+joueur de quatre-vingts heures ne la reçoit jamais.
 
 ## Montée en charge
 

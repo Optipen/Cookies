@@ -400,6 +400,8 @@ const GLYPHS = {
     </>
   ),
   check: <path d="M5 12.5 9.5 17 19 7" />,
+  // Fermer: la croix des panneaux qu'on peut écarter.
+  close: <path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" />,
 };
 
 /**

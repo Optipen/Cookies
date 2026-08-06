@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, act, cleanup, within } from "@testing-library/react";
 import CookieCraze from "../components/CookieCraze.jsx";
 import { productionStats, deriveStats } from "../utils/selectors.js";
 import { createFreshState, SAVE_KEY } from "../utils/state.js";
-import { RATE_WINDOW_MS, RATE_IDLE_MS } from "../hooks/useClickRate.js";
 import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { SHARE_BASE } from "../data/upgrades.js";
 import { onGrid, snapDown } from "../utils/grid.js";
@@ -161,7 +160,7 @@ const cliquer = async (n = 1, pasMs = 200) => {
   }
 };
 
-describe("les cinq chiffres à l'écran", () => {
+describe("l'écran ne montre que ce sur quoi le joueur agit", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -172,34 +171,56 @@ describe("les cinq chiffres à l'écran", () => {
     localStorage.clear();
   });
 
-  it("affiche les cinq intitulés", async () => {
+  it("affiche la banque, le gain par clic et le minage — et rien d'autre en /s", async () => {
     await demarrer((x) => (x.items = { oven: 20, cursor: 10 }));
-    for (const libelle of ["Par clic", "Cadence", "Clics", "Minage", "Total"]) {
+    expect(screen.getByTestId("solde")).toBeTruthy();
+    expect(screen.getByTestId("stat-par-clic")).toBeTruthy();
+    expect(screen.getByTestId("stat-minage")).toBeTruthy();
+    for (const libelle of ["Par clic", "Minage"]) {
       expect(screen.getAllByText(new RegExp(libelle, "i")).length, libelle).toBeGreaterThan(0);
     }
   });
 
-  it("montre une cadence éteinte tant qu'on ne clique pas", async () => {
-    await demarrer((x) => (x.items = { oven: 20 }));
-    expect(screen.getByTestId("stat-cadence").textContent).toContain("—");
-    expect(screen.getByTestId("stat-clics").textContent).toContain("0");
+  it("ne montre plus la cadence, la production des clics ni le total", async () => {
+    // Cinq nombres dont trois bougeaient en permanence, pour répondre à une
+    // question qu'un joueur qui découvre ne se pose pas encore. Ils ont
+    // disparu de l'écran — le moteur, lui, les calcule toujours.
+    const { container } = await demarrer((x) => (x.items = { oven: 20, cursor: 10 }));
+    expect(screen.queryByTestId("stat-cadence")).toBeNull();
+    expect(screen.queryByTestId("stat-clics")).toBeNull();
+    expect(screen.queryByTestId("stat-total")).toBeNull();
+    expect(container.textContent).not.toMatch(/Cadence(?!\s+créditée)/i);
   });
 
-  it("allume la cadence dès qu'on clique, avec le signe « environ »", async () => {
-    await demarrer((x) => (x.items = { oven: 20 }));
-    await cliquer(6, 200);
+  it("n'écrit plus le même nombre dans l'en-tête ET dans la scène", async () => {
+    // « Par clic » et « Minage » vivaient aux deux endroits: le même nombre à
+    // deux centimètres d'écart. L'en-tête ne garde que ce que la scène ne
+    // montre pas — les chips et le CRMB.
+    const { container } = await demarrer((x) => (x.items = { oven: 20, cursor: 10 }));
+    const entete = within(container.querySelector("header"));
+    expect(entete.queryByText(/Par clic/i)).toBeNull();
+    expect(entete.queryByText(/Minage/i)).toBeNull();
+    // Et la scène, elle, les porte bien une fois chacun.
+    expect(screen.getAllByText(/^Par clic$/i).length).toBe(1);
+  });
+
+  it("garde le gain par clic vivant quand on clique", async () => {
+    await demarrer((x) => (x.items = { oven: 20, cursor: 10 }));
+    const avant = screen.getByTestId("stat-par-clic").textContent;
+    await cliquer(14, 90);
     await act(async () => vi.advanceTimersByTime(300));
-    expect(screen.getByTestId("stat-cadence").textContent).toContain("≈");
+    // Le combo monte: le gain par clic affiché doit suivre, c'est le seul
+    // retour visuel qui reste sur l'action de cliquer.
+    expect(screen.getByTestId("stat-par-clic").textContent).not.toBe(avant);
   });
 
-  it("éteint la cadence et la production des clics après une pause", async () => {
+  it("prévient encore quand les clics cessent d'être crédités", async () => {
+    // La cadence a disparu de l'écran, pas du moteur: un joueur dont les clics
+    // ne comptent plus doit continuer de l'apprendre.
     await demarrer((x) => (x.items = { oven: 20 }));
-    await cliquer(6, 200);
-    await act(async () => vi.advanceTimersByTime(RATE_IDLE_MS + RATE_WINDOW_MS + 500));
-    expect(screen.getByTestId("stat-cadence").textContent).toContain("—");
-    expect(screen.getByTestId("stat-clics").textContent).toContain("0");
-    // Au repos, le total affiché est exactement le minage affiché.
-    expect(screen.getByTestId("stat-total").textContent).toBe(screen.getByTestId("stat-minage").textContent);
+    await cliquer(40, 8);
+    await act(async () => vi.advanceTimersByTime(400));
+    expect(screen.getByText(new RegExp(`limitée à ${CREDIT_MAX_CPS} clics/s`, "i"))).toBeTruthy();
   });
 
   it("ne parle jamais de CPC ni de CPS", async () => {

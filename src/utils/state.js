@@ -133,6 +133,15 @@ export function createFreshState(now = Date.now()) {
     cookieEatEnabled: true,
     cookieEatenCount: 0,
     cookieBites: [],
+
+    // === Le Guide ===
+    // `faites` retient les étapes franchies. Un latch est nécessaire parce que
+    // deux étapes se mesurent sur le parc (« achète un Curseur », « monte à dix
+    // bâtiments »), et qu'une renaissance remet le parc à zéro: sans lui, le
+    // jeu réexpliquerait le clic à un joueur de quatre-vingts heures.
+    // `masque` est le choix du joueur, et il est définitif tant qu'il ne le
+    // reprend pas: un conseil qu'on a fermé ne revient pas tout seul.
+    guide: { faites: {}, masque: false },
   };
 }
 
@@ -356,6 +365,18 @@ export function migrate(savedState, now = Date.now()) {
     delete merged.combo;
     delete merged.settings;
 
+    // --- Guide: arrive après la v7 ---
+    //
+    // Aucune sauvegarde antérieure ne le contient. Ce n'est pas un problème:
+    // les étapes se mesurent sur l'état réel — un joueur qui possède déjà
+    // trente bâtiments les a toutes franchies sans qu'on ait rien à écrire.
+    // On assainit seulement ce qui pourrait venir d'une sauvegarde bricolée.
+    const oldGuide = isObj(savedState.guide) ? savedState.guide : {};
+    merged.guide = {
+      faites: isObj(oldGuide.faites) ? { ...oldGuide.faites } : {},
+      masque: !!oldGuide.masque,
+    };
+
     // --- Flags volatils: on ne rejoue pas un état d'événement périmé ---
     merged.flags = {
       ...fresh.flags,
@@ -443,6 +464,10 @@ export function createResetState({
   unlocked = null,
   // Compteurs à vie: ils ne se remettent à zéro que sur « Tout effacer ».
   lifetimeStats = null,
+  // Étapes du Guide déjà franchies. Elles décrivent ce que le JOUEUR sait
+  // faire, pas ce que sa partie possède: réexpliquer le clic après une
+  // renaissance serait absurde.
+  guide = null,
   sounds = true,
   // Un joueur qui relance une partie a déjà vu l'écran d'accueil: le lui
   // réimposer n'apporte rien. Seule une toute première partie l'affiche.
@@ -489,6 +514,12 @@ export function createResetState({
       bestStreak: n(lifetimeStats.bestStreak),
     };
   }
+  if (isObj(guide)) {
+    s.guide = {
+      faites: isObj(guide.faites) ? { ...guide.faites } : {},
+      masque: !!guide.masque,
+    };
+  }
   s.ui.sounds = !!sounds;
   s.ui.introSeen = !!introSeen;
   return s;
@@ -507,6 +538,7 @@ export const couchesConservees = (state) => ({
   skinsOwned: state?.skinsOwned || null,
   unlocked: state?.unlocked || null,
   lifetimeStats: state?.lifetimeStats || null,
+  guide: state?.guide || null,
 });
 
 // === Validation ===

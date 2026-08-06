@@ -79,9 +79,12 @@ describe("démarrage", () => {
 describe("boucle de jeu", () => {
   it("crédite des cookies au clic", async () => {
     await startGame();
-    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
+    // Le solde est la seule preuve qui compte, et le seul grand chiffre de
+    // l'écran depuis que la scène ne montre plus que « par clic » et
+    // « minage ». Le compteur de clics vit dans Profil → Statistiques.
+    expect(screen.getByTestId("solde").textContent).toBe("0");
     await clickCookie();
-    expect(screen.getByText(/^Clics :/).textContent).toContain("1");
+    expect(Number(screen.getByTestId("solde").textContent.replace(/\D/g, ""))).toBeGreaterThan(0);
   });
 
   it("achète un bâtiment et met à jour la production", async () => {
@@ -213,7 +216,7 @@ describe("prestige", () => {
 
     expect(screen.queryByTestId("confirmation")).toBeNull();
     // La partie repart de zéro et les chips sont crédités
-    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
+    expect(screen.getByTestId("solde").textContent).toBe("0");
     expect(chipsAttendus).toBeGreaterThan(0);
     expect(screen.getAllByText(String(chipsAttendus), { selector: ".text-lg" }).length).toBeGreaterThan(0);
   });
@@ -257,7 +260,7 @@ describe("réinitialisation", () => {
     });
 
     expect(screen.queryByTestId("confirmation")).toBeNull();
-    expect(screen.getByText(/^Clics :/).textContent).toContain("0");
+    expect(screen.getByTestId("solde").textContent).toBe("0");
   });
 });
 
