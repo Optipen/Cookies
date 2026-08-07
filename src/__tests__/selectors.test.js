@@ -384,12 +384,30 @@ describe("Mineurs: deux gains, deux unités", () => {
 });
 
 describe("paliers: doubler le parc, doubler le rendement", () => {
-  it("double le seuil à chaque palier, sans fin", () => {
-    expect([0, 1, 2, 3, 4, 5].map(tierThreshold)).toEqual([10, 20, 40, 80, 160, 320]);
-    for (let n = 1; n < 40; n++) {
+  it("place le premier palier à cinq, puis double sans fin", () => {
+    // Cinq, parce qu'acheter son deuxième, troisième, quatrième Curseur ne
+    // changeait jamais rien à ce que la carte annonçait: le palier qui répond à
+    // ça arrivait au dixième, trop tard pour qu'on fasse le lien.
+    //
+    // Et le seuil SUIVANT reste à vingt, pas à dix: c'est ce qui garde la
+    // partie strictement identique à partir du dixième exemplaire. Un palier
+    // de plus à chaque étage rendait tout le jeu deux fois plus fort pour
+    // toujours — mesuré, le rapport actif/passif tombait à 2,32 sur les dix
+    // premières minutes et le joueur rapide crevait son plafond.
+    expect([0, 1, 2, 3, 4, 5].map(tierThreshold)).toEqual([5, 20, 40, 80, 160, 320]);
+    for (let n = 2; n < 40; n++) {
       expect(tierThreshold(n) / tierThreshold(n - 1)).toBe(2);
     }
     expect(tierThreshold(39)).toBeGreaterThan(tierThreshold(38));
+
+    // Le cumul est INCHANGÉ dès dix exemplaires: ×2 à dix, ×4 à vingt.
+    const cumul = (owned) =>
+      [0, 1, 2, 3, 4, 5, 6].reduce((m, n) => (tierThreshold(n) <= owned ? m * tierMultiplier(n) : m), 1);
+    expect(cumul(5)).toBe(2); // le gain: ×2 dès cinq, là où il n'y avait rien
+    expect(cumul(10)).toBe(2);
+    expect(cumul(20)).toBe(4);
+    expect(cumul(40)).toBe(8);
+    expect(cumul(320)).toBe(64);
   });
 
   it("garde un multiplicateur unique et net: ×2", () => {

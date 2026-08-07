@@ -1,8 +1,10 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import Icon from "./Icon.jsx";
 import { CLICKERS, MINER_ITEMS, LABELS, itemUnlocked } from "../data/items.js";
+import { nextTierFor } from "../data/upgrades.js";
 import { costOf, deriveStats, timeToAfford, maxAffordable, REF_CLICKS_PER_SECOND } from "../utils/selectors.js";
-import { fmt, fmtExact, fmtPrix, fmtDuration } from "../utils/format.js";
+import { unitValue } from "../utils/calc.js";
+import { fmt, fmtExact, fmtPrix, fmtDuration, fmtMult } from "../utils/format.js";
 import { snapDown } from "../utils/grid.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 
@@ -35,6 +37,8 @@ const ItemCard = memo(function ItemCard({
   before,
   after,
   gainMain,
+  valeurUnite,
+  palier,
   gainClick,
   unit,
   eta,
@@ -91,10 +95,40 @@ const ItemCard = memo(function ItemCard({
                 <span className="shrink-0 text-[10px] font-semibold text-honey tabular-nums">×{owned}</span>
               )}
             </span>
-            {/* Le gain réel, en gros: c'est la seule chose qui décide l'achat. */}
-            <span className={`block text-[11px] font-bold tabular-nums ${clic ? "text-honey-light" : "text-mint"}`}>
-              +{fmt(gainMain)} {unit}
+            {/* Le gain réel, en gros: c'est la seule chose qui décide l'achat.
+                À droite, le palier — la réponse à « pourquoi en acheter un
+                douzième ». */}
+            <span className="flex items-baseline justify-between gap-2">
+              <span className={`text-[11px] font-bold tabular-nums ${clic ? "text-honey-light" : "text-mint"}`}>
+                +{fmt(gainMain)} {unit}
+              </span>
+              {palier && (
+                <span
+                  data-testid={`palier-${item.id}`}
+                  className={`shrink-0 text-[9.5px] font-extrabold tabular-nums ${
+                    palier.pret ? "text-honey" : "text-cream/40"
+                  }`}
+                  title={
+                    palier.pret
+                      ? `Palier atteint: ×${fmtMult(palier.multiplier)} sur tous tes ${item.name}, dans l'onglet Améliorations`
+                      : `À ${palier.threshold} ${item.name}, chacun rapportera ×${fmtMult(palier.multiplier)}`
+                  }
+                >
+                  {palier.pret ? `×${fmtMult(palier.multiplier)} à prendre` : `×${fmtMult(palier.multiplier)} dans ${palier.remaining}`}
+                </span>
+              )}
             </span>
+            {/* La barre du palier: elle avance à chaque exemplaire acheté, et
+                c'est tout l'intérêt — elle montre que le prochain vaut plus que
+                le précédent. */}
+            {palier && !palier.pret && (
+              <span className="mt-1 block h-[2px] w-full overflow-hidden rounded-full bg-honey-light/10">
+                <span
+                  className={`block h-full rounded-full transition-[width] duration-300 ${clic ? "bg-honey/60" : "bg-mint/60"}`}
+                  style={{ width: `${Math.round(palier.progress * 100)}%` }}
+                />
+              </span>
+            )}
           </span>
         </button>
 
@@ -150,6 +184,23 @@ const ItemCard = memo(function ItemCard({
                 +{fmtExact(item.value)} {unit}
               </dd>
             </div>
+            {valeurUnite > item.value && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-cream/45">Avec tes paliers et bonus</dt>
+                <dd className="font-semibold text-honey">
+                  +{fmt(valeurUnite)} {unit}
+                </dd>
+              </div>
+            )}
+            {palier && !palier.pret && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-cream/45">Prochain palier</dt>
+                <dd className="text-cream/70">
+                  {palier.threshold} {item.name} —{" "}
+                  <span className="font-bold text-honey">×{fmtMult(palier.multiplier)} chacun</span>
+                </dd>
+              </div>
+            )}
             {gainClick > 0 && (
               <div className="flex justify-between gap-2">
                 <dt className="text-cream/45">Aussi, en puissance de clic</dt>
@@ -232,6 +283,23 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats, designe = null }) 
         // Le détail avant → après reste exact pour qui veut vérifier.
         const gainClick = isClick ? 0 : snapDown(next.perClickNoCombo - base.perClickNoCombo);
 
+        // CE QUE LA CARTE ANNONCE: la valeur unitaire × la quantité, et non
+        // l'écart entre les deux totaux.
+        //
+        // L'écart mentait. La règle des nombres pose les TOTAUX sur des entiers
+        // dès cent, si bien qu'au-delà de cent par clic, un Curseur à 0,25
+        // faisait passer la somme de 101 à 101,25 — pliée à 101. La carte
+        // affichait alors « +0 /clic » sur un bouton qui demandait de payer. Et
+        // ce n'était pas un cas rare: c'est le premier objet du jeu, celui que
+        // le Guide fait acheter, en tête de liste pour toujours.
+        //
+        // Rien n'est perdu dans le moteur — quatre Curseurs font bien +1 — et
+        // la valeur unitaire est exactement ce qui entre dans la somme. C'est
+        // d'ailleurs la règle que le projet s'était donnée: « la quantification
+        // se fait par exemplaire, c'est le gain unitaire que la boutique
+        // annonce, c'est donc lui qui doit être exact ».
+        const valeurUnite = unitValue(item, base.perItemMult?.[item.id] || 1, isClick ? base.clickMult : base.mineMult);
+
         const flash =
           state.flags?.flash && state.flags.flash.itemId === item.id && now < state.flags.flash.until
             ? state.flags.flash
@@ -244,7 +312,9 @@ function Shop({ state, filter = "all", onBuy, qty = 1, stats, designe = null }) 
           flash,
           before,
           after,
-          gainMain: snapDown(after - before),
+          gainMain: valeurUnite * n,
+          valeurUnite,
+          palier: nextTierFor(state, item.id),
           gainClick,
           unit: LABELS[item.mode].unit,
           isFree: price === 0,

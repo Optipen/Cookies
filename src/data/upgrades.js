@@ -25,18 +25,34 @@ const ordinal = (n) => (n >= NAMES.length ? ` ${Math.floor(n / NAMES.length) + 1
 // --- Paliers de possession -------------------------------------------------
 
 /**
- * Seuil du n-ième palier: 25, 50, 100, 200, 400, 800 … — un doublement à chaque
- * fois, sans fin.
+ * Seuils: **5**, puis 20, 40, 80, 160, 320 … — un doublement à chaque fois,
+ * sans fin.
  *
- * Le premier palier était à 10 exemplaires et les multiplicateurs montaient
- * jusqu'à ×5: un bâtiment à 400 exemplaires cumulait ×360, et la partie
- * s'emballait en quelques minutes. Un doublement régulier récompensé par un
- * ×2 régulier garde exactement le même geste — « doubler mon parc le rend deux
- * fois meilleur » — dix fois plus lentement.
+ * Historique, et il compte. Les multiplicateurs montaient d'abord jusqu'à ×5
+ * sur des seuils rapprochés: un bâtiment à 400 exemplaires cumulait ×360 et la
+ * partie s'emballait en quelques minutes. Un doublement régulier récompensé par
+ * un ×2 régulier garde exactement le même geste — « doubler mon parc le rend
+ * deux fois meilleur » — dix fois plus lentement.
+ *
+ * Le premier seuil est ensuite passé de 10 à **5**, et c'est la seule chose qui
+ * a changé: le joueur disait, à raison, qu'acheter son deuxième, troisième,
+ * quatrième Curseur ne changeait jamais rien à ce que la carte annonçait. Le
+ * palier qui répond à ça existait déjà — il arrivait simplement trop tard pour
+ * qu'on fasse le lien.
+ *
+ * Le seuil SUIVANT reste à 20, et pas à 10: c'est ce qui garde la partie
+ * strictement identique à partir du dixième exemplaire. Un palier de plus à
+ * chaque étage aurait rendu tout le jeu deux fois plus fort pour toujours —
+ * mesuré, le rapport actif/passif tombait de 2,43 à 2,32 sur les dix premières
+ * minutes et le joueur rapide crevait son plafond. Ici, le cumul vaut ×2 dès
+ * cinq exemplaires (contre ×1 avant), ×2 à dix et ×4 à vingt — exactement comme
+ * avant. Le gain est CONCENTRÉ là où il manquait.
  */
-export const TIER_FIRST = BALANCE.tier_first ?? 10;
+export const TIER_FIRST = BALANCE.tier_first ?? 5;
+export const TIER_SECOND = BALANCE.tier_second ?? 20;
 export function tierThreshold(n) {
-  return TIER_FIRST * Math.pow(2, Math.max(0, Math.floor(n)));
+  const k = Math.max(0, Math.floor(n));
+  return k === 0 ? TIER_FIRST : TIER_SECOND * Math.pow(2, k - 1);
 }
 
 /** Multiplicateur du n-ième palier: toujours ×2. Un seul nombre à retenir. */
@@ -174,6 +190,36 @@ export function availableUpgrades(state) {
   }
 
   return list;
+}
+
+/**
+ * Le prochain palier de CE bâtiment, pour sa carte de boutique.
+ *
+ * C'est l'information qui manquait le plus au jeu: le joueur achetait son
+ * deuxième, troisième, quatrième Curseur en voyant toujours « +0,25 /clic » et
+ * en concluait — à raison — qu'en acheter plus ne changeait rien. Le palier qui
+ * double la valeur du bâtiment existait, mais il vivait dans un autre onglet:
+ * rien, sur la carte qu'on regarde en achetant, ne disait qu'il approchait.
+ */
+export function nextTierFor(state, itemId) {
+  const item = ITEMS.find((i) => i.id === itemId);
+  if (!item) return null;
+  const count = state.items?.[itemId] || 0;
+  for (let n = 0; n < 80; n++) {
+    const up = makeTierUpgrade(item, n);
+    if (state.upgrades?.[up.id]) continue;
+    return {
+      upgrade: up,
+      threshold: up.threshold,
+      multiplier: up.value,
+      owned: count,
+      remaining: Math.max(0, up.threshold - count),
+      // Atteint mais pas encore acheté: c'est un bouton qui attend, pas un but.
+      pret: count >= up.threshold,
+      progress: Math.min(1, count / up.threshold),
+    };
+  }
+  return null;
 }
 
 /**

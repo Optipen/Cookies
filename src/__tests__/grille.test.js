@@ -115,6 +115,7 @@ describe("les valeurs configurées sont réellement sur la grille", () => {
       "reference_combo",
       "price_scale",
       "tier_first",
+      "tier_second",
     ];
     expect(Object.keys(tuning.standard.balance).sort()).toEqual([...attendues].sort());
   });

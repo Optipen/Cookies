@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (564 tests)                    |
+| `npm test`          | Suite de tests (582 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -129,18 +129,64 @@ donne **+80 000 /s de minage** *et*, par la part reversée, **+4 800 /clic**.
 Ces deux nombres ne s'additionnent pas — l'un est une production par seconde,
 l'autre une puissance par clic — et la boutique les affiche séparément.
 
-### Paliers : doubler le parc, doubler le rendement
+### Paliers : plus j'en achète, plus chacun rapporte
 
 Une seule règle, et un seul nombre à retenir :
 
 | | Rôle | Valeurs |
 | --- | --- | --- |
-| **Seuil** (`tierThreshold`) | à combien d'exemplaires le palier se débloque | 10, 20, 40, 80, 160, 320 … un doublement à chaque fois, sans fin |
+| **Seuil** (`tierThreshold`) | à combien d'exemplaires le palier se débloque | **5**, puis 20, 40, 80, 160, 320 … un doublement à chaque fois, sans fin |
 | **Multiplicateur** (`tierMultiplier`) | ce que le palier multiplie | **×2**, toujours |
 
 Doubler son parc le rend deux fois meilleur. L'échelle précédente (seuils
 10/25/50/100/200/400, multiplicateurs ×2 puis ×3 puis ×5) cumulait **×360** à
 quatre cents exemplaires et faisait s'emballer la partie en quelques minutes.
+
+#### Le premier seuil est passé de 10 à 5
+
+Le retour du joueur, mot pour mot : *« tu achètes la première fois le curseur et
+ça donne +0,25 ; si tu l'achètes au bout de quatre, cinq fois, ça doit te donner
+plus. »* Il avait raison sur le ressenti, et le mécanisme qui répond à ça
+existait déjà — il arrivait simplement au dixième exemplaire, et il vivait dans
+un autre onglet. Rien, sur la carte qu'on regarde en achetant, ne disait qu'il
+approchait.
+
+Le seuil **suivant reste à 20**, et c'est la seule chose qui rend le changement
+sûr : le cumul est **strictement identique à partir du dixième exemplaire**.
+
+| Exemplaires | 4 | **5** | 10 | 20 | 40 | 320 |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| Avant | ×1 | ×1 | ×2 | ×4 | ×8 | ×64 |
+| Maintenant | ×1 | **×2** | ×2 | ×4 | ×8 | ×64 |
+
+Le gain est **concentré là où il manquait**. La variante naïve — un palier de
+plus à chaque étage, seuils 5/10/20/40 — ajoutait un doublement permanent : le
+rapport actif/passif mesuré tombait de 2,43 à **2,32** sur les dix premières
+minutes et le joueur rapide crevait son plafond (4,20 pour une borne à 4,20).
+Une autre variante — deux paliers rapprochés à ×1,5 — se faisait **avaler par la
+grille** : 0,25 × 1,5 = 0,375, plié à 0,25. Un palier payé qui ne fait rien.
+
+Après la bascule, tous les rapports mesurés sont dans leurs fourchettes :
+
+| | 10 min | 1 h | 6 h | 1 j | 30 j | 365 j |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| 3 clics/s | 1,48 | 1,57 | 1,87 | 1,98 | 1,94 | 1,93 |
+| 5 clics/s | 2,41 | 2,43 | 2,55 | 2,61 | 2,61 | 2,60 |
+| 7 clics/s | 3,68 | 3,66 | 3,33 | 3,28 | 3,27 | 3,25 |
+
+#### Et la carte le montre, enfin
+
+Le palier ne vit plus seulement dans l'onglet Améliorations. Chaque carte de
+boutique porte, à droite du gain, l'état du prochain palier de **ce** bâtiment —
+et une barre de deux pixels qui avance à chaque exemplaire acheté :
+
+```
+🖱️  Curseur ×3                    ×2 dans 2
+    +0,25 /clic                   ▓▓▓▓▓▓░░░░
+```
+
+À cinq, elle bascule en appel à l'action — « ×2 à prendre » — et le détail de la
+carte annonce la valeur unitaire réelle, paliers et bonus compris.
 
 ### Les cinq chiffres
 
@@ -227,6 +273,23 @@ jamais supérieur à la valeur**.
 On n'abrège qu'à partir de **cent mille** (`COMPACT_FROM`) : en dessous, le
 nombre entier tient à l'écran et se lit d'un coup. Au-delà du dernier suffixe,
 on passe en notation scientifique plutôt que d'inventer un nom d'unité.
+
+#### La boutique annonce la valeur unitaire, pas un écart
+
+Une carte de boutique annonçait l'**écart** entre les deux totaux, et cet écart
+mentait de deux façons opposées. La règle pose les totaux sur des entiers dès
+cent : au-delà de cent par clic, un Curseur à 0,25 faisait passer la somme de
+101 à 101,25, pliée à 101. La carte affichait alors **« +0 /clic » sur un bouton
+qui demandait de payer** — et pas sur n'importe quel objet : le premier du jeu,
+celui que le Guide fait acheter, en tête de liste pour toujours.
+
+Rien n'était perdu dans le moteur (quatre Curseurs font bien +1), mais l'écran
+demandait de payer pour rien. Elle annonce désormais la **valeur unitaire** —
+ce qu'un exemplaire ajoute réellement à la somme, paliers et bonus compris.
+C'est d'ailleurs la règle que le projet s'était donnée dès le départ : *« la
+quantification se fait par exemplaire, c'est le gain unitaire que la boutique
+annonce, c'est donc lui qui doit être exact »*. Le détail avant → après reste
+exact pour qui veut vérifier.
 
 Sept formateurs, chacun pour un usage :
 
@@ -726,7 +789,7 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 564 tests
+npm test                      # 582 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -923,6 +986,35 @@ les cookies dorés, visibles par eux-mêmes, sont redescendus au rang ordinaire.
 Mesuré sur une session type : moins de quatre notifications par minute, sur un
 quart d'heure comme sur une heure.
 
+#### Les bandeaux font la queue
+
+Le bandeau — le gros titre qui traverse le haut de l'écran — est le canal des
+**moments** : « Étape franchie », « Flocon dépassé », « Cookie croqué ». Il
+n'avait qu'un emplacement, et trois systèmes écrivaient dedans. Pendant le
+tutoriel, le seul moment où tout arrive en même temps, le deuxième bandeau
+remplaçait le premier au bout de quelques dixièmes de seconde. Mesuré en
+navigateur : **un débutant dépassait Flocon sans jamais voir « Flocon
+dépassé ».**
+
+Ils font désormais la queue, dans une file bornée à quatre — au-delà, le joueur
+regarde défiler des titres au lieu de jouer, et le dernier arrive vingt secondes
+après le geste qui l'a déclenché. La politique (capacité, doublons, ordre) vit
+dans [`src/utils/bannieres.js`](src/utils/bannieres.js), en fonctions pures,
+comme celle des notifications ; le composant ne garde que la minuterie.
+
+Et ce qui compte ne vit plus **uniquement** dans le canal qui a le droit de
+jeter : la prime d'un rival dépassé est écrite dans le bandeau, pas seulement
+dans la notification majeure — qui, elle, peut légitimement être écartée par le
+plafond de trois par minute.
+
+#### La série, la seule chose qui parle de demain
+
+Les quêtes quotidiennes et leur **série** existaient, mais uniquement dans
+l'onglet Quêtes — que personne n'ouvre de lui-même. Un joueur ne savait donc
+jamais qu'il avait quelque chose à protéger. Une pastille `🔥 Série · 3 j` est
+maintenant dans l'en-tête dès le premier jour, et elle emmène aux quêtes d'un
+appui.
+
 ### Cliquer vite paie, automatiser non
 
 Le rapport actif/passif suit la cadence sans plafond, comme voulu. Mais la
@@ -1056,6 +1148,12 @@ qu'un appelant ne confie pas repart à neuf, et ça se lit sur le site d'appel.
 Les tests, eux, éprouvaient `createResetState` **isolément** — une fonction
 correcte appelée avec un argument manquant reste correcte. Ils jouent
 maintenant les deux bouts : le contrat de la fonction, et le geste du joueur.
+
+**Et les trois dialogues énumèrent ce tableau.** Celui de la Renaissance ne le
+faisait pas : il disait seulement *« ta progression actuelle sera réinitialisée
+(l'arbre céleste est conservé) »* — vrai, et terriblement incomplet devant le
+geste le plus intimidant du jeu. Rien n'y disait que le CRMB, les apparences,
+les succès, les compteurs à vie et la place au Classement ne bougent pas.
 
 ### Les compteurs à vie
 
@@ -1350,9 +1448,12 @@ en cookies, parce que c'est la seule forme qui a la bonne allure : ×4,9 de
 handicap à dix minutes, quand les cadeaux font toute la partie ; ×1,02 à
 vingt-quatre heures, quand ils ne pèsent plus rien.
 
-Résultat mesuré, sur trois parcours de débutant joués par Playwright : il
-démarre huitième, dépasse Flocon entre la **98ᵉ et la 120ᵉ seconde**, Nino peu
-après, et doit travailler pour la suite.
+Résultat mesuré, sur des parcours de débutant joués par Playwright : il démarre
+huitième, dépasse Flocon **autour de la cinquantième seconde** — le premier
+palier étant depuis passé au cinquième exemplaire, il monte plus vite qu'au
+relevé initial — atteint la sixième place, et doit travailler pour la suite.
+Chaque changement d'équilibrage rejoue `scripts/rivaux.mjs` : un test compare la
+table à ce que le simulateur produit vraiment, et échoue si on l'oublie.
 
 L'autre piste a été essayée, et écartée sur mesure : faire jouer les rivaux
 **avec** la couche d'événements du simulateur. Elle donne à un joueur de trois

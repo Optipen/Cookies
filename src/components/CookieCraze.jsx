@@ -64,6 +64,7 @@ import {
 import { coutAchatCrmb, gainVenteCrmb, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
 import { conseil as conseilDuGuide } from "../data/guide.js";
+import { createFileBannieres } from "../utils/bannieres.js";
 import { rubanVisible } from "../data/rivaux.js";
 
 import { useAudio } from "../hooks/useAudio.js";
@@ -585,18 +586,52 @@ export default function CookieCraze() {
     []
   );
 
+  /**
+   * Les bandeaux font la QUEUE, ils ne s'écrasent plus.
+   *
+   * Il n'y avait qu'un emplacement, et trois systèmes écrivaient dedans: les
+   * étapes du Guide, les rivaux dépassés, le cookie croqué. Pendant le
+   * tutoriel — le seul moment où tout arrive en même temps — le deuxième
+   * bandeau remplaçait le premier au bout de quelques dixièmes de seconde, et
+   * le plus beau moment du jeu disparaissait sans laisser de trace. Mesuré en
+   * navigateur: un débutant dépassait Flocon sans jamais voir « Flocon
+   * dépassé ».
+   *
+   * La file est bornée à quatre: en fêter huit d'affilée n'est plus une fête,
+   * c'est une file d'attente. Et les doublons sont écartés — deux fois le même
+   * titre, c'est un bug d'appelant, pas deux événements.
+   */
+  const bannierEnCours = useRef(false);
+
   // --- Effets visuels: API stable partagée avec les hooks d'événements ------
-  const fx = useMemo(
-    () => ({
-      banner: ({ title, sub, ms = 2000 }) =>
-        setState((s) => ({ ...s, fx: { ...s.fx, banner: { title, sub, until: Date.now() + ms } } })),
+  const fx = useMemo(() => {
+    // La POLITIQUE (capacité, doublons, ordre) vit dans `utils/bannieres.js`,
+    // en fonctions pures; il ne reste ici que la minuterie.
+    const file = createFileBannieres();
+    // Fonction locale et récursive: elle ne vit que dans cette fermeture, et
+    // n'écrit dans les refs que depuis un rappel — jamais pendant un rendu.
+    const defiler = () => {
+      if (bannierEnCours.current) return;
+      const b = file.shift();
+      if (!b) return;
+      bannierEnCours.current = true;
+      setState((s) => ({ ...s, fx: { ...s.fx, banner: { title: b.title, sub: b.sub, until: Date.now() + b.ms } } }));
+      setTimeout(() => {
+        bannierEnCours.current = false;
+        defiler();
+      }, b.ms + 150);
+    };
+
+    return {
+      banner: (b) => {
+        if (file.push(b)) defiler();
+      },
       shake: (ms = 800) => setState((s) => ({ ...s, fx: { ...s.fx, shakeUntil: Date.now() + ms } })),
       burstGold: (n) => particlesRef.current?.burstGold(n),
       burstText: (n, text) => particlesRef.current?.burstText(n, text),
       burstCrumbs: (n) => particlesRef.current?.burstCrumbs(n),
-    }),
-    []
-  );
+    };
+  }, []);
 
   /**
    * Achat refusé: une secousse courte, aucun texte.
@@ -654,7 +689,11 @@ export default function CookieCraze() {
     (rival) => {
       particlesRef.current?.burstGold(40);
       audio.play("golden", 0.55);
-      fx.banner({ title: `${rival.nom} dépassé`, sub: rival.phrase, ms: 2600 });
+      // La récompense va dans le BANDEAU, et pas seulement dans la
+      // notification: la file de notifications plafonne les événements majeurs
+      // à trois par minute et peut légitimement en écarter un. Ce qui compte
+      // ne doit pas vivre uniquement dans le canal qui a le droit de jeter.
+      fx.banner({ title: `${rival.nom} dépassé`, sub: `+${fmtCrmb(rival.crmb)} CRMB`, ms: 2600 });
       notify.major(`🏅 Tu passes devant ${rival.nom} · +${fmtCrmb(rival.crmb)} CRMB`, "gold");
     },
     [audio, fx, notify]
@@ -1146,7 +1185,18 @@ export default function CookieCraze() {
     if (apercu <= 0 || demande.lifetime < PRESTIGE_MIN_LIFETIME) return;
     setConfirmation({
       titre: "Renaissance céleste",
-      corps: `Renaître et gagner ${apercu} chips célestes et ${CRMB_PAR_PRESTIGE} CRMB ? Ta progression actuelle sera réinitialisée (l'arbre céleste est conservé).`,
+      // Le dialogue ÉNUMÈRE ce qui reste, comme celui de l'Ascension et celui
+      // de la réinitialisation. Il disait seulement « ta progression actuelle
+      // sera réinitialisée (l'arbre céleste est conservé) » — vrai, et
+      // terriblement incomplet devant le geste le plus intimidant du jeu: rien
+      // ne disait que le CRMB, les apparences, les succès, les compteurs à vie
+      // et la place au Classement, eux, ne bougent pas.
+      corps:
+        `Renaître et gagner ${apercu} chip${apercu > 1 ? "s" : ""} céleste${apercu > 1 ? "s" : ""} ` +
+        `et ${CRMB_PAR_PRESTIGE} CRMB ? ` +
+        `Tu perds ta partie : tes cookies, tes bâtiments et tes améliorations. ` +
+        `Tu gardes tes chips célestes et l'arbre céleste, tes étoiles et la Voûte, ton CRMB et le Registre, ` +
+        `tes apparences, tes succès, tes compteurs à vie et ta place au Classement.`,
       libelle: "Renaître",
       action: () => {
         // Recalculé au moment du OUI: l'état a pu bouger pendant la lecture.
@@ -1500,6 +1550,23 @@ export default function CookieCraze() {
             {/* « Par clic » et « Minage » vivaient ici ET dans la barre juste
                 en dessous — le même nombre écrit deux fois à deux centimètres
                 d'écart. L'en-tête ne garde que ce que la scène ne montre pas. */}
+            {/* La SÉRIE, et c'est la seule chose de l'écran qui parle de
+                demain. Elle existait déjà — mais uniquement dans l'onglet
+                Quêtes, que personne n'ouvre de lui-même: un joueur ne savait
+                donc jamais qu'il avait quelque chose à protéger. */}
+            {isFeatureEnabled("ENABLE_QUESTS") && (state.quests?.streak || 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => setTab("quests")}
+                className="pill"
+                data-testid="serie"
+                title={`Série de ${state.quests.streak} jour${state.quests.streak > 1 ? "s" : ""}. Termine une quête quotidienne aujourd'hui pour la garder.`}
+              >
+                <Icon name="flame" size={12} />
+                <span className="font-medium opacity-70">Série</span>
+                <b className="tabular-nums">{state.quests.streak} j</b>
+              </button>
+            )}
             {isFeatureEnabled("ENABLE_PRESTIGE") && (state.prestige?.chips || 0) > 0 && (
               <HeaderStat label="Chips" value={availableChips(state)} icon="spark" title="Chips célestes disponibles" />
             )}
