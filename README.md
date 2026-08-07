@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (559 tests)                    |
+| `npm test`          | Suite de tests (564 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -189,29 +189,62 @@ règle prime sur les autres : **le texte à l'écran se relit à l'identique**.
 | `401,75` | `401` (la valeur VAUT 401) | Dès cent, la règle interdit les décimales — le pli va vers le bas, à la banque comme à l'écran |
 | `1,3` | `1,25` | Sous cent, les quarts s'affichent entiers de quarts, sans décimale supprimée |
 | `1,72K` | `1 720` | Une abréviation qui fabrique une décimale là où le nombre n'en avait pas |
-| `1,91M` | `1 910K` | Un suffixe ne porte jamais de virgule : la mantisse descend d'un cran et redevient entière |
-| `11,8M` | `11 750K` | Un prix exactement représentable s'affiche EXACTEMENT |
-| `100,00K` | `99 999` | Le solde s'abrégeait dès le millier |
-| `1 000M` | `1B` | L'arrondi à trois chiffres franchissait le millier sans remonter d'un cran |
+| `1 230K` | `1,23M` | **Une seule unité par palier** : un compteur qui monte ne redescend pas d'unité |
+| `2 000K` | `2M` | Même cause : « deux mille K » ne se lit pas comme deux millions |
+| `1B` (pour 999 999 999) | `999M` | Le compact ne franchit jamais un palier à la place du joueur |
+| `1 248K` | `1,248M` | Un prix exact se lit maintenant dans l'unité du solde |
+| `×1500000000` | `×1,5B` | Le cas entier de `fmtMult` partait droit sur `String(v)`, sans séparateur |
+| `120h 00m` | `5j 00h` | Un nombre d'heures à trois chiffres se calcule, il ne se lit pas |
+
+#### Une seule unité par palier
+
+C'est la règle qui a coûté une refonte. L'ancienne refusait toute décimale
+derrière un suffixe et **descendait d'un cran** pour l'éviter. La suite affichée
+sautait alors d'une unité à l'autre, et revenait en arrière :
+
+```
+999K → 1M → 1 100K → 1 200K → 2M → 2 500K → 20 900K → 123M
+```
+
+Personne ne lit ça comme une progression. La même suite aujourd'hui — trois
+chiffres significatifs, **tronqués**, dans la plus grande unité qui laisse une
+mantisse au-dessus de un :
+
+```
+999K → 1M → 1,02M → 1,05M → 1,1M → 1,2M → 2M → 2,5M → 20,9M → 123M → 1B
+```
+
+Trois chiffres significatifs, parce que c'est le plus petit nombre qui laisse
+**voir** un compteur monter : à deux, `1,2M` resterait figé cent mille cookies
+durant. Tronqués et non arrondis, parce qu'un joueur à 999 999 cookies n'a pas
+un million — `999K` est vrai, `1M` ne l'est pas encore. Et les zéros de queue
+tombent : `2M`, pas `2,00M`.
+
+Deux propriétés sont vérifiées par balayage sur toute la plage du jeu : **l'unité
+affichée ne redescend jamais** quand le nombre monte, et **le texte relu n'est
+jamais supérieur à la valeur**.
 
 On n'abrège qu'à partir de **cent mille** (`COMPACT_FROM`) : en dessous, le
-nombre entier tient à l'écran et se lit d'un coup. Au-dessus, la forme compacte
-ne porte **jamais de décimale** : trois chiffres significatifs à mantisse
-entière — `123K` · `1 910K` · `20 100K` · `123M` — la mantisse entière la plus
-haute gagnant (`25M`, pas `25 000K`), et un nombre exactement représentable
-s'affiche exactement (`11 750K`). Au-delà du dernier suffixe, on passe en
-notation scientifique plutôt que d'inventer un nom d'unité.
+nombre entier tient à l'écran et se lit d'un coup. Au-delà du dernier suffixe,
+on passe en notation scientifique plutôt que d'inventer un nom d'unité.
 
-Cinq formateurs, chacun pour un usage :
+Sept formateurs, chacun pour un usage :
 
 | | Pour quoi | Exemple |
 | --- | --- | --- |
-| `fmt` | tout nombre de gameplay | `99,75` · `1 720` · `1 910K` |
+| `fmt` | tout nombre de gameplay | `99,75` · `1 720` · `1,23M` |
 | `fmtExact` | valeur de fiche, jamais abrégée | `80 000` |
-| `fmtInt` | le solde, en entier | `1 234` · `1 230K` |
-| `fmtMult` | multiplicateur de grille | `×1,50` · `×2` |
+| `fmtInt` | le solde, en entier | `1 234` · `1,23M` |
+| `fmtPrix` | un prix — **exact au cookie près** | `124 800` · `1,248M` · `27,5B` |
+| `fmtMult` | multiplicateur de grille | `×1,50` · `×2` · `×1,5B` |
 | `fmtApprox` | valeur **mesurée ou estimée** | `≈4,25` |
 | `fmtCrmb` | montant CRMB, centimes | `1` · `1,5` · `1,05` · `<0,01` |
+
+`fmtPrix` garde sa garantie propre — **le prix affiché est le prix payé** — mais
+la porte désormais dans l'unité du solde : `1,248M` plutôt que `1 248K`.
+Comparer `1 248K` à un solde de `1,2M` demandait une conversion mentale à chaque
+achat. Un prix qui ne tombe pas juste s'écrit toujours en toutes lettres, aussi
+long soit-il (`1 248 300`).
 
 Le préfixe `≈` n'est pas décoratif : il distingue une valeur calculée d'une
 valeur mesurée sur une fenêtre glissante. Écrire une cadence « 4,3 /s » tout
@@ -693,7 +726,7 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 559 tests
+npm test                      # 564 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 

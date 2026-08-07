@@ -4,11 +4,25 @@
 // figée: sans elle, `toLocaleString` suit la langue du navigateur et le même
 // solde s'affiche « 1,234.56 » chez l'un et « 1 234,56 » chez l'autre.
 //
-// Règle qui prime sur toutes les autres: **un nombre affiché est le nombre
-// calculé**. 401,75 s'écrivait « 401,8 » — une décimale supprimée sur une
-// valeur qui en avait deux, si bien que 401,75 et 401,8 devenaient le même
-// texte. Une abréviation qui fabrique une décimale là où le nombre n'en avait
-// pas (« 1,72K » pour 1 720) tombe sous la même règle.
+// Règle qui prime sur toutes les autres: **un nombre affiché n'annonce jamais
+// plus que le nombre calculé**. 401,75 s'écrivait « 401,8 » — une décimale
+// supprimée sur une valeur qui en avait deux, si bien que 401,75 et 401,8
+// devenaient le même texte. Sous le seuil d'abréviation, la valeur est donc
+// écrite en toutes lettres; au-dessus, elle est TRONQUÉE, jamais arrondie vers
+// le haut: on n'a pas « 1M » tant qu'on n'a pas le millionième cookie.
+//
+// Deuxième règle, et elle a coûté une refonte: **un compteur qui monte doit se
+// voir monter, dans une seule unité à la fois.** L'abréviation refusait toute
+// décimale derrière un suffixe et descendait d'un cran pour l'éviter. La suite
+// affichée sautait alors d'une unité à l'autre et revenait en arrière:
+//
+//     999K → 1M → 1 100K → 1 200K → 2M → 2 500K → 20 900K → 123M
+//
+// Personne ne lit ça comme une progression — « 2 000K » pour deux millions,
+// disait le joueur, « visuellement ce n'est pas joli ». La même suite
+// aujourd'hui, à trois chiffres significatifs et une seule unité par palier:
+//
+//     999K → 1M → 1,1M → 1,2M → 2M → 2,5M → 20,9M → 123M → 1B
 
 export const LOCALE = "fr-FR";
 
@@ -35,15 +49,35 @@ const loc = (v, max, min = 0) =>
   v.toLocaleString(LOCALE, { minimumFractionDigits: min, maximumFractionDigits: max });
 
 /**
- * Forme compacte SANS décimale: « 1 910K » plutôt que « 1,91M ».
+ * Rang du suffixe: le plus grand dont la mantisse reste au-dessus de un.
  *
- * Un suffixe ne porte jamais de virgule. Quand la mantisse à trois chiffres
- * significatifs en aurait une, on descend d'un suffixe pour retrouver un
- * entier: 5 750 000 s'écrit « 5 750K », 20 941 234 s'écrit « 20 900K ».
- * Et un nombre exactement représentable s'affiche EXACTEMENT — les prix sont
- * posés sur 0,25 × 10^k, « 11,8M » pour 11 750 000 serait un mensonge; on
- * écrit « 11 750K ». La mantisse entière la plus haute gagne: « 25M », pas
- * « 25 000K ».
+ * Le logarithme flotte — `Math.log10(1e21)/3` ne vaut pas exactement 7 — et un
+ * rang faux d'un cran change l'unité affichée. On le recale donc par
+ * comparaison directe, qui, elle, ne ment jamais.
+ */
+function rangSuffixe(abs) {
+  let k = Math.floor(Math.log10(abs) / 3);
+  if (!Number.isFinite(k)) k = 0;
+  while (k > 0 && abs < Math.pow(1000, k)) k -= 1;
+  while (k < SUFFIXES.length - 1 && abs >= Math.pow(1000, k + 1)) k += 1;
+  return Math.max(0, Math.min(SUFFIXES.length - 1, k));
+}
+
+/** Le produit `m × p` débarrassé du bruit du binaire (1,23 × 100 = 122,999…). */
+const sansBruit = (v) => Number(v.toPrecision(12));
+
+/**
+ * Forme compacte: **une seule unité par palier, trois chiffres significatifs,
+ * tronqués.**
+ *
+ *     1 000 000 → 1M        1 234 567 → 1,23M      20 941 234 → 20,9M
+ *     1 200 000 → 1,2M      5 750 000 → 5,75M     123 456 789 → 123M
+ *
+ * Trois chiffres significatifs, parce que c'est le plus petit nombre qui laisse
+ * VOIR un compteur monter: à deux, « 1,2M » resterait figé cent mille cookies
+ * durant. Tronqués et non arrondis, parce qu'un joueur à 999 999 cookies n'a
+ * pas un million — « 999K » est vrai, « 1M » ne l'est pas encore. Et les zéros
+ * de queue tombent: « 2M », pas « 2,00M ».
  */
 function compact(n) {
   const signe = n < 0 ? -1 : 1;
@@ -55,26 +89,13 @@ function compact(n) {
     return (signe * abs).toExponential(2).replace(".", ",");
   }
 
-  // 1. La représentation exacte, si elle existe: la plus grande unité dont la
-  //    mantisse est un entier d'au plus cinq chiffres.
-  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
-    const mant = abs / Math.pow(1000, k);
-    if (mant >= 1 && mant <= 99_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
-      return loc(signe * Math.round(mant), 0) + SUFFIXES[k];
-    }
-  }
-
-  // 2. Sinon, trois chiffres significatifs — et si la mantisse arrondie garde
-  //    une décimale, elle descend d'un suffixe pour redevenir entière.
-  const ordre = Math.floor(Math.log10(abs));
-  const arrondi = Math.round(abs / Math.pow(10, ordre - 2)) * Math.pow(10, ordre - 2);
-  let cran = Math.min(SUFFIXES.length - 1, Math.floor((Math.log10(arrondi) + 1e-9) / 3));
-  let mant = arrondi / Math.pow(1000, cran);
-  if (Math.abs(mant - Math.round(mant)) > 1e-9 && cran >= 1) {
-    cran -= 1;
-    mant = arrondi / Math.pow(1000, cran);
-  }
-  return loc(signe * Math.round(mant), 0) + SUFFIXES[cran];
+  const k = rangSuffixe(abs);
+  const mant = abs / Math.pow(1000, k);
+  // Trois chiffres significatifs: 124 · 20,9 · 1,23
+  const dec = mant >= 100 ? 0 : mant >= 10 ? 1 : 2;
+  const p = Math.pow(10, dec);
+  const tronque = Math.floor(sansBruit(mant * p)) / p;
+  return loc(signe * tronque, dec) + SUFFIXES[k];
 }
 
 /**
@@ -105,8 +126,13 @@ export function fmt(n) {
  * Un prix de lot est une somme exacte d'unités: il peut valoir 124 800, que le
  * compact à trois chiffres écrirait « 125K » — un mensonge de 200 cookies.
  * Règle: en dessous du million, le nombre plein; au-delà, la forme compacte
- * SEULEMENT si elle est exacte (mantisse entière, jusqu'à six chiffres —
- * « 1 248K », « 124 800K »), sinon le nombre plein, aussi long soit-il.
+ * SEULEMENT si elle est exacte, sinon le nombre plein, aussi long soit-il.
+ *
+ * « Exacte » veut maintenant dire *à trois décimales près dans l'unité du
+ * solde* — « 1,248M » — et non plus *entière dans l'unité d'en dessous* —
+ * « 1 248K ». Le prix payé est le même; ce qui change, c'est qu'il se lit dans
+ * la MÊME unité que le solde juste au-dessus. Comparer « 1 248K » à un solde
+ * de « 1,2M » demandait une conversion mentale à chaque achat.
  */
 export function fmtPrix(n) {
   const v = nombre(n);
@@ -114,11 +140,14 @@ export function fmtPrix(n) {
   if (!Number.isFinite(v)) return v > 0 ? "∞" : "-∞";
   const abs = Math.abs(v);
   if (abs < 1_000_000) return loc(Math.round(v), 0);
-  for (let k = SUFFIXES.length - 1; k >= 1; k--) {
-    const mant = abs / Math.pow(1000, k);
-    if (mant >= 1 && mant <= 999_999 && Math.abs(mant - Math.round(mant)) < 1e-9) {
-      return loc(Math.sign(v) * Math.round(mant), 0) + SUFFIXES[k];
-    }
+  // Au-delà des suffixes nommés, le nombre plein n'aide personne.
+  if (abs >= Math.pow(1000, SUFFIXES.length)) return compact(v);
+
+  const k = rangSuffixe(abs);
+  const mant = sansBruit(abs / Math.pow(1000, k));
+  const millimes = sansBruit(mant * 1000);
+  if (Math.abs(millimes - Math.round(millimes)) < 1e-6) {
+    return loc((Math.sign(v) * Math.round(millimes)) / 1000, 3) + SUFFIXES[k];
   }
   return loc(Math.round(v), 0);
 }
@@ -158,12 +187,17 @@ export function fmtInt(n) {
  * Un entier s'écrit nu — « ×2 », pas « ×2,00 ». Une fraction garde ses deux
  * décimales pour que ×1,50 et ×1,75 s'alignent à l'œil. Les valeurs étant
  * choisies sur la grille, ce formatage n'arrondit jamais rien de visible.
+ *
+ * Passé cent mille, il abrège comme tout le reste: un multiplicateur global de
+ * fin de partie s'écrivait « ×1500000000 » — sans le moindre séparateur, parce
+ * que le cas entier partait droit sur `String(v)`.
  */
 export function fmtMult(n) {
   const v = nombre(n);
   if (v === null) return "1";
   if (!Number.isFinite(v)) return "∞";
-  return Number.isInteger(v) ? String(v) : loc(v, 2, 2);
+  if (Math.abs(v) >= COMPACT_FROM) return compact(v);
+  return Number.isInteger(v) ? loc(v, 0) : loc(v, 2, 2);
 }
 
 /**
@@ -183,14 +217,23 @@ export function fmtPct(ratio, digits = 0) {
   return (pct > 0 ? "+" : "") + loc(pct, digits) + " %";
 }
 
-/** Durée lisible: 12s · 4m 30s · 2h 05m */
+/**
+ * Durée lisible: 12s · 4m 30s · 2h 05m · 5j 03h
+ *
+ * Deux unités au plus, la plus grande d'abord — comme les nombres, qui ne
+ * s'écrivent que dans une seule unité. Le jour manquait, et une partie de deux
+ * semaines s'annonçait « 336h 00m »: un nombre d'heures à quatre chiffres ne
+ * se lit pas, il se calcule.
+ */
 export function fmtDuration(ms) {
   const v = nombre(ms);
   if (v === null || !Number.isFinite(v) || v <= 0) return "0s";
   const total = Math.floor(v / 1000);
-  const h = Math.floor(total / 3600);
+  const j = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
+  if (j > 0) return `${loc(j, 0)}j ${String(h).padStart(2, "0")}h`;
   if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
   if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
   return `${s}s`;
@@ -216,6 +259,10 @@ export function fmtCrmb(n, digits = 2) {
   const v = nombre(n);
   if (v === null || !Number.isFinite(v)) return "∞";
   if (v > 0 && v < 0.005) return "<0,01";
+  // Le centime n'a plus de sens à cette échelle, et « 99 000 000 » déborde de
+  // la pastille de l'en-tête: au-delà du seuil général, le CRMB abrège comme
+  // les cookies.
+  if (Math.abs(v) >= COMPACT_FROM) return compact(v);
   return loc(v, Math.min(2, digits));
 }
 

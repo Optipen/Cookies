@@ -3,7 +3,7 @@ import { costOf, bulkCost, unitPrice, maxAffordable } from "../utils/selectors.j
 import { createFreshState } from "../utils/state.js";
 import { ITEMS, ITEM_BY_ID } from "../data/items.js";
 import { lisible, prixLisible } from "../utils/grid.js";
-import { fmt } from "../utils/format.js";
+import { fmtPrix } from "../utils/format.js";
 
 const LATER = 6e5; // hors de la fenêtre de début de partie
 const partie = (mutate = () => {}) => {
@@ -142,16 +142,18 @@ describe("les prix restent lisibles et strictement croissants", () => {
   });
 
   it("s'affiche exactement: le texte à l'écran EST le prix payé", () => {
-    // `compact` rend toute mantisse posée sur les quarts EXACTEMENT — et sans
-    // décimale dans le suffixe: la mantisse descend d'un cran pour rester
-    // entière. « 5 750K », jamais « 5,75M » ni « 5,8M ».
+    // C'est `fmtPrix` qui porte cette garantie, et il la porte maintenant dans
+    // l'UNITÉ DU SOLDE: « 5,75M », et non plus « 5 750K ». Comparer un prix à
+    // un solde ne demande plus de conversion mentale. Un prix qui ne tombe pas
+    // juste s'écrit toujours en toutes lettres, aussi long soit-il.
     const esp = (s) => s.replace(/[\s  ]/g, " ");
-    expect(esp(fmt(5_750_000))).toBe("5 750K");
-    expect(esp(fmt(57_500_000))).toBe("57 500K");
-    expect(fmt(575_000_000)).toBe("575M");
-    expect(esp(fmt(11_750_000))).toBe("11 750K");
-    expect(esp(fmt(2_750_000_000_000))).toBe("2 750B");
-    expect(fmt(125_000)).toBe("125K");
+    expect(fmtPrix(5_750_000)).toBe("5,75M");
+    expect(fmtPrix(57_500_000)).toBe("57,5M");
+    expect(fmtPrix(575_000_000)).toBe("575M");
+    expect(fmtPrix(11_750_000)).toBe("11,75M");
+    expect(fmtPrix(2_750_000_000_000)).toBe("2,75T");
+    expect(esp(fmtPrix(125_000))).toBe("125 000");
+    expect(esp(fmtPrix(1_248_300))).toBe("1 248 300");
   });
 
   it("rend un prix entier, jamais nul, jamais négatif", () => {

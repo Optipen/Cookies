@@ -50,18 +50,23 @@ describe("un nombre affiché est le nombre calculé", () => {
     expect(fmt(1720)).not.toContain("K");
   });
 
-  it("reste compact pour les très grands nombres — sans décimale dans le suffixe", () => {
-    // Règle définitive: « 1 910K » plutôt que « 1,91M ». Une mantisse qui
-    // aurait une virgule descend d'un suffixe pour redevenir entière.
-    expect(esp(fmt(1_234_567))).toBe("1 230K");
-    expect(esp(fmt(12_345_678))).toBe("12 300K");
+  it("reste compact pour les très grands nombres, dans UNE SEULE unité", () => {
+    // Règle définitive: trois chiffres significatifs, dans la plus grande
+    // unité qui laisse une mantisse au-dessus de un. « 1,23M », jamais
+    // « 1 230K »: un compteur qui monte ne doit pas changer d'unité pour
+    // revenir en arrière.
+    expect(fmt(1_234_567)).toBe("1,23M");
+    expect(fmt(12_345_678)).toBe("12,3M");
     expect(fmt(123_456_789)).toBe("123M");
-    expect(esp(fmt(1.5e12))).toBe("1 500B");
+    expect(fmt(1.5e12)).toBe("1,5T");
   });
 
-  it("ne fabrique jamais « 1 000K » en arrondissant vers le haut", () => {
-    expect(fmt(999_999_999)).toBe("1B");
-    expect(fmt(999_999)).not.toContain("K");
+  it("tronque plutôt que d'annoncer un palier qu'on n'a pas atteint", () => {
+    // 999 999 999 cookies, ce n'est PAS un milliard. Le compact ne franchit
+    // jamais un palier à la place du joueur.
+    expect(fmt(999_999_999)).toBe("999M");
+    expect(fmt(999_999)).toBe("999K");
+    expect(fmt(1_999_999)).toBe("1,99M");
     for (let e = 5; e < 40; e++) {
       for (const m of [0.999999, 1, 9.999999]) {
         const texte = fmt(m * Math.pow(10, e));
@@ -145,7 +150,7 @@ describe("seuil de compactage", () => {
 
   it("s'applique aussi au solde", () => {
     expect(esp(fmtInt(99_999))).toBe("99 999");
-    expect(esp(fmtInt(1_234_567))).toBe("1 230K");
+    expect(fmtInt(1_234_567)).toBe("1,23M");
     expect(fmtInt(0)).toBe("0");
     expect(fmtInt(-5)).toBe("0"); // un solde ne s'affiche jamais négatif
   });
