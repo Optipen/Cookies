@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLatestRef } from "./useLatestRef.js";
 import { ETAPES } from "../data/guide.js";
 
@@ -23,6 +23,22 @@ export function useGuide(state, setState, onFranchie) {
   const stateRef = useLatestRef(state);
   const setStateRef = useLatestRef(setState);
   const franchieRef = useLatestRef(onFranchie);
+  /**
+   * Ce qui était DÉJÀ vrai quand le Guide est arrivé, capturé au montage.
+   *
+   * Une partie avancée remplit d'entrée toutes les conditions — elle possède
+   * des Curseurs, un Four, dix bâtiments, des quêtes finies. Payer ces
+   * étapes-là reviendrait à verser les sept primes d'un coup à quelqu'un qui
+   * n'a rien franchi devant nous, simplement parce que le Guide vient
+   * d'apparaître dans sa version du jeu.
+   *
+   * Une prime récompense un geste VU. Ce qui était déjà acquis est donc
+   * verrouillé sans être payé; tout ce qui se franchit ENSUITE est payé.
+   */
+  const acquisRef = useRef(null);
+  if (acquisRef.current === null) {
+    acquisRef.current = new Set(ETAPES.filter((e) => e.fait(state)).map((e) => e.id));
+  }
 
   useEffect(() => {
     const iv = setInterval(() => {
@@ -32,6 +48,7 @@ export function useGuide(state, setState, onFranchie) {
       const nouvelles = ETAPES.filter((e) => !s.guide?.faites?.[e.id] && e.fait(s));
       if (!nouvelles.length) return;
 
+      const acquis = acquisRef.current;
       const franchies = [];
       setStateRef.current((prev) => {
         const faites = { ...(prev.guide?.faites || {}) };
@@ -42,8 +59,11 @@ export function useGuide(state, setState, onFranchie) {
           if (!faites[e.id] && e.fait(prev)) {
             faites[e.id] = true;
             change = true;
-            prime += e.recompense || 0;
-            franchies.push(e);
+            // Déjà vrai au montage: on verrouille, on ne paie pas.
+            if (!acquis.has(e.id)) {
+              prime += e.recompense || 0;
+              franchies.push(e);
+            }
           }
         }
         if (!change) return prev;

@@ -178,6 +178,24 @@ describe("un joueur qui découvre", () => {
     expect(acheter.disabled).toBe(false);
   }, 15000);
 
+  it("ne verse aucune prime pour ce qui était déjà acquis à l'arrivée", async () => {
+    // Un joueur existant remplit d'entrée les sept conditions. Le Guide n'a
+    // rien vu se franchir: il verrouille, il ne paie pas. Sinon la mise à jour
+    // du jeu offrirait 9 525 cookies à tout le monde, sans qu'aucun geste ne
+    // les ait mérités.
+    const depart = veteran();
+    await demarrer(depart);
+    const avant = Number(screen.getByTestId("solde").textContent.replace(/\D/g, ""));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 1400));
+    });
+    const apres = Number(screen.getByTestId("solde").textContent.replace(/\D/g, ""));
+    const primeTotale = ETAPES.reduce((n, e) => n + e.recompense, 0);
+    // Le minage tourne, donc le solde monte un peu — mais jamais de la somme
+    // des sept primes.
+    expect(apres - avant).toBeLessThan(primeTotale);
+  }, 15000);
+
   it("récompense chaque étape franchie, en cookies", () => {
     // Un guide qui ne promet rien n'est qu'une liste de corvées.
     for (const e of ETAPES) expect(e.recompense, e.id).toBeGreaterThan(0);
@@ -301,6 +319,60 @@ describe("il y a toujours quelque chose à viser", () => {
     for (const etat of [neuf(), veteran(), veteran((s) => (s.cookies = 0))]) {
       expect(conseil(etat, deriveStats(etat, 0))).not.toBeNull();
     }
+  });
+});
+
+describe("le guide se range quand le joueur sait jouer", () => {
+  it("prend toute la place pendant la découverte", async () => {
+    // L'étape 2 plutôt que la 1: la première vise le cookie lui-même, elle n'a
+    // donc pas de bouton « Montre-moi » à proposer.
+    await demarrer(neuf((s) => (s.lifetimeStats.clicks = CLICS_PREMIERE_ETAPE)));
+    const guide = screen.getByTestId("guide");
+    expect(guide.getAttribute("data-phase")).toBe("decouverte");
+    // La carte pleine: consigne, promesse, endroit, bouton, récompense.
+    expect(guide.textContent).toMatch(/À faire · 2\/7/);
+    expect(guide.textContent).toMatch(/cookies à la clé/i);
+    expect(within(guide).getByRole("button", { name: /Montre-moi/i })).toBeTruthy();
+  });
+
+  it("se réduit à UNE LIGNE une fois les sept étapes franchies", async () => {
+    // Le même bloc gardé après le tutoriel donne un jeu qui tient la main
+    // indéfiniment, et mange la place de la boutique à chaque session.
+    await demarrer(veteran());
+    const guide = screen.getByTestId("guide");
+    expect(guide.getAttribute("data-phase")).toBe("objectif");
+    // Ce qui disparaît: le compteur d'étapes, la promesse, le gros bouton.
+    expect(guide.textContent).not.toMatch(/À faire ·/);
+    expect(guide.textContent).not.toMatch(/cookies à la clé/i);
+    expect(within(guide).queryByRole("button", { name: /Montre-moi/i })).toBeNull();
+  });
+
+  it("reste tapable une fois réduit, et emmène toujours au bon endroit", async () => {
+    await demarrer(
+      veteran((x) => {
+        x.items = { oven: 7 };
+        x.upgrades = {};
+        x.cookies = 0;
+        x.lifetime = PRESTIGE_MIN_LIFETIME / 2; // objectif « palier », onglet Boutique
+        // Un parc réduit rouvrirait la découverte: le joueur, lui, a déjà tout vu.
+        x.guide = { faites: Object.fromEntries(ETAPES.map((e) => [e.id, true])), masque: false };
+      })
+    );
+    const guide = screen.getByTestId("guide");
+    expect(guide.getAttribute("data-phase")).toBe("objectif");
+    await act(async () => {
+      fireEvent.click(within(guide).getAllByRole("button")[0]);
+    });
+    expect(screen.getByRole("tab", { name: "Boutique" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("occupe nettement moins de lignes de texte qu'en découverte", async () => {
+    const { unmount } = await demarrer(neuf());
+    const grand = screen.getByTestId("guide").textContent.trim().length;
+    unmount();
+    await demarrer(veteran());
+    const petit = screen.getByTestId("guide").textContent.trim().length;
+    expect(petit).toBeLessThan(grand / 2);
   });
 });
 

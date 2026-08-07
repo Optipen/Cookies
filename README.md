@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (514 tests)                    |
+| `npm test`          | Suite de tests (523 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -693,7 +693,7 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 514 tests
+npm test                      # 523 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
@@ -1182,6 +1182,42 @@ du moment**, par ordre de ce qui change le plus la partie tout de suite.
 | 3 | Le palier de bâtiment le plus proche | « 3 Fours avant le palier — au 10ᵉ, chacun rapporte deux fois plus » |
 | 4 | L'avancement vers la Renaissance | Le dernier recours : **aucun écran n'est jamais sans horizon** |
 
+### Le guide se range quand le joueur sait jouer
+
+Le même bloc gardé après le tutoriel donne un jeu qui **tient la main
+indéfiniment** : on n'apprend plus rien, on se fait dicter la suite, et le
+panneau mange la place de la boutique à chaque session. Le contenu ne change
+pas — c'est la place qu'il prend qui change.
+
+| | Découverte (7 étapes) | Ensuite |
+| --- | --- | --- |
+| Hauteur mesurée | **250 px** | **50 px** |
+| Forme | carte pleine : consigne, promesse, endroit, bouton, récompense, barre | **une ligne** tapable, avec un filet de progression de 3 px |
+| Compteur d'étapes | « À faire · 3/7 » | — |
+| Bouton | « Montre-moi », plein format | un chevron |
+
+Un joueur qui sait jouer veut **un cap, pas un cours**.
+
+### Pourquoi cliquer ?
+
+La question n'avait aucune réponse à l'écran. Mesuré sur le moteur
+(`npm run balance`), à cinq clics par seconde :
+
+| Horizon | 10 min | 1 h | 6 h | 1 j | 30 j | 365 j |
+| --- | --- | --- | --- | --- | --- | --- |
+| Production **×** en cliquant | 2,6 | 2,8 | 2,7 | 2,6 | 2,8 | 2,8 |
+
+Cliquer multiplie la production par **2,6 à 2,8**, du début de partie à la
+trois-cent-soixantième journée — le jeu était donc bien équilibré, il ne le
+disait simplement à personne. Une ligne l'annonce maintenant, sous les deux
+chiffres, **et seulement quand la question se pose** : pendant qu'on clique, et
+s'il y a un minage auquel se comparer.
+
+Elle n'affiche **jamais « ×1 »**. La cadence est une moyenne glissante : pendant
+la seconde où elle monte, le rapport passe par 1, et annoncer « cliquer te
+rapporte ×1 » dirait exactement le contraire de ce que cette ligne existe pour
+dire. En dessous d'un cran de grille, elle se tait.
+
 Deux garde-fous, tous deux couverts par des tests :
 
 - **Un vétéran ne se fait jamais réexpliquer le clic.** Trois étapes se mesurent
@@ -1192,6 +1228,11 @@ Deux garde-fous, tous deux couverts par des tests :
 - **Le joueur reste maître.** Une croix masque le guide, définitivement ; ⚙️ →
   *Réafficher le guide* le ramène. Un conseil qu'on a fermé ne revient jamais
   tout seul.
+- **Aucune prime rétroactive.** Une partie avancée remplit d'entrée les sept
+  conditions. Les étapes sont alors verrouillées **sans être payées** : une
+  prime récompense un geste vu, pas un état constaté au chargement. Sans cette
+  règle, la mise à jour offrait 9 525 cookies à tout le monde — et faussait la
+  mesure du gain au clic.
 
 Tout vit dans [`src/data/guide.js`](src/data/guide.js), en **fonctions pures** :
 aucune ne touche à React, au DOM ni à l'horloge. C'est ce qui permet de vérifier

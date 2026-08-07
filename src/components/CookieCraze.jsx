@@ -45,7 +45,7 @@ import { CREDIT_MAX_CPS } from "../utils/rate.js";
 import { createGuard, fabriquerDefi } from "../utils/anticheat.js";
 import { gainCroque } from "../utils/gains.js";
 import { offlineGains } from "../utils/offline.js";
-import { STEP } from "../utils/grid.js";
+import { STEP, snap } from "../utils/grid.js";
 import { fmt, fmtInt, fmtCrmb, fmtDuration, fmtMult } from "../utils/format.js";
 import {
   loadState,
@@ -195,6 +195,32 @@ const ProductionBar = memo(function ProductionBar({ stats, cadence }) {
           </div>
         </div>
       </div>
+      {/* CE QUE CLIQUER RAPPORTE, en un seul nombre.
+          Mesuré sur le moteur: à cinq clics par seconde, cliquer multiplie la
+          production par 2,6 — du début de partie à la trois-cent-soixantième
+          journée. Le jeu ne l'avait jamais dit à personne, et la question
+          « pourquoi je clique ? » n'avait donc aucune réponse à l'écran.
+          Elle n'apparaît que pendant qu'on clique, et seulement s'il y a un
+          minage auquel se comparer: sans Mineur, tout vient déjà des doigts. */}
+      {(() => {
+        if (!c.actif || c.minage <= 0) return null;
+        const rapport = snap(Math.min(99, c.total / c.minage));
+        // JAMAIS « ×1 ». La cadence est une moyenne glissante: pendant la
+        // seconde où elle monte, le rapport passe par 1 — et annoncer
+        // « cliquer te rapporte ×1 » dirait exactement le contraire de ce que
+        // cette ligne existe pour dire. En dessous d'un cran de grille, on se
+        // tait plutôt que de décourager.
+        if (rapport < 1 + STEP) return null;
+        return (
+          <p className="mt-2 border-t border-honey/15 pt-2 text-center text-[11.5px] font-bold text-honey">
+            <span className="font-semibold text-cream/55">Cliquer te rapporte </span>
+            <span className="tabular-nums" data-testid="valeur-du-clic">
+              ×{fmtMult(rapport)}
+            </span>
+            <span className="font-semibold text-cream/55"> de production</span>
+          </p>
+        );
+      })()}
       {/* La cadence créditée est bornée. On le dit quand on y touche, plutôt
           que de laisser croire qu'accélérer rapporte encore. */}
       {c.bornee && (

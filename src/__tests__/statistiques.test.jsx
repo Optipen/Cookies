@@ -214,6 +214,35 @@ describe("l'écran ne montre que ce sur quoi le joueur agit", () => {
     expect(screen.getByTestId("stat-par-clic").textContent).not.toBe(avant);
   });
 
+  it("dit ce que cliquer rapporte, mais seulement quand on clique", async () => {
+    // « On ne comprend pas l'intérêt de cliquer »: mesuré, cliquer multiplie la
+    // production par ~2,6 à cinq clics par seconde. Le jeu ne le disait nulle
+    // part. Il le dit maintenant — et uniquement quand la question se pose.
+    await demarrer((x) => (x.items = { oven: 20, cursor: 10 }));
+    expect(screen.queryByTestId("valeur-du-clic")).toBeNull();
+
+    await cliquer(8, 120);
+    await act(async () => vi.advanceTimersByTime(400));
+    const valeur = screen.getByTestId("valeur-du-clic");
+    expect(valeur.textContent).toMatch(/^×\d/);
+    // JAMAIS « ×1 »: la cadence est une moyenne glissante et passe par 1 en
+    // montant. Annoncer « cliquer te rapporte ×1 » dirait le contraire de ce
+    // que cette ligne existe pour dire.
+    expect(valeur.textContent).not.toBe("×1");
+    expect(Number(valeur.textContent.replace("×", "").replace(",", "."))).toBeGreaterThanOrEqual(1.25);
+
+    // Au repos, la ligne s'éteint: il n'y a plus rien à comparer.
+    await act(async () => vi.advanceTimersByTime(6000));
+    expect(screen.queryByTestId("valeur-du-clic")).toBeNull();
+  });
+
+  it("ne la montre pas tant qu'il n'y a aucun minage auquel se comparer", async () => {
+    await demarrer((x) => (x.items = {}));
+    await cliquer(8, 120);
+    await act(async () => vi.advanceTimersByTime(400));
+    expect(screen.queryByTestId("valeur-du-clic")).toBeNull();
+  });
+
   it("prévient encore quand les clics cessent d'être crédités", async () => {
     // La cadence a disparu de l'écran, pas du moteur: un joueur dont les clics
     // ne comptent plus doit continuer de l'apprendre.
