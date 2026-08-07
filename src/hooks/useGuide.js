@@ -39,34 +39,33 @@ export function useGuide(state, setState, onFranchie) {
   if (acquisRef.current === null) {
     acquisRef.current = new Set(ETAPES.filter((e) => e.fait(state)).map((e) => e.id));
   }
+  /** Étapes déjà traitées par ce montage, que l'état soit commité ou non: deux
+   *  tics rapprochés ne peuvent pas verser deux fois la même prime. */
+  const traiteesRef = useRef(new Set());
 
   useEffect(() => {
     const iv = setInterval(() => {
       const s = stateRef.current;
       if (!s) return;
       // Rien à écrire dans le cas courant: on ne réveille pas React pour rien.
-      const nouvelles = ETAPES.filter((e) => !s.guide?.faites?.[e.id] && e.fait(s));
+      const nouvelles = ETAPES.filter(
+        (e) => !s.guide?.faites?.[e.id] && !traiteesRef.current.has(e.id) && e.fait(s)
+      );
       if (!nouvelles.length) return;
+      for (const e of nouvelles) traiteesRef.current.add(e.id);
 
-      const acquis = acquisRef.current;
-      const franchies = [];
+      // Déjà vraies au montage: on verrouille, on ne paie pas.
+      const franchies = nouvelles.filter((e) => !acquisRef.current.has(e.id));
+      const prime = franchies.reduce((n, e) => n + (e.recompense || 0), 0);
+
+      // TOUT est décidé avant le `setState`. Remplir `franchies` DEPUIS le
+      // réducteur paraissait plus sûr — c'est le contraire: React 18 diffère
+      // le réducteur dès qu'une file de mises à jour est en cours, donc la
+      // liste était encore vide au moment de la parcourir, et la célébration
+      // ne partait pas. Le réducteur ne fait plus qu'écrire.
       setStateRef.current((prev) => {
         const faites = { ...(prev.guide?.faites || {}) };
-        let change = false;
-        let prime = 0;
-        for (const e of nouvelles) {
-          // Re-vérifié sur `prev`: l'état a pu bouger depuis le calcul.
-          if (!faites[e.id] && e.fait(prev)) {
-            faites[e.id] = true;
-            change = true;
-            // Déjà vrai au montage: on verrouille, on ne paie pas.
-            if (!acquis.has(e.id)) {
-              prime += e.recompense || 0;
-              franchies.push(e);
-            }
-          }
-        }
-        if (!change) return prev;
+        for (const e of nouvelles) faites[e.id] = true;
         // La récompense est versée ICI, dans la même transition que le verrou:
         // une étape franchie ne peut donc jamais payer deux fois.
         return {

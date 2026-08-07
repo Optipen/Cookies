@@ -24,13 +24,13 @@ export const FEATURES = {
 /**
  * Version du schéma de sauvegarde.
  *
- * Elle passe à 7 avec les COMPTEURS À VIE (`lifetimeStats`): un bloc qui
- * n'existait dans aucune sauvegarde précédente. La version est ÉCRITE dans la
- * sauvegarde et `migratedFrom` garde celle d'où l'on vient — sans quoi il est
- * impossible de dire, devant une partie cassée, quelle transformation l'a
- * produite.
+ * Elle est passée à 7 avec les COMPTEURS À VIE (`lifetimeStats`), et à 8 avec
+ * les deux cumuls que réclame le Classement — cookies produits et temps de jeu
+ * à travers TOUTES les parties. La version est ÉCRITE dans la sauvegarde et
+ * `migratedFrom` garde celle d'où l'on vient — sans quoi il est impossible de
+ * dire, devant une partie cassée, quelle transformation l'a produite.
  */
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 // === État neuf ===
 // Fonction (et non constante) pour que chaque appel produise des objets frais:
@@ -85,6 +85,19 @@ export function createFreshState(now = Date.now()) {
       cookiesEaten: 0,
       questsCompleted: 0,
       bestStreak: 0,
+
+      // Les deux cumuls du Classement. Ils comptent ce que les parties
+      // PRÉCÉDENTES ont produit et duré: la partie en cours s'y ajoute à la
+      // lecture (`cookiesAVie`, `tempsDeJeuAVie`), et s'y verse au moment
+      // exact où elle se termine — renaissance, ascension, réinitialisation.
+      //
+      // Pourquoi ce découpage plutôt qu'un compteur incrémenté partout: les
+      // cookies arrivent d'une douzaine d'endroits (boucle, clic, quêtes,
+      // succès, dorés, hors-ligne, primes du guide). Un compteur de plus à
+      // tenir à jour dans chacun d'eux serait faux au premier oubli, et le
+      // seul symptôme serait un classement légèrement injuste — donc invisible.
+      cookiesAvant: 0,
+      playtimeAvant: 0,
     },
 
     flags: {
@@ -142,15 +155,23 @@ export function createFreshState(now = Date.now()) {
     // `masque` est le choix du joueur, et il est définitif tant qu'il ne le
     // reprend pas: un conseil qu'on a fermé ne revient pas tout seul.
     guide: { faites: {}, masque: false },
+
+    // === Le Classement ===
+    // `battus` retient le premier dépassement de chaque rival. Le classement
+    // affiché, lui, reste VIVANT: un rival repassé devant redevient un rival.
+    // Sans ce verrou, la prime d'un dépassement se paierait à chaque
+    // oscillation autour de la même position.
+    classement: { battus: {} },
   };
 }
 
 // === Clés de stockage ===
-export const SAVE_KEY = "cookieCrazeSaveV7";
+export const SAVE_KEY = "cookieCrazeSaveV8";
 // Lues dans l'ordre, de la plus récente à la plus ancienne. Elles ne sont
 // jamais effacées: une sauvegarde qu'on a su lire une fois doit rester lisible
 // si le joueur revient sur une version antérieure.
 export const LEGACY_KEYS = [
+  "cookieCrazeSaveV7",
   "cookieCrazeSaveV6",
   "cookieCrazeSaveV5",
   "cookieCrazeSaveV4",
@@ -274,6 +295,13 @@ export function migrate(savedState, now = Date.now()) {
       cookiesEaten: auMoins(vieSauvee.cookiesEaten, savedState.cookieEatenCount),
       questsCompleted: auMoins(vieSauvee.questsCompleted, quetesFaites),
       bestStreak: auMoins(vieSauvee.bestStreak, savedState.quests?.streak),
+      // Les cumuls du Classement arrivent en v8. Une sauvegarde d'avant n'a
+      // aucune trace de ses parties passées: on part donc de zéro, et la
+      // partie EN COURS s'y ajoutera à la lecture. Un vétéran est ainsi
+      // classé sur la partie qu'il a sous les yeux plutôt que sur un cumul
+      // qu'on aurait inventé — un plancher honnête, jamais un plafond.
+      cookiesAvant: Math.max(0, num(vieSauvee.cookiesAvant)),
+      playtimeAvant: Math.max(0, num(vieSauvee.playtimeAvant)),
     };
 
     // --- Prestige: l'arbre céleste arrive en v5 ---
@@ -377,6 +405,14 @@ export function migrate(savedState, now = Date.now()) {
       masque: !!oldGuide.masque,
     };
 
+    // --- Classement: arrive en v8 ---
+    // Rien à semer: les rivaux se comparent à l'état réel. Un joueur qui en
+    // dépasse déjà cinq les verra derrière lui au premier affichage — sans
+    // encaisser cinq primes pour un dépassement qu'on n'a pas vu (le verrou
+    // du montage, côté `useClassement`, s'en charge).
+    const oldClassement = isObj(savedState.classement) ? savedState.classement : {};
+    merged.classement = { battus: isObj(oldClassement.battus) ? { ...oldClassement.battus } : {} };
+
     // --- Flags volatils: on ne rejoue pas un état d'événement périmé ---
     merged.flags = {
       ...fresh.flags,
@@ -468,6 +504,9 @@ export function createResetState({
   // faire, pas ce que sa partie possède: réexpliquer le clic après une
   // renaissance serait absurde.
   guide = null,
+  // Rivaux déjà dépassés. Comme le Guide: c'est une trace du parcours du
+  // JOUEUR, pas de ce que sa partie possède.
+  classement = null,
   sounds = true,
   // Un joueur qui relance une partie a déjà vu l'écran d'accueil: le lui
   // réimposer n'apporte rien. Seule une toute première partie l'affiche.
@@ -512,6 +551,8 @@ export function createResetState({
       cookiesEaten: n(lifetimeStats.cookiesEaten),
       questsCompleted: n(lifetimeStats.questsCompleted),
       bestStreak: n(lifetimeStats.bestStreak),
+      cookiesAvant: Math.max(0, num(lifetimeStats.cookiesAvant)),
+      playtimeAvant: Math.max(0, num(lifetimeStats.playtimeAvant)),
     };
   }
   if (isObj(guide)) {
@@ -520,10 +561,49 @@ export function createResetState({
       masque: !!guide.masque,
     };
   }
+  if (isObj(classement)) {
+    s.classement = { battus: isObj(classement.battus) ? { ...classement.battus } : {} };
+  }
   s.ui.sounds = !!sounds;
   s.ui.introSeen = !!introSeen;
   return s;
 }
+
+/**
+ * Cookies produits depuis la toute première partie, renaissances comprises.
+ *
+ * `lifetime` est remis à zéro par chaque renaissance: c'est la production de
+ * la partie EN COURS, et elle a sa raison d'être — le prestige se calcule
+ * dessus. Le Classement, lui, mesure un parcours entier: il additionne donc ce
+ * que les parties précédentes ont produit et ce que celle-ci produit.
+ */
+export const cookiesAVie = (state) =>
+  Math.max(0, num(state?.lifetimeStats?.cookiesAvant)) + Math.max(0, num(state?.lifetime));
+
+/**
+ * Temps de jeu depuis la toute première partie.
+ *
+ * C'est l'unité de mesure du Classement, et c'est un choix: les rivaux
+ * avancent au TEMPS DE JEU du joueur, pas à l'horloge murale. Quelqu'un qui
+ * joue vingt minutes par jour se compare donc à des adversaires qui ont joué
+ * vingt minutes eux aussi. Sur une horloge murale, tout le monde perdrait en
+ * dormant — exactement le contraire de ce qu'un classement doit provoquer.
+ */
+export const tempsDeJeuAVie = (state) =>
+  Math.max(0, num(state?.lifetimeStats?.playtimeAvant)) + Math.max(0, num(state?.stats?.playtimeMs));
+
+/**
+ * Les compteurs à vie, la partie qui s'achève REPLIÉE dedans.
+ *
+ * C'est ici, et nulle part ailleurs, qu'une partie se verse dans les cumuls:
+ * les trois gestes qui terminent une partie passent tous par
+ * `couchesConservees`, donc aucun ne peut oublier de le faire.
+ */
+export const cumulerVie = (state) => ({
+  ...(isObj(state?.lifetimeStats) ? state.lifetimeStats : {}),
+  cookiesAvant: cookiesAVie(state),
+  playtimeAvant: tempsDeJeuAVie(state),
+});
 
 /**
  * Tout ce qu'une renaissance ou une réinitialisation de partie conserve, sauf
@@ -537,8 +617,9 @@ export const couchesConservees = (state) => ({
   skin: state?.skin || null,
   skinsOwned: state?.skinsOwned || null,
   unlocked: state?.unlocked || null,
-  lifetimeStats: state?.lifetimeStats || null,
+  lifetimeStats: cumulerVie(state),
   guide: state?.guide || null,
+  classement: state?.classement || null,
 });
 
 // === Validation ===

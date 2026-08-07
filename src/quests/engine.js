@@ -348,6 +348,15 @@ export function tickQuests(state, ctx, now = Date.now(), rng = Math.random) {
   const finies = events.filter((e) => e.type === "completed").length;
   const vieAvant = next.lifetimeStats || {};
   const vie = {
+    // Le report d'abord, les deux compteurs que ce tic met à jour ensuite.
+    //
+    // Cette ligne manquait, et le bloc énumérait les cinq compteurs qu'il
+    // connaissait: chaque tic de quêtes reconstruisait donc `lifetimeStats` à
+    // cinq champs et EFFAÇAIT tout le reste. Les cumuls du Classement
+    // (`cookiesAvant`, `playtimeAvant`) disparaissaient au premier tic, et le
+    // seul symptôme visible était un joueur renvoyé bon dernier après une
+    // renaissance. Un littéral d'objet ne signale jamais un champ absent.
+    ...vieAvant,
     clicks: vieAvant.clicks || 0,
     goldenClicks: vieAvant.goldenClicks || 0,
     cookiesEaten: vieAvant.cookiesEaten || 0,

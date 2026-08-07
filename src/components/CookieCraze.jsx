@@ -6,6 +6,7 @@ import Upgrades from "./Upgrades.jsx";
 import QuestBoard from "./QuestBoard.jsx";
 import ParticleLayer from "./ParticleLayer.jsx";
 import Guide from "./Guide.jsx";
+import Classement, { RubanClassement } from "./Classement.jsx";
 
 // Panneaux rarement ouverts en début de partie: chargés à la demande pour
 // alléger le premier rendu (utile sur mobile et connexion lente).
@@ -63,6 +64,7 @@ import {
 import { coutAchatCrmb, gainVenteCrmb, minerCost, roundCrmb, addCrmb, ledgerCost, getTier, MINERS } from "../utils/crypto.js";
 import { buildContext } from "../quests/engine.js";
 import { conseil as conseilDuGuide } from "../data/guide.js";
+import { rubanVisible } from "../data/rivaux.js";
 
 import { useAudio } from "../hooks/useAudio.js";
 import { useNotify } from "../hooks/useNotify.js";
@@ -75,6 +77,7 @@ import { useCombo } from "../hooks/useCombo.js";
 import { useClickRate } from "../hooks/useClickRate.js";
 import { useClock, useTimeLeft } from "../hooks/useClock.js";
 import { useGuide } from "../hooks/useGuide.js";
+import { useClassement } from "../hooks/useClassement.js";
 import { useLatestRef } from "../hooks/useLatestRef.js";
 
 // Six onglets: production et clic partagent la boutique, et le profil regroupe
@@ -463,13 +466,27 @@ const ConfirmDialog = memo(function ConfirmDialog({ demande, onConfirmer, onAnnu
   );
 });
 
-const HeaderStat = memo(function HeaderStat({ label, value, tone = "honey", title, icon }) {
+/**
+ * Amène un élément sous les yeux, quand le navigateur sait le faire.
+ *
+ * `scrollIntoView` manque encore à quelques webviews embarquées — et l'appel
+ * part d'un `requestAnimationFrame`, donc l'exception qu'il lève n'est
+ * rattrapée par personne: elle remonte en erreur non gérée et coupe la frame.
+ * Un défilement raté ne vaut pas ça.
+ */
+const amener = (el, doux, block) => {
+  if (typeof el?.scrollIntoView === "function") el.scrollIntoView({ behavior: doux, block });
+};
+
+const HeaderStat = memo(function HeaderStat({ label, value, tone = "honey", title, icon, testid }) {
   const tones = { honey: "pill", mint: "pill pill-mint", crmb: "pill pill-crmb" };
   return (
     <span title={title} className={tones[tone] || tones.honey}>
       {icon && <Icon name={icon} size={12} />}
       <span className="font-medium opacity-70">{label}</span>
-      <b className="tabular-nums">{value}</b>
+      <b className="tabular-nums" data-testid={testid}>
+        {value}
+      </b>
     </span>
   );
 });
@@ -553,7 +570,7 @@ export default function CookieCraze() {
         const doux = stateRef.current?.ui?.reducedMotion ? "auto" : "smooth";
         // On vise la CARTE quand le guide en désigne une, le panneau sinon.
         const carte = c.cible ? document.getElementById(`item-${c.cible}`) : null;
-        (carte || panneauRef.current)?.scrollIntoView({ behavior: doux, block: carte ? "center" : "start" });
+        amener(carte || panneauRef.current, doux, carte ? "center" : "start");
       });
     },
     [stateRef]
@@ -626,6 +643,32 @@ export default function CookieCraze() {
     [audio, fx, notify]
   );
   useGuide(state, setState, etapeFranchie);
+
+  /**
+   * Un rival dépassé, et c'est le moment que tout le Classement existe pour
+   * produire: la seule récompense du jeu qui vienne de QUELQU'UN, pas d'un
+   * compteur. On la traite comme une renaissance — bandeau, gerbe, son — parce
+   * qu'à l'échelle d'une session c'est le même genre d'événement.
+   */
+  const rivalDepasse = useCallback(
+    (rival) => {
+      particlesRef.current?.burstGold(40);
+      audio.play("golden", 0.55);
+      fx.banner({ title: `${rival.nom} dépassé`, sub: rival.phrase, ms: 2600 });
+      notify.major(`🏅 Tu passes devant ${rival.nom} · +${fmtCrmb(rival.crmb)} CRMB`, "gold");
+    },
+    [audio, fx, notify]
+  );
+  useClassement(state, setState, rivalDepasse);
+
+  /** Le ruban emmène au tableau complet, dans le Profil. */
+  const ouvrirClassement = useCallback(() => {
+    setTab("profile");
+    requestAnimationFrame(() => {
+      const doux = stateRef.current?.ui?.reducedMotion ? "auto" : "smooth";
+      amener(panneauRef.current, doux, "start");
+    });
+  }, [stateRef]);
 
   const events = useEvents({ stateRef, setState, notify, fx, audio });
 
@@ -1464,6 +1507,7 @@ export default function CookieCraze() {
               <HeaderStat
                 label="CRMB"
                 value={fmtCrmb(state.crypto.balance)}
+                testid="solde-crmb"
                 tone="crmb"
                 icon="crmb"
                 title={`Cours : ${fmt(state.crypto.price)} cookies`}
@@ -1649,6 +1693,13 @@ export default function CookieCraze() {
                 donc il ne pousse la boutique nulle part. */}
             <Guide conseil={conseil} onAller={allerA} onMasquer={masquerGuide} reducedMotion={reducedMotion} />
 
+            {/* Le ruban du Classement: une place, un nom, une barre.
+                Il n'apparaît qu'au premier rival dépassé — avant ça, il n'a
+                rien à raconter, et le Guide a la parole. Son arrivée est
+                elle-même une récompense: elle suit le bandeau « Flocon
+                dépassé » de quelques dixièmes de seconde. */}
+            {rubanVisible(state) && <RubanClassement state={state} onOuvrir={ouvrirClassement} />}
+
           </section>
 
           {/* --- Panneau latéral ---
@@ -1789,7 +1840,10 @@ export default function CookieCraze() {
                 )}
                 {tab === "profile" && (
                   <>
-                    <StatsPanel state={state} stats={stats} />
+                    <Classement state={state} />
+                    <div className="mt-4 border-t border-honey/15 pt-4">
+                      <StatsPanel state={state} stats={stats} />
+                    </div>
                     {isFeatureEnabled("ENABLE_SKINS") && (
                       <div className="mt-4 pt-4 border-t border-honey/15">
                         <Skins

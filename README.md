@@ -17,7 +17,7 @@ npm run dev        # http://localhost:5173
 | `npm run dev`       | Serveur de développement                      |
 | `npm run build`     | Build de production dans `dist/`              |
 | `npm run preview`   | Sert le build sur http://localhost:4173       |
-| `npm test`          | Suite de tests (523 tests)                    |
+| `npm test`          | Suite de tests (559 tests)                    |
 | `npm run test:watch`| Tests en continu                              |
 | `npm run coverage`  | Rapport de couverture                         |
 | `npm run lint`      | ESLint                                        |
@@ -693,11 +693,12 @@ son navigateur et `sharp` s'installent en une commande.
 
 ```bash
 npm ci                        # installation reproductible
-npm test                      # 523 tests
+npm test                      # 559 tests
 npm run lint                  # zéro avertissement, tout le dépôt
 npm run build && npm run preview
 
 npm run balance               # rapport actif/passif par cadence et par horizon
+npx vite-node scripts/rivaux.mjs    # rejoue les sept rivaux du Classement
 npm run simulations           # deux familles de profils, onze horizons
 npm run simulations mecanique # une seule famille (plus rapide)
 
@@ -996,7 +997,7 @@ Trois gestes remettent la partie à zéro, et ils ne gardent pas la même chose.
 Le tableau est le **contrat**, et il est vérifié par des tests qui jouent le
 geste réel du joueur, écran compris :
 
-| | Partie | Chips & arbre | Étoiles & Voûte | CRMB, Registre, matériel | Apparences | Succès | Compteurs à vie |
+| | Partie | Chips & arbre | Étoiles & Voûte | CRMB, Registre, matériel | Apparences | Succès | Compteurs à vie & Classement |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
 | **Renaissance** (prestige) | ✗ | ✓ recalculés | ✓ | ✓ | ✓ | ✓ | ✓ |
 | **Ascension** | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -1049,6 +1050,16 @@ affiche le total à vie avec le chiffre de la partie en cours juste en dessous.
 Une sauvegarde d'avant ne perd rien : les compteurs à vie sont **semés** avec
 ce que la partie en cours a déjà accumulé. C'est un plancher, jamais un
 plafond.
+
+Deux d'entre eux ne comptent pas des gestes mais des **cumuls** —
+`cookiesAvant` et `playtimeAvant`, les cookies cuits et le temps joué par
+toutes les parties précédentes. Ils portent le Classement, et ils ne sont
+incrémentés nulle part : la partie en cours s'y ajoute *à la lecture*
+(`cookiesAVie`, `tempsDeJeuAVie`) et s'y **replie** au moment exact où elle se
+termine, dans `cumulerVie`. Les cookies arrivent d'une douzaine d'endroits —
+boucle, clic, quêtes, succès, dorés, hors-ligne, primes — et un compteur de
+plus à tenir à jour dans chacun d'eux serait faux au premier oubli, avec pour
+seul symptôme un classement légèrement injuste. Donc invisible.
 
 ### Le poids servi
 
@@ -1238,6 +1249,129 @@ Tout vit dans [`src/data/guide.js`](src/data/guide.js), en **fonctions pures** :
 aucune ne touche à React, au DOM ni à l'horloge. C'est ce qui permet de vérifier
 par des tests qu'un joueur neuf reçoit bien sa première consigne, et qu'un
 joueur de quatre-vingts heures ne la reçoit jamais.
+
+### Des joueurs en face — le Classement
+
+Un multiplicateur affiché est une **information**. Une raison, c'est quelqu'un
+devant soi. Le retour du joueur était sans appel : *« on ne comprend toujours
+pas l'intérêt de cliquer, il n'y a pas de réel gain au bout »* — et il tenait
+même si le chiffre ci-dessus était juste.
+
+Sept rivaux, donc. Ils ne diffèrent **que par leur cadence de clic** : même
+catalogue, mêmes prix, mêmes paliers, mêmes renaissances, même façon d'acheter.
+Monter d'une place, c'est donc littéralement appuyer plus qu'eux — le classement
+est la traduction directe de l'effort, et c'est tout ce qu'on lui demande de
+dire.
+
+| | Flocon | Nino | Salomé | Tarek | Iris | Zoé | CRUMB-9000 |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| Cadence | 0,25 c/s | 1 | 2 | 3,5 | 5,5 | 8 | 12 |
+| Prime au dépassement | 1 CRMB | 1 | 2 | 2 | 3 | 5 | **10** |
+
+Trois décisions portent tout le reste, et chacune a coûté une mesure.
+
+**1. Ce ne sont pas des joueurs en ligne, et l'écran le dit.** Crumbora est
+entièrement client : la partie vit dans le `localStorage` du joueur et s'y
+réécrit en dix secondes depuis la console — c'est déjà écrit noir sur blanc
+dans [`src/utils/anticheat.js`](src/utils/anticheat.js). Un classement alimenté
+par ces sauvegardes ne classerait rien : la première personne à ouvrir les
+outils de développement serait première pour toujours, et tous les autres
+joueraient contre un champ de texte. Sept adversaires honnêtes valent mieux que
+mille faux. Le panneau l'explique en toutes lettres plutôt que de laisser
+croire.
+
+**2. Ils avancent au TEMPS DE JEU, pas à l'horloge murale.** Quelqu'un qui joue
+vingt minutes par jour affronte des rivaux qui ont joué vingt minutes eux
+aussi. Sur une horloge murale, tout le monde perdrait du terrain **en dormant**
+— exactement le contraire de ce qu'un classement doit provoquer.
+
+**3. Leurs chiffres viennent du moteur, pas d'une formule inventée.**
+`scripts/rivaux.mjs` fait jouer sept parties par le simulateur du jeu et relève
+la production cumulée à **vingt-huit temps de jeu**, de la trentième seconde au
+trentième jour. Entre deux relevés, l'interpolation est **géométrique** : sur un
+segment qui va de dix à quatre-vingts millions, la droite passerait par
+quarante-cinq millions à mi-parcours là où le jeu en produit vingt-huit, et le
+classement sauterait à chaque palier franchi.
+
+#### Huit minutes d'avance, et c'est un chiffre mesuré
+
+Le simulateur ne modélise que la mécanique. Un joueur, lui, reçoit en plus dès
+sa première minute les primes des sept étapes du Guide (9 525 cookies), ses
+premiers succès et ses premières quêtes. Sans correction, le résultat mesuré en
+navigateur était sans appel : un débutant à trois clics par seconde qui suit le
+Guide passait **premier sur huit au bout de quarante-neuf secondes**, devant un
+adversaire simulé à douze clics par seconde — puis se faisait doubler par les
+sept, un par un. Le seul classement pire qu'aucun classement est celui qui
+commence par une victoire imméritée et se poursuit en dégringolade.
+
+La courbe réelle d'un débutant, relevée en navigateur :
+
+| Temps de jeu | 11 s | 49 s | 2 min 33 |
+| --- | :-: | :-: | :-: |
+| Cookies cuits | 3 314 | 18 824 | 41 934 |
+
+La même partie **sans les cadeaux** met environ huit minutes à en arriver là.
+Les cadeaux de bienvenue valent donc à peu près huit minutes d'avance, et c'est
+exactement ce qu'on rend aux rivaux. Une avance en **temps** plutôt qu'une prime
+en cookies, parce que c'est la seule forme qui a la bonne allure : ×4,9 de
+handicap à dix minutes, quand les cadeaux font toute la partie ; ×1,02 à
+vingt-quatre heures, quand ils ne pèsent plus rien.
+
+Résultat mesuré, sur trois parcours de débutant joués par Playwright : il
+démarre huitième, dépasse Flocon entre la **98ᵉ et la 120ᵉ seconde**, Nino peu
+après, et doit travailler pour la suite.
+
+L'autre piste a été essayée, et écartée sur mesure : faire jouer les rivaux
+**avec** la couche d'événements du simulateur. Elle donne à un joueur de trois
+clics par seconde 2,4 millions de cookies en deux minutes, là où le vrai
+débutant en a quarante-deux mille. Cinquante-sept fois trop — cette couche
+décrit une espérance mathématique, pas quelqu'un qui joue.
+
+#### Deux bugs que seul le navigateur pouvait montrer
+
+- **Un tic de quêtes effaçait les cumuls.** `tickQuests` reconstruit
+  `lifetimeStats`, et le faisait en **énumérant** les cinq compteurs qu'il
+  connaissait. Les deux cumuls du Classement disparaissaient donc au premier tic
+  de quête, et le seul symptôme visible était un joueur renvoyé **bon dernier
+  après une renaissance**. C'est exactement le défaut décrit plus haut pour
+  `createResetState` : un littéral d'objet ne signale jamais un champ absent.
+- **Les célébrations ne partaient jamais.** Le hook remplissait la liste des
+  rivaux à fêter *depuis le réducteur* `setState`, puis la parcourait juste
+  après l'appel. React 18 ne garantit pas d'exécuter un réducteur sur-le-champ —
+  il le diffère dès qu'une file de mises à jour est en cours, c'est-à-dire tout
+  le temps dans un jeu qui appelle `setState` deux fois par seconde. Mesuré en
+  navigateur : les primes tombaient bien (+12 CRMB) et **aucun bandeau ne
+  s'affichait**. Le même +12 disait la seconde moitié du bug — sans verrou
+  local, deux tics rapprochés lisaient tous deux un `battus` pas encore commité
+  et payaient six rivaux d'un coup. Tout se décide maintenant **avant** le
+  `setState` ; le réducteur ne fait qu'écrire. `useGuide`, bâti sur le même
+  modèle, avait le même défaut et le même correctif.
+
+#### Ce qui est verrouillé par des tests
+
+- **L'escalier tient à tous les temps de jeu.** Chaque rival est devant le
+  précédent, de la première seconde au cent-vingtième jour. Rejouer le script
+  après un rééquilibrage des prix peut faire se croiser deux courbes, et le rang
+  du joueur se mettrait alors à bouger **sans qu'il ait joué**.
+- **Renaître ne fait pas reculer.** La renaissance vide `lifetime` : branché
+  dessus, le classement renverrait le joueur bon dernier au moment précis où le
+  jeu lui demande de tout recommencer.
+- **Aucune prime rétroactive.** Une partie avancée devance d'entrée cinq ou six
+  rivaux. Ils sont alors verrouillés **sans être payés** : une prime récompense
+  un dépassement vu, pas un état constaté au chargement.
+- **Une prime ne se paie qu'une fois**, alors même que le classement reste
+  vivant — un rival repassé devant redevient un rival, et c'est ce qui donne
+  envie de revenir.
+
+La prime en cookies vaut **une minute de la production du moment**, clic
+compris : soixante cookies à la première minute, une minute d'avance en fin de
+partie. Une valeur fixe aurait été un cadeau absurde au début et une poussière
+ensuite.
+
+À l'écran, ça tient en **44 px** : un ruban d'une ligne sous le cookie — la
+place, celui qui est devant, la fraction déjà comblée — qui n'apparaît qu'au
+**premier rival dépassé**. Avant ça il n'aurait rien à raconter, et le Guide a
+la parole. Le tableau complet vit dans l'onglet Profil, à un appui de là.
 
 ## Montée en charge
 

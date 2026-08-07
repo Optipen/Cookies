@@ -93,7 +93,11 @@ describe("une partie Cookie Craze s'ouvre telle quelle dans Crumbora", () => {
     // est le préfixe: c'est lui qui relie un joueur à sa partie.
     expect(SAVE_KEY).toMatch(/^cookieCrazeSaveV\d+$/);
     // Et toutes les clés précédentes restent lues, la plus récente en premier.
-    expect(LEGACY_KEYS[0]).toBe("cookieCrazeSaveV6");
+    // La plus récente se DÉDUIT de la clé courante: nommer « V6 » ici faisait
+    // échouer ce test à chaque version du schéma, pour une raison qui n'avait
+    // rien à voir avec ce qu'il protège.
+    const version = Number(SAVE_KEY.match(/\d+$/)[0]);
+    expect(LEGACY_KEYS[0]).toBe(`cookieCrazeSaveV${version - 1}`);
     expect(LEGACY_KEYS).toContain("cookieCrazeSaveV1");
   });
 
